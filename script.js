@@ -1842,19 +1842,22 @@
         const tabs = document.querySelectorAll('.mode-tab');
         const modeSimple = document.getElementById('mode-simple');
         const modeWorkflow = document.getElementById('mode-workflow');
+        const modeNai = document.getElementById('mode-nai');
+        const btnGenerate = document.getElementById('btn-generate');
+        const btnNaiGenerate = document.getElementById('btn-nai-generate');
+        const btnDzmm = document.getElementById('btn-dzmm');
 
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 tabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
                 const mode = tab.dataset.mode;
-                if (mode === 'simple') {
-                    modeSimple.classList.remove('hidden');
-                    modeWorkflow.classList.add('hidden');
-                } else {
-                    modeSimple.classList.add('hidden');
-                    modeWorkflow.classList.remove('hidden');
-                }
+                modeSimple.classList.toggle('hidden', mode !== 'simple');
+                modeWorkflow.classList.toggle('hidden', mode !== 'workflow');
+                if (modeNai) modeNai.classList.toggle('hidden', mode !== 'nai');
+                if (btnGenerate) btnGenerate.classList.toggle('hidden', mode === 'nai');
+                if (btnNaiGenerate) btnNaiGenerate.classList.toggle('hidden', mode !== 'nai');
+                if (btnDzmm) btnDzmm.classList.toggle('hidden', mode === 'nai');
             });
         });
 
@@ -3471,6 +3474,355 @@
         });
     }
 
+    // ==================== NAI 在线生图 ====================
+    const NAI_API_BASE = 'https://api.idlecloud.cc/api';
+    const NAI_STORAGE_KEY = 'nai_api_key';
+
+    function setupNai() {
+        const apiKeyInput = document.getElementById('inp-nai-apikey');
+        const toggleBtn = document.getElementById('btn-nai-apikey-toggle');
+        if (!apiKeyInput) return;
+
+        // Load saved API key
+        const savedKey = localStorage.getItem(NAI_STORAGE_KEY);
+        if (savedKey) apiKeyInput.value = savedKey;
+
+        apiKeyInput.addEventListener('change', () => {
+            localStorage.setItem(NAI_STORAGE_KEY, apiKeyInput.value.trim());
+        });
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+            });
+        }
+
+        // Size presets
+        document.querySelectorAll('.nai-size-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.nai-size-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        // Upscale premium gate
+        const chkUpscale = document.getElementById('chk-nai-upscale');
+        if (chkUpscale) {
+            chkUpscale.addEventListener('change', () => {
+                if (chkUpscale.checked) {
+                    showToast('大图模式需要高级权限，请加入 Discord 群获取资格');
+                    chkUpscale.checked = false;
+                }
+            });
+        }
+
+        // Sliders
+        const sliders = [
+            ['rng-nai-steps', 'nai-steps-val', v => v],
+            ['rng-nai-cfg', 'nai-cfg-val', v => parseFloat(v).toFixed(1)],
+            ['rng-nai-rescale', 'nai-rescale-val', v => parseFloat(v).toFixed(2)],
+            ['rng-nai-batch', 'nai-batch-val', v => v],
+        ];
+        sliders.forEach(([sliderId, valId, fmt]) => {
+            const slider = document.getElementById(sliderId);
+            const valEl = document.getElementById(valId);
+            if (slider && valEl) {
+                slider.addEventListener('input', () => { valEl.textContent = fmt(slider.value); });
+            }
+        });
+
+        // Random seed
+        const btnSeed = document.getElementById('btn-nai-random-seed');
+        if (btnSeed) {
+            btnSeed.addEventListener('click', () => {
+                document.getElementById('inp-nai-seed').value = Math.floor(Math.random() * 4294967295);
+            });
+        }
+
+        // img2img upload
+        const img2imgZone = document.getElementById('nai-img2img-zone');
+        const img2imgInput = document.getElementById('inp-nai-img2img');
+        if (img2imgZone && img2imgInput) {
+            img2imgZone.addEventListener('click', () => img2imgInput.click());
+            img2imgZone.addEventListener('dragover', e => { e.preventDefault(); img2imgZone.style.borderColor = '#14b8a6'; });
+            img2imgZone.addEventListener('dragleave', () => { img2imgZone.style.borderColor = ''; });
+            img2imgZone.addEventListener('drop', e => {
+                e.preventDefault();
+                img2imgZone.style.borderColor = '';
+                if (e.dataTransfer.files.length) handleNaiImg2imgFile(e.dataTransfer.files[0]);
+            });
+            img2imgInput.addEventListener('change', () => {
+                if (img2imgInput.files[0]) handleNaiImg2imgFile(img2imgInput.files[0]);
+            });
+        }
+
+        // Premium zones
+        document.querySelectorAll('.nai-premium-zone').forEach(zone => {
+            zone.addEventListener('click', () => {
+                showToast('该功能需要高级权限，请加入 Discord 群获取资格');
+            });
+        });
+
+        // Character control
+        const btnAddChar = document.getElementById('btn-nai-add-character');
+        if (btnAddChar) {
+            btnAddChar.addEventListener('click', () => {
+                const list = document.getElementById('nai-character-list');
+                const count = list.querySelectorAll('.nai-character-item').length;
+                if (count >= 6) { showToast('最多支持 6 个角色'); return; }
+                const idx = count + 1;
+                const item = document.createElement('div');
+                item.className = 'nai-character-item';
+                item.innerHTML = `<h3>角色 ${idx} <button class="btn-icon btn-sm nai-remove-char" title="删除">🗑️</button></h3>
+                    <textarea placeholder="角色正向提示词..." class="nai-char-prompt" rows="2"></textarea>
+                    <textarea placeholder="角色反向提示词..." class="nai-char-uc" rows="1" style="margin-top:4px"></textarea>
+                    <div class="compact-row" style="margin-top:4px">
+                        <label>X <input type="number" class="nai-char-x" value="0.5" min="0" max="1" step="0.1"></label>
+                        <label>Y <input type="number" class="nai-char-y" value="0.5" min="0" max="1" step="0.1"></label>
+                    </div>`;
+                item.querySelector('.nai-remove-char').addEventListener('click', () => {
+                    item.remove();
+                    updateNaiCharInfo();
+                });
+                list.appendChild(item);
+                updateNaiCharInfo();
+            });
+        }
+
+        // Reset
+        const btnReset = document.getElementById('btn-nai-reset');
+        if (btnReset) {
+            btnReset.addEventListener('click', () => {
+                document.getElementById('sel-nai-model').value = 'nai-diffusion-4-5-full';
+                document.querySelectorAll('.nai-size-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('.nai-size-btn[data-w="1024"]').classList.add('active');
+                document.getElementById('inp-nai-seed').value = '-1';
+                document.getElementById('sel-nai-sampler').value = 'k_euler';
+                const resetSliders = { 'rng-nai-steps': '23', 'rng-nai-cfg': '5', 'rng-nai-rescale': '0', 'rng-nai-batch': '1' };
+                Object.entries(resetSliders).forEach(([id, val]) => {
+                    const el = document.getElementById(id);
+                    if (el) { el.value = val; el.dispatchEvent(new Event('input')); }
+                });
+                document.getElementById('sel-nai-noise-schedule').value = 'karras';
+                ['chk-nai-smea','chk-nai-dyn','chk-nai-variety','chk-nai-decrisp','chk-nai-legacy','chk-nai-legacy-uc','chk-nai-legacy-v3','chk-nai-auto-smea','chk-nai-euler-bug'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = false;
+                });
+                document.getElementById('chk-nai-brownian').checked = true;
+                document.getElementById('sel-nai-uc-preset').value = '1';
+                document.getElementById('nai-character-list').innerHTML = '';
+                updateNaiCharInfo();
+                showToast('已重置所有参数');
+            });
+        }
+
+        // Generate button
+        const btnNaiGen = document.getElementById('btn-nai-generate');
+        if (btnNaiGen) {
+            btnNaiGen.addEventListener('click', () => naiGenerate());
+        }
+    }
+
+    let _naiImg2imgBase64 = null;
+
+    function handleNaiImg2imgFile(file) {
+        if (!file.type.startsWith('image/')) { showToast('请上传图片文件'); return; }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            _naiImg2imgBase64 = e.target.result.split(',')[1];
+            const preview = document.getElementById('nai-img2img-preview');
+            const img = document.getElementById('nai-img2img-img');
+            img.src = e.target.result;
+            preview.classList.remove('hidden');
+            document.getElementById('nai-img2img-zone').classList.add('hidden');
+        };
+        reader.readAsDataURL(file);
+
+        const removeBtn = document.querySelector('.nai-remove-img[data-target="nai-img2img"]');
+        if (removeBtn) {
+            removeBtn.onclick = () => {
+                _naiImg2imgBase64 = null;
+                document.getElementById('nai-img2img-preview').classList.add('hidden');
+                document.getElementById('nai-img2img-zone').classList.remove('hidden');
+                document.getElementById('inp-nai-img2img').value = '';
+            };
+        }
+    }
+
+    function updateNaiCharInfo() {
+        const list = document.getElementById('nai-character-list');
+        const info = document.getElementById('nai-character-info');
+        if (!list || !info) return;
+        const count = list.querySelectorAll('.nai-character-item').length;
+        info.textContent = `已配置 ${count}/6 个角色，当前启用 ${count} 个。`;
+    }
+
+    function getNaiPayload() {
+        const activeSize = document.querySelector('.nai-size-btn.active');
+        const w = activeSize ? parseInt(activeSize.dataset.w) : 1024;
+        const h = activeSize ? parseInt(activeSize.dataset.h) : 1536;
+        let seed = parseInt(document.getElementById('inp-nai-seed').value);
+        if (seed < 0) seed = Math.floor(Math.random() * 4294967295);
+
+        const payload = {
+            model: document.getElementById('sel-nai-model').value,
+            positivePrompt: document.getElementById('txt-positive').value.trim(),
+            negativePrompt: document.getElementById('txt-negative').value.trim(),
+            width: w,
+            height: h,
+            steps: parseInt(document.getElementById('rng-nai-steps').value),
+            scale: parseFloat(document.getElementById('rng-nai-cfg').value),
+            sampler: document.getElementById('sel-nai-sampler').value,
+            seed: seed,
+            noise_schedule: document.getElementById('sel-nai-noise-schedule').value,
+            promptGuidanceRescale: parseFloat(document.getElementById('rng-nai-rescale').value),
+            sm: document.getElementById('chk-nai-smea').checked,
+            sm_dyn: document.getElementById('chk-nai-dyn').checked,
+            decrisp: document.getElementById('chk-nai-decrisp').checked,
+            variety: document.getElementById('chk-nai-variety').checked,
+            prefer_brownian: document.getElementById('chk-nai-brownian').checked,
+            deliberate_euler_ancestral_bug: document.getElementById('chk-nai-euler-bug').checked,
+            legacy: document.getElementById('chk-nai-legacy').checked,
+            legacy_uc: document.getElementById('chk-nai-legacy-uc').checked,
+            legacy_v3_extend: document.getElementById('chk-nai-legacy-v3').checked,
+            ucPreset: parseInt(document.getElementById('sel-nai-uc-preset').value),
+            autoSmea: document.getElementById('chk-nai-auto-smea').checked,
+            use_coords: !(document.getElementById('chk-nai-use-coords')?.checked),
+            use_upscale_credits: false,
+        };
+
+        // img2img
+        if (_naiImg2imgBase64) {
+            payload.action = true;
+            payload.image = _naiImg2imgBase64;
+            payload.strength = parseFloat(document.getElementById('inp-nai-strength').value);
+            payload.noise = parseFloat(document.getElementById('inp-nai-noise').value);
+        }
+
+        // Character prompts (V4)
+        const charItems = document.querySelectorAll('.nai-character-item');
+        if (charItems.length > 0) {
+            const characterPrompts = [];
+            const v4Captions = [];
+            const v4NegCaptions = [];
+            charItems.forEach(item => {
+                const prompt = item.querySelector('.nai-char-prompt').value.trim();
+                const uc = item.querySelector('.nai-char-uc').value.trim();
+                const x = parseFloat(item.querySelector('.nai-char-x').value) || 0.5;
+                const y = parseFloat(item.querySelector('.nai-char-y').value) || 0.5;
+                characterPrompts.push({ prompt, uc, center: { x, y } });
+                v4Captions.push({ char_caption: prompt, centers: [{ x, y }] });
+                v4NegCaptions.push({ char_caption: uc, centers: [{ x, y }] });
+            });
+            payload.characterPrompts = characterPrompts;
+            payload.v4_prompt_char_captions = v4Captions;
+            payload.v4_negative_prompt_char_captions = v4NegCaptions;
+        }
+
+        return payload;
+    }
+
+    async function naiGenerate() {
+        const apiKey = document.getElementById('inp-nai-apikey').value.trim();
+        if (!apiKey) { showToast('请先输入 API Key'); return; }
+
+        const batchCount = parseInt(document.getElementById('rng-nai-batch').value) || 1;
+        const btnGen = document.getElementById('btn-nai-generate');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+
+        btnGen.disabled = true;
+        btnGen.textContent = '生成中...';
+        progressContainer.classList.remove('hidden');
+
+        try {
+            for (let batch = 0; batch < batchCount; batch++) {
+                if (batchCount > 1) {
+                    progressText.textContent = `第 ${batch + 1}/${batchCount} 张`;
+                }
+                progressBar.style.width = '10%';
+
+                const payload = getNaiPayload();
+                const headers = {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                };
+
+                // Submit
+                const submitRes = await fetch(`${NAI_API_BASE}/generate_image`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload)
+                });
+
+                if (!submitRes.ok) {
+                    const errText = await submitRes.text();
+                    throw new Error(`提交失败 (${submitRes.status}): ${errText}`);
+                }
+
+                const { job_id } = await submitRes.json();
+                progressBar.style.width = '30%';
+                progressText.textContent = batchCount > 1 ? `第 ${batch + 1}/${batchCount} 张 - 排队中...` : '排队中...';
+
+                // Poll
+                let attempts = 0;
+                const maxAttempts = 120;
+                while (attempts < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 5000));
+                    attempts++;
+
+                    const resultRes = await fetch(`${NAI_API_BASE}/get_result/${job_id}`, { headers });
+                    if (!resultRes.ok) {
+                        throw new Error(`查询失败 (${resultRes.status})`);
+                    }
+
+                    const result = await resultRes.json();
+                    const pct = Math.min(30 + (attempts / maxAttempts) * 60, 90);
+                    progressBar.style.width = pct + '%';
+
+                    if (result.status === 'completed') {
+                        progressBar.style.width = '100%';
+                        const imageUrl = result.image_url || result.video_url;
+                        if (imageUrl) {
+                            const resultImg = document.getElementById('result-image');
+                            const placeholder = document.getElementById('result-placeholder');
+                            const actions = document.getElementById('result-actions');
+                            resultImg.src = imageUrl;
+                            resultImg.classList.remove('hidden');
+                            placeholder.classList.add('hidden');
+                            if (actions) actions.classList.remove('hidden');
+                            showToast(batchCount > 1 ? `第 ${batch + 1}/${batchCount} 张生成完成！` : '图片生成完成！');
+                        }
+                        break;
+                    } else if (result.status === 'failed') {
+                        throw new Error(`生成失败: ${result.error || '未知错误'}`);
+                    } else {
+                        const statusText = result.status === 'queued' ? '排队中...' : '生成中...';
+                        progressText.textContent = batchCount > 1 ? `第 ${batch + 1}/${batchCount} 张 - ${statusText}` : statusText;
+                    }
+                }
+
+                if (attempts >= maxAttempts) {
+                    throw new Error('生成超时，请稍后重试');
+                }
+
+                if (batch < batchCount - 1) {
+                    progressText.textContent = '等待下一张...';
+                    await new Promise(r => setTimeout(r, 20000));
+                }
+            }
+        } catch (err) {
+            showToast(`错误: ${err.message}`);
+            console.error('NAI generate error:', err);
+        } finally {
+            btnGen.disabled = false;
+            btnGen.textContent = 'NAI 在线生图';
+            progressContainer.classList.add('hidden');
+            progressBar.style.width = '0%';
+        }
+    }
+
     setupTheme();
     setupToggles();
     setupArchSwitch();
@@ -3482,5 +3834,6 @@
     setupPromptTagEditor();
     setupMetaImport();
     setupDzmm();
+    setupNai();
     init();
 })();
