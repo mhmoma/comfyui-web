@@ -3184,6 +3184,20 @@
             return r;
         },
 
+        tokenJsonToText(val) {
+            if (typeof val !== 'string') return String(val || '');
+            const trimmed = val.trim();
+            if (!trimmed.startsWith('[')) return val;
+            try {
+                const arr = JSON.parse(trimmed);
+                if (!Array.isArray(arr) || !arr[0]?.text) return val;
+                return arr
+                    .filter(t => !t.isPunctuation && t.text && t.text !== '\n')
+                    .map(t => t.text)
+                    .join(', ');
+            } catch { return val; }
+        },
+
         parseComfyUI(promptStr, workflowStr) {
             const result = { source: 'ComfyUI' };
             try {
@@ -3191,7 +3205,8 @@
                 for (const [nodeId, node] of Object.entries(prompt)) {
                     const ct = node.class_type;
                     if (ct === 'CLIPTextEncode' || ct === 'WeiLinPromptUIWithoutLora') {
-                        const txt = node.inputs?.text || node.inputs?.temp_str || '';
+                        let txt = node.inputs?.text || node.inputs?.temp_str || '';
+                        txt = this.tokenJsonToText(txt);
                         if (!result.positive) result.positive = txt;
                         else if (!result.negative) result.negative = txt;
                     }
