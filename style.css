@@ -2009,3 +2009,301 @@ textarea {
         max-height: 300px;
     }
 }
+
+/* ==================== 主题系统 ==================== */
+
+/* 主题切换按钮 */
+.theme-btn {
+    position: relative;
+}
+
+.theme-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px;
+    display: flex;
+    gap: 6px;
+    box-shadow: var(--shadow);
+    z-index: 100;
+}
+
+.theme-panel.hidden {
+    display: none;
+}
+
+.theme-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.theme-dot:hover {
+    transform: scale(1.15);
+}
+
+.theme-dot.active {
+    border-color: white;
+    box-shadow: 0 0 8px rgba(255,255,255,0.3);
+}
+
+.theme-dot[data-theme="default"] { background: linear-gradient(135deg, #1a1a2e, #e94560); }
+.theme-dot[data-theme="cyberpunk"] { background: linear-gradient(135deg, #0a0a14, #00d4ff); }
+.theme-dot[data-theme="forest"] { background: linear-gradient(135deg, #0f1a14, #10b981); }
+.theme-dot[data-theme="sunset"] { background: linear-gradient(135deg, #1a1410, #f59e0b); }
+.theme-dot[data-theme="lavender"] { background: linear-gradient(135deg, #1a1428, #a78bfa); }
+.theme-dot[data-theme="light"] { background: linear-gradient(135deg, #f0f0f5, #3b82f6); }
+
+/* 赛博朋克主题 */
+[data-theme="cyberpunk"] {
+    --bg-primary: #0a0a14;
+    --bg-secondary: #0e0e1c;
+    --bg-panel: #141428;
+    --bg-input: #0c0c1a;
+    --accent: #00d4ff;
+    --accent-hover: #33dfff;
+    --accent-blue: #00d4ff;
+    --accent-green: #00ff88;
+    --accent-purple: #ff00ff;
+    --accent-amber: #ffdd00;
+    --accent-teal: #00ffc8;
+    --text-primary: #e0f0ff;
+    --text-secondary: #6688aa;
+    --border: #1a2a3e;
+    --border-subtle: #141e2e;
+    --shadow: 0 4px 12px rgba(0, 212, 255, 0.1);
+    --sidebar-bg: #0c0c18;
+    --content-bg: #0a0a12;
+    --history-bg: #0c0e18;
+    --header-bg: linear-gradient(135deg, #0e0e1c, #0a1628);
+}
+
+[data-theme="cyberpunk"] .header h1 {
+    background: linear-gradient(135deg, #00d4ff, #ff00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+[data-theme="cyberpunk"] .tag-group-row {
+    background: #0e1828;
+}
+
+[data-theme="cyberpunk"] .tag-subtabs {
+    background: #080810;
+}
+
+[data-theme="cyberpunk"] .progress-bar {
+    background: linear-gradient(90deg, #00d4ff, #ff00ff, #ffdd00);
+}
+
+/* 森林主题 */
+[data-theme="forest"] {
+    --bg-primary: #0f1a14;
+    --bg-secondary: #132218;
+    --bg-panel: #1a2e20;
+    --bg-input: #111e16;
+    --accent: #10b981;
+    --accent-hover: #34d399;
+    --accent-blue: #38bdf8;
+    --accent-green: #10b981;
+    --accent-purple: #8b9cf7;
+    --accent-amber: #fbbf24;
+    --accent-teal: #2dd4bf;
+    --text-primary: #e0f0e8;
+    --text-secondary: #7aa08a;
+    --border: #1e3828;
+    --border-subtle: #1a2e22;
+    --shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+    --sidebar-bg: #111e16;
+    --content-bg: #0e1a12;
+    --history-bg: #121e18;
+    --header-bg: linear-gradient(135deg, #132218, #0e2016);
+}
+
+[data-theme="forest"] .header h1 {
+    background: linear-gradient(135deg, #10b981, #a3e635);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+[data-theme="forest"] .tag-group-row {
+    background: #1a3024;
+}
+
+[data-theme="forest"] .tag-subtabs {
+    background: #0c1610;
+}
+
+[data-theme="forest"] .progress-bar {
+    background: linear-gradient(90deg, #10b981, #a3e635, #fbbf24);
+}
+
+/* 日落主题 */
+[data-theme="sunset"] {
+    --bg-primary: #1a1410;
+    --bg-secondary: #221a14;
+    --bg-panel: #2e2218;
+    --bg-input: #1e1610;
+    --accent: #f59e0b;
+    --accent-hover: #fbbf24;
+    --accent-blue: #fb923c;
+    --accent-green: #a3e635;
+    --accent-purple: #f472b6;
+    --accent-amber: #f59e0b;
+    --accent-teal: #fbbf24;
+    --text-primary: #f0e8e0;
+    --text-secondary: #a08a70;
+    --border: #382e1e;
+    --border-subtle: #2e2418;
+    --shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+    --sidebar-bg: #1e1810;
+    --content-bg: #1a140e;
+    --history-bg: #1e1a14;
+    --header-bg: linear-gradient(135deg, #221a14, #281e12);
+}
+
+[data-theme="sunset"] .header h1 {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+[data-theme="sunset"] .tag-group-row {
+    background: #2e2416;
+}
+
+[data-theme="sunset"] .tag-subtabs {
+    background: #14100c;
+}
+
+[data-theme="sunset"] .progress-bar {
+    background: linear-gradient(90deg, #f59e0b, #ef4444, #f472b6);
+}
+
+/* 薰衣草主题 */
+[data-theme="lavender"] {
+    --bg-primary: #1a1428;
+    --bg-secondary: #201830;
+    --bg-panel: #2a2040;
+    --bg-input: #1c1630;
+    --accent: #a78bfa;
+    --accent-hover: #c4b5fd;
+    --accent-blue: #818cf8;
+    --accent-green: #a3e635;
+    --accent-purple: #a78bfa;
+    --accent-amber: #fbbf24;
+    --accent-teal: #c084fc;
+    --text-primary: #ece8f4;
+    --text-secondary: #8a80a0;
+    --border: #322850;
+    --border-subtle: #282040;
+    --shadow: 0 4px 12px rgba(167, 139, 250, 0.1);
+    --sidebar-bg: #1c1630;
+    --content-bg: #181226;
+    --history-bg: #1c182e;
+    --header-bg: linear-gradient(135deg, #201830, #1e1838);
+}
+
+[data-theme="lavender"] .header h1 {
+    background: linear-gradient(135deg, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+[data-theme="lavender"] .tag-group-row {
+    background: #28204a;
+}
+
+[data-theme="lavender"] .tag-subtabs {
+    background: #141020;
+}
+
+[data-theme="lavender"] .progress-bar {
+    background: linear-gradient(90deg, #818cf8, #a78bfa, #f472b6);
+}
+
+/* 纯白亮色主题 */
+[data-theme="light"] {
+    --bg-primary: #f5f5fa;
+    --bg-secondary: #ffffff;
+    --bg-panel: #eef0f5;
+    --bg-input: #ffffff;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-purple: #8b5cf6;
+    --accent-amber: #f59e0b;
+    --accent-teal: #14b8a6;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+    --border-subtle: #eef0f5;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --sidebar-bg: #f8f9fc;
+    --content-bg: #f0f2f8;
+    --history-bg: #f5f7fa;
+    --header-bg: linear-gradient(135deg, #ffffff, #f0f2f8);
+}
+
+[data-theme="light"] .header h1 {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+[data-theme="light"] .tag-group-row {
+    background: #e8ecf4;
+}
+
+[data-theme="light"] .tag-subtabs {
+    background: #f0f2f8;
+}
+
+[data-theme="light"] .progress-bar {
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+}
+
+[data-theme="light"] .btn-icon {
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .btn-primary:hover {
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="light"] .placeholder {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.03);
+}
+
+[data-theme="light"] select,
+[data-theme="light"] input[type="number"],
+[data-theme="light"] input[type="text"],
+[data-theme="light"] textarea {
+    border-color: #d1d5db;
+}
+
+[data-theme="light"] .panel-group[data-group="basic"] .panel-group-header {
+    color: #2563eb;
+}
+
+[data-theme="light"] .panel-group[data-group="enhance"] .panel-group-header {
+    color: #7c3aed;
+}
+
+[data-theme="light"] .panel-group[data-group="control"] .panel-group-header {
+    color: #0d9488;
+}
+
+[data-theme="light"] .panel-group[data-group="post"] .panel-group-header {
+    color: #d97706;
+}
