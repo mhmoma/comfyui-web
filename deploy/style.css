@@ -2315,6 +2315,8 @@ textarea {
     gap: 5px;
     padding: 6px 8px;
     min-height: 0;
+    max-height: 200px;
+    overflow-y: auto;
     border-radius: 0 0 var(--radius) var(--radius);
     background: rgba(0, 0, 0, 0.15);
     border: 1px solid var(--border);
@@ -2340,8 +2342,9 @@ textarea {
     cursor: grab;
     user-select: none;
     transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-    max-width: 200px;
+    max-width: 100%;
     position: relative;
+    flex-shrink: 0;
 }
 
 .prompt-tag:hover {
@@ -2363,7 +2366,9 @@ textarea {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 140px;
+    max-width: calc(100% - 40px);
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .prompt-tag-weight {
