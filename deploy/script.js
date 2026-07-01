@@ -2593,6 +2593,49 @@
         }
     }
 
+    // ==================== 主题系统 ====================
+    function setupTheme() {
+        const saved = localStorage.getItem('comfyui_theme') || 'default';
+        applyTheme(saved);
+
+        const btn = document.getElementById('btn-theme');
+        const panel = document.getElementById('theme-panel');
+        if (!btn || !panel) return;
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panel.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!panel.contains(e.target) && e.target !== btn) {
+                panel.classList.add('hidden');
+            }
+        });
+
+        panel.querySelectorAll('.theme-dot').forEach(dot => {
+            dot.addEventListener('click', () => {
+                const theme = dot.dataset.theme;
+                applyTheme(theme);
+                localStorage.setItem('comfyui_theme', theme);
+                panel.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+            });
+        });
+    }
+
+    function applyTheme(theme) {
+        if (theme === 'default') {
+            document.documentElement.removeAttribute('data-theme');
+        } else {
+            document.documentElement.setAttribute('data-theme', theme);
+        }
+        document.querySelectorAll('.theme-dot').forEach(d => {
+            d.classList.toggle('active', d.dataset.theme === theme);
+        });
+    }
+
+    setupTheme();
     setupToggles();
     setupArchSwitch();
     setupPanelGroups();
