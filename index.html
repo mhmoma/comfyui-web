@@ -312,9 +312,9 @@
                             <section class="panel">
                                 <h2>图像尺寸</h2>
                                 <div class="nai-size-presets">
-                                    <button class="nai-size-btn" data-w="1472" data-h="1472">方形 1472x1472</button>
-                                    <button class="nai-size-btn" data-w="1536" data-h="1024">横向 1536x1024</button>
-                                    <button class="nai-size-btn active" data-w="1024" data-h="1536">纵向 1024x1536</button>
+                                    <button class="nai-size-btn" data-w="1024" data-h="1024">方形 1024x1024</button>
+                                    <button class="nai-size-btn" data-w="1216" data-h="832">横向 1216x832</button>
+                                    <button class="nai-size-btn active" data-w="832" data-h="1216">纵向 832x1216</button>
                                 </div>
                                 <div class="nai-upscale-row">
                                     <label><input type="checkbox" id="chk-nai-upscale"> 启用大图模式</label>
@@ -332,6 +332,10 @@
                                     <select id="sel-nai-sampler">
                                         <option value="k_euler" selected>Euler</option>
                                         <option value="k_euler_ancestral">Euler Ancestral</option>
+                                        <option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option>
+                                        <option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option>
+                                        <option value="k_dpmpp_2m">DPM++ 2M</option>
+                                        <option value="k_dpmpp_sde">DPM++ SDE</option>
                                         <option value="ddim">DDIM</option>
                                     </select>
                                 </label>

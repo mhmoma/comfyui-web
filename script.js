@@ -3634,7 +3634,7 @@
             btnReset.addEventListener('click', () => {
                 document.getElementById('sel-nai-model').value = 'nai-diffusion-4-5-full';
                 document.querySelectorAll('.nai-size-btn').forEach(b => b.classList.remove('active'));
-                document.querySelector('.nai-size-btn[data-w="1024"]').classList.add('active');
+                document.querySelector('.nai-size-btn[data-w="832"]').classList.add('active');
                 document.getElementById('inp-nai-seed').value = '-1';
                 document.getElementById('sel-nai-sampler').value = 'k_euler';
                 const resetSliders = { 'rng-nai-steps': '23', 'rng-nai-cfg': '5', 'rng-nai-rescale': '0', 'rng-nai-batch': '1' };
