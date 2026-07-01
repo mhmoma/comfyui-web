@@ -373,7 +373,7 @@
 
                 <div class="action-bar">
                     <button id="btn-generate" class="btn-primary">生成图片</button>
-                    <a href="https://www.dzmm.ai/draw/generate/create" target="_blank" rel="noopener" class="btn-dzmm" title="使用 dzmm.ai 在线生图">使用dzmm生图</a>
+                    <button id="btn-dzmm" class="btn-dzmm" title="使用 dzmm.ai 在线生图">使用dzmm生图</button>
                     <div id="progress-container" class="progress-container hidden">
                         <div id="progress-bar" class="progress-bar"></div>
                         <span id="progress-text">0%</span>
@@ -523,6 +523,18 @@
     </div>
 
     <input type="file" id="inp-wf-file" accept=".json" hidden>
+
+    <!-- dzmm.ai 嵌入面板 -->
+    <div id="dzmm-panel" class="dzmm-panel hidden">
+        <div class="dzmm-panel-header">
+            <span>dzmm.ai 在线生图</span>
+            <div class="dzmm-panel-actions">
+                <a href="https://www.dzmm.ai/draw/generate/create" target="_blank" rel="noopener" class="dzmm-open-btn" title="在新窗口打开">↗ 新窗口</a>
+                <button id="btn-dzmm-close" class="dzmm-close-btn" title="关闭">✕</button>
+            </div>
+        </div>
+        <iframe id="dzmm-iframe" class="dzmm-iframe" src="about:blank" allow="clipboard-write"></iframe>
+    </div>
 
     <!-- 元数据解析弹窗 -->
     <div id="modal-meta" class="modal hidden">
