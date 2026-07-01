@@ -2372,9 +2372,7 @@ textarea {
 }
 
 .prompt-tag-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-word;
     min-width: 0;
 }
 
@@ -2472,8 +2470,6 @@ textarea {
 .prompt-tag-zh {
     font-size: 10px;
     color: var(--accent-teal);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
     line-height: 1.2;
 }
