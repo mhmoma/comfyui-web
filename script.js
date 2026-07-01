@@ -2909,13 +2909,15 @@
             el.draggable = true;
             el.dataset.idx = idx;
 
+            const textCol = document.createElement('span');
+            textCol.className = 'prompt-tag-text-col';
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'prompt-tag-name';
             nameSpan.textContent = tag.name;
             nameSpan.title = tag.name;
             nameSpan.addEventListener('dblclick', () => this.startEdit(el, tag, idx));
-
-            el.appendChild(nameSpan);
+            textCol.appendChild(nameSpan);
 
             if (TagTranslator.showChinese) {
                 const zh = TagTranslator.getSync(tag.name);
@@ -2923,20 +2925,20 @@
                     const zhSpan = document.createElement('span');
                     zhSpan.className = 'prompt-tag-zh';
                     zhSpan.textContent = zh;
-                    el.appendChild(zhSpan);
+                    textCol.appendChild(zhSpan);
                 } else if (TagTranslator.provider !== 'local') {
                     TagTranslator.translate(tag.name).then(zh => {
                         if (zh && el.isConnected) {
                             const zhSpan = document.createElement('span');
                             zhSpan.className = 'prompt-tag-zh';
                             zhSpan.textContent = zh;
-                            const actionsEl = el.querySelector('.prompt-tag-actions');
-                            if (actionsEl) el.insertBefore(zhSpan, actionsEl);
-                            else el.appendChild(zhSpan);
+                            textCol.appendChild(zhSpan);
                         }
                     });
                 }
             }
+
+            el.appendChild(textCol);
 
             if (tag.weight !== 1.0) {
                 const wSpan = document.createElement('span');
