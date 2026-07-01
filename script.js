@@ -1563,7 +1563,19 @@
                 clearTimeout(debounce);
                 debounce = setTimeout(() => this.renderGrid(), 200);
             });
+
+            this.textarea.addEventListener('input', () => this.refreshHighlights());
+
             this.render();
+        }
+
+        refreshHighlights() {
+            const selected = this.getSelectedTags();
+            this.gridEl.querySelectorAll('.tag-item').forEach(el => {
+                const tagName = el.dataset.tag;
+                if (!tagName) return;
+                el.classList.toggle('selected', selected.has(tagName));
+            });
         }
 
         render() {
@@ -1629,6 +1641,7 @@
                 const isSelected = selected.has(tag.t);
                 const weight = this.getTagWeight(tag.t);
                 div.className = 'tag-item' + (isSelected ? ' selected' : '') + (isArtistGroup ? ' tag-artist' : '');
+                div.dataset.tag = tag.t;
                 if (isArtistGroup) {
                     const displayName = tag.t.replace(/_/g, ' ');
                     const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
