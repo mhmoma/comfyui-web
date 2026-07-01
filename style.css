@@ -2362,13 +2362,20 @@ textarea {
     box-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
 }
 
+.prompt-tag-text-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex-shrink: 1;
+    max-width: calc(100% - 40px);
+    line-height: 1.2;
+}
+
 .prompt-tag-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: calc(100% - 40px);
     min-width: 0;
-    flex-shrink: 1;
 }
 
 .prompt-tag-weight {
@@ -2465,6 +2472,8 @@ textarea {
 .prompt-tag-zh {
     font-size: 10px;
     color: var(--accent-teal);
-    margin-left: 2px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
 }
