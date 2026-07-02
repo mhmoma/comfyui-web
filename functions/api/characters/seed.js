@@ -23,8 +23,7 @@ CREATE INDEX IF NOT EXISTS idx_chars_name ON characters(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_chars_trigger ON characters(trigger_text COLLATE NOCASE);
 `;
 
-const SERIES_PER_BATCH = 10;
-const CHARS_PER_BATCH = 100;
+const CHARS_PER_BATCH = 50;
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -38,40 +37,36 @@ export async function onRequestPost(context) {
   }
 
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get('page') || '0', 10);
+  const action = url.searchParams.get('action') || 'data';
 
   try {
-    if (page === 0) {
+    if (action === 'init') {
       const stmts = SCHEMA.split(';').map(s => s.trim()).filter(Boolean);
       for (const stmt of stmts) {
         await db.prepare(stmt).run();
       }
-      await db.prepare('DELETE FROM characters').run();
-      await db.prepare('DELETE FROM series').run();
+      return json(200, { ok: true, message: 'Schema created, tables cleared' });
     }
 
-    const githubUrl = 'https://raw.githubusercontent.com/mhmoma/comfyui-Web/main/characters.json';
-    const res = await fetch(githubUrl);
-    if (!res.ok) return json(500, { error: `GitHub fetch failed: ${res.status}` });
-    const allData = await res.json();
+    if (action === 'status') {
+      const { results: sc } = await db.prepare('SELECT COUNT(*) as cnt FROM series').all();
+      const { results: cc } = await db.prepare('SELECT COUNT(*) as cnt FROM characters').all();
+      return json(200, { ok: true, series: sc[0]?.cnt || 0, characters: cc[0]?.cnt || 0 });
+    }
 
-    const start = page * SERIES_PER_BATCH;
-    const end = Math.min(start + SERIES_PER_BATCH, allData.length);
-    const batch = allData.slice(start, end);
-
-    if (batch.length === 0) {
-      const { results } = await db.prepare('SELECT COUNT(*) as cnt FROM characters').all();
-      const charCount = results[0]?.cnt || 0;
-      return json(200, { ok: true, done: true, totalCharacters: charCount, message: 'All data seeded!' });
+    const body = await request.json();
+    if (!Array.isArray(body) || body.length === 0) {
+      return json(400, { error: 'POST body must be a non-empty array of series objects' });
     }
 
     let charCount = 0;
-    const seriesStmts = batch.map(s =>
+    const seriesStmts = body.map(s =>
       db.prepare('INSERT OR REPLACE INTO series (id, name, count) VALUES (?, ?, ?)').bind(s.id, s.name, s.count || 0)
     );
     await db.batch(seriesStmts);
 
-    for (const s of batch) {
+    for (const s of body) {
+      if (!s.characters || !Array.isArray(s.characters)) continue;
       const allCharStmts = s.characters.map(ch =>
         db.prepare(
           'INSERT INTO characters (series_id, trigger_text, name, thumb_url, count, lora_url, tags) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -84,15 +79,10 @@ export async function onRequestPost(context) {
       }
     }
 
-    const hasMore = end < allData.length;
     return json(200, {
       ok: true,
-      done: !hasMore,
-      page,
-      seriesProcessed: batch.length,
+      seriesProcessed: body.length,
       charactersInserted: charCount,
-      progress: `${end}/${allData.length} series`,
-      nextPage: hasMore ? page + 1 : null,
     });
   } catch (e) {
     return json(500, { error: e.message, stack: e.stack });
