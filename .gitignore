@@ -1,3 +1,13 @@
 
-# 忽略超大原始数据文件
+# 忽略数据文件（保密）
 animadex_raw.json
+characters.json
+danbooru_chars_clean.json
+danbooru_chars_raw.json
+artists.json
+artists_raw.json
+
+# Wrangler 缓存和本地状态
+.wrangler/cache/
+.wrangler/state/
+.wrangler/tmp/
