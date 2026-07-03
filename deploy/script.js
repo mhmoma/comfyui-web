@@ -555,25 +555,24 @@
     let hasComfyUIManager = false;
 
     async function loadIPAdapterModels() {
-        try {
-            const data = await apiGet('/object_info/IPAdapterSimple');
-            ipaPluginInstalled = true;
-            const models = data.IPAdapterSimple?.input?.required?.ipadapter_file?.[0] || [];
-            ipaModels = models;
-            updateIPAdapterUI();
-        } catch (e1) {
+        const nodeNames = ['IPAdapterModelLoader', 'IPAdapterSimple', 'IPAdapter'];
+        let found = false;
+        for (const nodeName of nodeNames) {
             try {
-                const data = await apiGet('/object_info/IPAdapter');
+                const data = await apiGet('/object_info/' + nodeName);
                 ipaPluginInstalled = true;
-                const models = data.IPAdapter?.input?.required?.ipadapter_file?.[0] || [];
+                const nodeInfo = data[nodeName]?.input?.required;
+                const models = nodeInfo?.ipadapter_file?.[0] || nodeInfo?.model_name?.[0] || [];
                 ipaModels = models;
-                updateIPAdapterUI();
-            } catch (e2) {
-                ipaPluginInstalled = false;
-                ipaModels = [];
-                updateIPAdapterUI();
-            }
+                found = true;
+                break;
+            } catch (_) {}
         }
+        if (!found) {
+            ipaPluginInstalled = false;
+            ipaModels = [];
+        }
+        updateIPAdapterUI();
 
         try {
             await apiGet('/api/extensions');
