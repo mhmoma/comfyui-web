@@ -1815,7 +1815,8 @@
             if (!this.gridEl || !this.subTabsEl) { console.error('Missing elements!'); return; }
             this.gridEl.innerHTML = '';
             this._removePagination();
-            const search = this.searchEl.value.toLowerCase();
+            this._hideAutocomplete();
+            const search = this._searchMode === 'category' ? '' : this.searchEl.value.toLowerCase();
             let items;
             if (search) {
                 if (this.groupIdx === _artistGroupIdx) {
