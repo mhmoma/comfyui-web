@@ -54,12 +54,30 @@ body {
 }
 
 .header h1 {
-    font-size: 1.4rem;
-    font-weight: 600;
-    background: linear-gradient(135deg, var(--accent), #ff9a9e);
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), #ff6b9d, #c084fc);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    letter-spacing: 0.5px;
+    text-shadow: none;
+    filter: drop-shadow(0 0 8px rgba(233, 69, 96, 0.3));
+}
+
+.version-badge {
+    font-size: 0.65em;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    padding: 2px 8px;
+    border: 1px solid var(--accent-blue);
+    border-radius: 12px;
+    margin-left: 6px;
+    vertical-align: middle;
+    filter: none;
 }
 
 /* Buttons */
