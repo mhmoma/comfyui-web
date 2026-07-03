@@ -2262,7 +2262,12 @@
                     this.gridEl.innerHTML = `<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%;font-size:0.85rem">${msg}</div>`;
                     return;
                 }
-                this._renderItems(items);
+                const isAllFav = this._virtualMode === 'fav' && (this._virtualSub || 0) === 0;
+                if (isAllFav && items.length > 0) {
+                    this._renderGroupedFavItems(items);
+                } else {
+                    this._renderItems(items);
+                }
                 return;
             }
 
@@ -2528,6 +2533,74 @@
                     : '点击添加/移除 | 点⭐收藏 | Shift+点击加权重 | Ctrl+点击减权重';
                 this.gridEl.appendChild(div);
             });
+        }
+
+        _renderGroupedFavItems(items) {
+            this.gridEl.innerHTML = '';
+            const groups = { character: [], artist: [], tag: [] };
+            items.forEach(item => {
+                const type = item.type || 'tag';
+                if (groups[type]) groups[type].push(item);
+                else groups.tag.push(item);
+            });
+            const labels = { character: '👤 角色', artist: '🎨 画师', tag: '🏷️ 标签' };
+            const order = ['character', 'artist', 'tag'];
+            const selected = this.getSelectedTags();
+            let hasContent = false;
+            order.forEach(type => {
+                const arr = groups[type];
+                if (!arr.length) return;
+                hasContent = true;
+                const header = document.createElement('div');
+                header.className = 'fav-group-header';
+                header.innerHTML = `<span>${labels[type]}</span><span class="fav-group-count">${arr.length}</span>`;
+                this.gridEl.appendChild(header);
+                const section = document.createElement('div');
+                section.className = 'fav-group-grid';
+                arr.forEach(tag => {
+                    const div = document.createElement('div');
+                    const isSelected = selected.has(tag.t);
+                    const weight = this.getTagWeight(tag.t);
+                    const hasThumb = !!tag.th;
+                    const isFav = FavManager.has(tag.t);
+                    const useCount = tag._count || UsageTracker.getCount(tag.t);
+                    const isArtist = type === 'artist';
+                    div.className = 'tag-item' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtist ? ' tag-artist' : '');
+                    div.dataset.tag = tag.t;
+                    const favStar = `<span class="tag-fav-star fav-active" title="取消收藏">★</span>`;
+                    const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
+                    if (hasThumb) {
+                        div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                        div.addEventListener('click', (e) => {
+                            if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
+                            e.stopPropagation();
+                            if (isArtist) showArtistPreview(tag);
+                            else showCharPreview(tag);
+                        });
+                    } else if (isArtist) {
+                        const displayName = tag.t.replace(/_/g, ' ');
+                        const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
+                        div.innerHTML = `${favStar}<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                    } else {
+                        div.innerHTML = `${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                    }
+                    if (!hasThumb) {
+                        div.addEventListener('click', (e) => {
+                            if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
+                            if (e.shiftKey && isSelected) this.adjustWeight(tag.t, 0.1);
+                            else if (e.ctrlKey && isSelected) this.adjustWeight(tag.t, -0.1);
+                            else this.toggleTag(tag.t, tag.d, tag.th);
+                            this.renderGrid();
+                        });
+                    }
+                    div.title = hasThumb ? '点击查看详情 | 点⭐收藏' : '点击添加/移除 | 点⭐收藏';
+                    section.appendChild(div);
+                });
+                this.gridEl.appendChild(section);
+            });
+            if (!hasContent) {
+                this.gridEl.innerHTML = `<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%;font-size:0.85rem">还没有收藏任何标签，在标签卡片上点击 ⭐ 来收藏</div>`;
+            }
         }
 
         getSelectedTags() {

@@ -3351,6 +3351,47 @@ textarea {
     border-color: #fbbf24 !important;
 }
 
+/* ==================== 收藏分组视图 ==================== */
+.fav-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 4px 4px;
+    margin-top: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary, #aaa);
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+
+.fav-group-header:first-child {
+    margin-top: 0;
+}
+
+.fav-group-count {
+    font-size: 0.7rem;
+    font-weight: 400;
+    background: var(--accent, #7c3aed);
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+.fav-group-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0 4px;
+    width: 100%;
+}
+
+.fav-group-grid .tag-item {
+    position: relative;
+}
+
 /* ==================== Architecture-aware Panel States ==================== */
 .arch-hidden {
     display: none !important;
