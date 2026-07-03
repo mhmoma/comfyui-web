@@ -710,7 +710,6 @@
     async function downloadIPAdapterModel() {
         const needsIPA = ipaModels.length === 0;
         const needsCLIP = ipaClipVisionModels.length === 0;
-
         const downloads = [];
         if (needsIPA) {
             downloads.push({
@@ -728,7 +727,6 @@
                 size: '~2.5GB',
             });
         }
-
         if (downloads.length === 0) return;
 
         dom.btnIpaDownload.disabled = true;
@@ -739,15 +737,12 @@
 
         try {
             for (const dl of downloads) {
-                await fetch(`${getServer()}/api/install-model`, {
+                const res = await fetch(`${getServer()}/api/install-model`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        url: dl.url,
-                        filename: dl.filename,
-                        save_path: dl.save_path,
-                    }),
+                    body: JSON.stringify({ url: dl.url, filename: dl.filename, save_path: dl.save_path }),
                 });
+                if (!res.ok) throw new Error(`Manager API failed for ${dl.filename}`);
             }
 
             dom.ipaProgressBar.style.width = '30%';
@@ -774,15 +769,11 @@
                 if (attempts > 180) {
                     clearInterval(checkInterval);
                     dom.ipaProgressText.textContent = '下载超时，请手动下载';
-                        dom.btnIpaDownload.disabled = false;
-                    }
-                }, 5000);
-                return;
-            }
-
-            throw new Error('Manager API 不可用');
+                    dom.btnIpaDownload.disabled = false;
+                }
+            }, 5000);
         } catch (e) {
-            console.warn('ComfyUI Manager 下载失败，显示手动下载指引:', e);
+            console.warn('下载失败:', e);
             dom.ipaProgressText.textContent = '自动下载失败，请手动下载';
             dom.btnIpaDownload.disabled = false;
             setTimeout(() => dom.ipaDownloadProgress.classList.add('hidden'), 3000);
