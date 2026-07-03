@@ -3462,10 +3462,12 @@ textarea {
 }
 
 .fav-col-grid .tag-item.fav-mini.tag-char .tag-use-count {
+    top: auto;
+    right: auto;
+    bottom: 2px;
+    left: 2px;
     font-size: 0.55rem;
     padding: 0 3px;
-    bottom: -2px;
-    left: -2px;
 }
 
 .fav-col-grid .tag-item.fav-mini:not(.tag-char) {
