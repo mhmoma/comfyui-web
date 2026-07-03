@@ -656,8 +656,25 @@
 
         dom.ipaStatus.classList.remove('hidden', 'ipa-warn');
         dom.ipaStatus.classList.add('ipa-ok');
-        dom.ipaStatus.textContent = `✓ 检测到 ${ipaModels.length} 个模型 (${ipaApplyNode})`;
-        dom.ipaDownloadArea.classList.add('hidden');
+        let statusMsg = `✓ ${ipaModels.length} 个 IPA 模型`;
+        if (ipaClipVisionModels.length > 0) {
+            statusMsg += ` · ${ipaClipVisionModels.length} 个 CLIP Vision`;
+        } else {
+            dom.ipaStatus.classList.remove('ipa-ok');
+            dom.ipaStatus.classList.add('ipa-warn');
+            statusMsg += ' · ⚠️ 缺少 CLIP Vision 模型';
+        }
+        dom.ipaStatus.textContent = statusMsg;
+
+        if (ipaClipVisionModels.length === 0) {
+            dom.ipaDownloadArea.classList.remove('hidden');
+            const hint = dom.ipaDownloadArea.querySelector('.ipa-download-hint');
+            if (hint) hint.textContent = '需要下载 CLIP Vision 模型才能使用 IP-Adapter';
+            const manualHint = dom.ipaDownloadArea.querySelector('.ipa-manual-hint');
+            if (manualHint) manualHint.innerHTML = '手动下载: <a href="https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors" target="_blank" rel="noopener">CLIP-ViT-H model.safetensors</a> → 放入 <code>models/clip_vision/</code>';
+        } else {
+            dom.ipaDownloadArea.classList.add('hidden');
+        }
 
         ipaModels.forEach(m => {
             const opt = document.createElement('option');
