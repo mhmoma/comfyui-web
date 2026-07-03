@@ -16,10 +16,10 @@
     --accent-purple: #a78bfa;
     --accent-amber: #f59e0b;
     --accent-teal: #2dd4bf;
-    --text-primary: #e8e8f0;
-    --text-secondary: #9898b0;
-    --border: #2e2e4a;
-    --border-subtle: #252540;
+    --text-primary: #eaeaf2;
+    --text-secondary: #a8a8c4;
+    --border: #3a3a5c;
+    --border-subtle: #30304a;
     --radius: 8px;
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 
@@ -108,7 +108,7 @@ body {
 }
 
 .btn-primary:disabled {
-    opacity: 0.5;
+    opacity: 0.55;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -405,6 +405,11 @@ input[type="file"]::file-selector-button {
 
 select:focus, input:focus, textarea:focus {
     border-color: var(--accent);
+}
+
+::placeholder {
+    color: #7a7a96;
+    opacity: 1;
 }
 
 textarea {
@@ -922,7 +927,7 @@ textarea {
 }
 
 .tag-item .tag-text {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     color: var(--text-secondary);
     margin-top: 1px;
 }
@@ -933,8 +938,8 @@ textarea {
     right: -6px;
     background: var(--accent);
     color: white;
-    font-size: 0.55rem;
-    padding: 1px 4px;
+    font-size: 0.6rem;
+    padding: 2px 5px;
     border-radius: 8px;
     display: none;
 }
@@ -956,7 +961,7 @@ textarea {
 }
 
 .tag-item.tag-artist .tag-desc {
-    font-size: 0.58rem;
+    font-size: 0.63rem;
     color: var(--text-secondary);
     font-weight: 400;
     margin-top: 2px;
@@ -989,13 +994,13 @@ textarea {
 }
 
 .artist-pagination button:disabled {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .artist-pagination .page-info {
-    font-size: 0.72rem;
-    color: var(--text-secondary);
+    font-size: 0.75rem;
+    color: var(--text-primary);
 }
 
 .artist-pagination .page-jump {
@@ -1048,10 +1053,10 @@ textarea {
 }
 
 .ac-group {
-    font-size: 0.62rem;
-    color: var(--accent);
-    background: rgba(99, 102, 241, 0.15);
-    padding: 1px 5px;
+    font-size: 0.65rem;
+    color: var(--accent-blue);
+    background: rgba(74, 158, 255, 0.12);
+    padding: 2px 6px;
     border-radius: 3px;
     flex-shrink: 0;
     white-space: nowrap;
@@ -1074,14 +1079,14 @@ textarea {
 }
 
 .ac-count {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     color: var(--text-secondary);
     flex-shrink: 0;
 }
 
 .ac-more {
     padding: 6px 12px;
-    font-size: 0.62rem;
+    font-size: 0.65rem;
     color: var(--text-secondary);
     text-align: center;
 }
@@ -1097,13 +1102,13 @@ textarea {
 
 .letter-btn {
     display: inline-block;
-    padding: 2px 6px;
-    font-size: 0.68rem;
+    padding: 3px 6px;
+    font-size: 0.7rem;
     border-radius: 4px;
     cursor: pointer;
     color: var(--text-secondary);
     transition: all 0.15s;
-    min-width: 20px;
+    min-width: 22px;
     text-align: center;
 }
 
