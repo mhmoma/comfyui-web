@@ -1860,13 +1860,14 @@
         _data: null,
         _load() { if (!this._data) this._data = JSON.parse(localStorage.getItem(this._KEY) || '{}'); return this._data; },
         _save() { localStorage.setItem(this._KEY, JSON.stringify(this._data)); },
-        record(tagText, desc, thumb) {
+        record(tagText, desc, thumb, type) {
             const data = this._load();
             if (!data[tagText]) data[tagText] = { d: desc || '', th: thumb || '', count: 0, last: 0 };
             data[tagText].count++;
             data[tagText].last = Date.now();
             if (desc) data[tagText].d = desc;
             if (thumb) data[tagText].th = thumb;
+            if (type) data[tagText].type = type;
             const keys = Object.keys(data);
             if (keys.length > 1000) {
                 keys.sort((a, b) => data[a].last - data[b].last);
@@ -1879,14 +1880,14 @@
             return Object.entries(data)
                 .sort((a, b) => b[1].last - a[1].last)
                 .slice(0, limit)
-                .map(([t, v]) => ({ t, d: v.d, th: v.th, _count: v.count, _last: v.last }));
+                .map(([t, v]) => ({ t, d: v.d, th: v.th, type: v.type || 'tag', _count: v.count, _last: v.last }));
         },
         getFrequent(limit = 100) {
             const data = this._load();
             return Object.entries(data)
                 .sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last)
                 .slice(0, limit)
-                .map(([t, v]) => ({ t, d: v.d, th: v.th, _count: v.count, _last: v.last }));
+                .map(([t, v]) => ({ t, d: v.d, th: v.th, type: v.type || 'tag', _count: v.count, _last: v.last }));
         },
         getCount(tagText) { return (this._load()[tagText] || {}).count || 0; },
         clear() { this._data = {}; this._save(); },
@@ -2641,12 +2642,13 @@
             return 1.0;
         }
 
-        toggleTag(tagText, tagDesc, tagThumb) {
+        toggleTag(tagText, tagDesc, tagThumb, tagType) {
             const isArtist = !this._virtualMode && tagData[this.groupIdx]?.name?.includes('画师');
             let formatted = tagText;
             if (isAnimaMode()) {
                 formatted = isArtist ? formatAnimaArtistTag(tagText) : formatAnimaTag(tagText);
             }
+            const resolvedType = tagType || (isArtist ? 'artist' : (tagThumb ? 'character' : 'tag'));
 
             let parts = this.textarea.value.split(',').map(s => s.trim()).filter(Boolean);
             const idx = parts.findIndex(p => {
@@ -2658,7 +2660,7 @@
                 parts.splice(idx, 1);
             } else {
                 parts.push(formatted);
-                UsageTracker.record(tagText, tagDesc, tagThumb);
+                UsageTracker.record(tagText, tagDesc, tagThumb, resolvedType);
             }
             this.textarea.value = parts.join(', ');
             this.textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2725,7 +2727,7 @@
                     if (e.target.dataset.action === 'trigger-tags' && storedTag.tags && storedTag.tags.length > 0) {
                         text = text + ', ' + storedTag.tags.join(', ');
                     }
-                    UsageTracker.record(storedTag.t, storedTag.d, storedTag.th);
+                    UsageTracker.record(storedTag.t, storedTag.d, storedTag.th, 'character');
                     const ta = dom.txtPositive;
                     const cur = ta.value.trim();
                     ta.value = cur ? cur + ', ' + text : text;
@@ -2804,7 +2806,7 @@
                 if (e.target.dataset.action === 'trigger') {
                     const storedTag = overlay._currentTag;
                     if (!storedTag) return;
-                    UsageTracker.record(storedTag.t, storedTag.d, storedTag.th);
+                    UsageTracker.record(storedTag.t, storedTag.d, storedTag.th, 'artist');
                     const formatted = isAnimaMode() ? formatAnimaArtistTag(storedTag.t) : storedTag.t;
                     const ta = dom.txtPositive;
                     const cur = ta.value.trim();
