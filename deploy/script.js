@@ -1726,13 +1726,14 @@
                     div.innerHTML = `<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}<span class="tag-weight">${weight.toFixed(1)}</span>`;
                 } else if (hasThumb) {
                     div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy"><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span><span class="tag-weight">${weight.toFixed(1)}</span>`;
-                    div.addEventListener('contextmenu', (e) => {
-                        e.preventDefault();
+                    div.addEventListener('click', (e) => {
+                        e.stopPropagation();
                         showCharPreview(tag);
                     });
                 } else {
                     div.innerHTML = `<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span><span class="tag-weight">${weight.toFixed(1)}</span>`;
                 }
+                if (!hasThumb) {
                 div.addEventListener('click', (e) => {
                     if (e.shiftKey && isSelected) {
                         this.adjustWeight(tag.t, 0.1);
@@ -1743,6 +1744,7 @@
                     }
                     this.renderGrid();
                 });
+                }
                 div.title = hasThumb
                     ? '点击添加/移除 | 右键预览 | Shift+点击加权重 | Ctrl+点击减权重'
                     : '点击添加/移除 | Shift+点击加权重 | Ctrl+点击减权重';
@@ -1830,8 +1832,8 @@
                         <div class="char-preview-tags"></div>
                         <div class="char-preview-lora"></div>
                         <div class="char-preview-actions">
-                            <button class="char-preview-btn" data-action="trigger">Trigger</button>
-                            <button class="char-preview-btn" data-action="trigger-tags">Trigger + Tags</button>
+                            <button class="char-preview-btn" data-action="trigger">填入触发词</button>
+                            <button class="char-preview-btn" data-action="trigger-tags">触发词 + 特征标签</button>
                         </div>
                     </div>
                     <button class="char-preview-close">✕</button>
@@ -1860,7 +1862,7 @@
         overlay.querySelector('.char-preview-img').src = imgUrl;
         overlay.querySelector('.char-preview-img').alt = tag.d;
         overlay.querySelector('.char-preview-name').textContent = tag.d;
-        overlay.querySelector('.char-preview-trigger').textContent = tag.t;
+        overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
         const tagsEl = overlay.querySelector('.char-preview-tags');
         if (tag.tags && tag.tags.length > 0) {
             tagsEl.innerHTML = tag.tags.map(t => `<span class="char-tag-pill">${t}</span>`).join('');
@@ -1871,7 +1873,7 @@
         }
         const loraEl = overlay.querySelector('.char-preview-lora');
         if (tag.lora) {
-            loraEl.innerHTML = `<a href="${tag.lora}" target="_blank" rel="noopener">CivitAI LoRA</a>`;
+            loraEl.innerHTML = `<a href="${tag.lora}" target="_blank" rel="noopener">CivitAI LoRA 模型下载</a>`;
             loraEl.classList.remove('hidden');
         } else {
             loraEl.classList.add('hidden');

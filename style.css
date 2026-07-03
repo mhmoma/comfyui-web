@@ -2809,17 +2809,19 @@ textarea {
 
 /* ==================== 角色缩略图标签 ==================== */
 .tag-item.tag-char {
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    min-width: 150px;
-    max-width: 220px;
+    gap: 4px;
+    padding: 6px;
+    width: 120px;
+    min-width: 120px;
+    max-width: 120px;
+    cursor: pointer;
 }
 
 .tag-thumb {
-    width: 64px;
-    height: 64px;
+    width: 108px;
+    height: 108px;
     border-radius: 6px;
     object-fit: cover;
     flex-shrink: 0;
@@ -2828,17 +2830,21 @@ textarea {
 }
 
 .tag-item.tag-char .tag-desc {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
 }
 
 .tag-item.tag-char .tag-text {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
 }
 
 /* ==================== 角色预览弹窗 ==================== */
