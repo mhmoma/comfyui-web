@@ -958,6 +958,17 @@
             modelOut = [ipaApplyId, 0];
         }
 
+        // Clip Skip
+        const clipSkip = parseInt(document.getElementById('inp-clip-skip')?.value || '1');
+        if (clipSkip > 1) {
+            const csId = id();
+            nodes[csId] = {
+                class_type: "CLIPSetLastLayer",
+                inputs: { clip: clipOut, stop_at_clip_layer: -clipSkip },
+            };
+            clipOut = [csId, 0];
+        }
+
         // CLIP Text Encode - Positive (with wildcard resolution)
         const resolvedPositive = resolveWildcards(dom.txtPositive.value || '');
         const posId = id();
