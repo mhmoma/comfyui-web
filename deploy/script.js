@@ -1674,11 +1674,30 @@
             this.subTabsEl = document.querySelector(`.tag-subtabs[data-picker="${pickerId}"]`);
             this.gridEl = document.querySelector(`.tag-grid[data-picker="${pickerId}"]`);
             this.searchEl = document.querySelector(`.tag-search[data-picker="${pickerId}"]`);
+            this.searchModeBtn = document.querySelector(`.search-mode-btn[data-picker="${pickerId}"]`);
+            this._searchMode = 'tag';
+
+            if (this.searchModeBtn) {
+                this.searchModeBtn.addEventListener('click', () => {
+                    this._searchMode = this._searchMode === 'tag' ? 'category' : 'tag';
+                    this.searchModeBtn.textContent = this._searchMode === 'tag' ? '标签' : '分类';
+                    this.searchModeBtn.classList.toggle('mode-category', this._searchMode === 'category');
+                    this.searchEl.placeholder = this._searchMode === 'tag' ? '搜索标签...' : '搜索分类/作品名...';
+                    this.searchEl.value = '';
+                    this.renderGrid();
+                });
+            }
 
             let debounce;
             this.searchEl.addEventListener('input', () => {
                 clearTimeout(debounce);
-                debounce = setTimeout(() => this.renderGrid(), 200);
+                debounce = setTimeout(() => {
+                    if (this._searchMode === 'category') {
+                        this._renderCategorySearch();
+                    } else {
+                        this.renderGrid();
+                    }
+                }, 200);
             });
 
             this.textarea.addEventListener('input', () => this.refreshHighlights());
@@ -1880,6 +1899,45 @@
             if (existing) existing.remove();
             const letterBar = this.gridEl.parentElement?.querySelector('.artist-letter-bar');
             if (letterBar && this.groupIdx !== _artistGroupIdx) letterBar.remove();
+        }
+
+        _renderCategorySearch() {
+            const query = this.searchEl.value.toLowerCase().trim();
+            this.gridEl.innerHTML = '';
+            this._removePagination();
+            if (!query) {
+                this.gridEl.innerHTML = '<div style="padding:20px;color:#999;text-align:center">输入作品名搜索分类…</div>';
+                return;
+            }
+            const results = [];
+            tagData.forEach((group, gi) => {
+                (group.subgroups || []).forEach((sub, si) => {
+                    if (!sub || !sub.name) return;
+                    if (sub.name.toLowerCase().includes(query)) {
+                        results.push({ groupIdx: gi, subIdx: si, groupName: group.name, subName: sub.name, tagCount: sub.tags?.length || 0, seriesId: sub._seriesId });
+                    }
+                });
+            });
+            if (results.length === 0) {
+                this.gridEl.innerHTML = '<div style="padding:20px;color:#999;text-align:center">未找到匹配的分类</div>';
+                return;
+            }
+            results.slice(0, 50).forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'category-result';
+                div.innerHTML = `<span class="cat-group">${r.groupName}</span><span class="cat-name">${r.subName}</span><span class="cat-count">${r.tagCount > 0 ? r.tagCount + ' 个标签' : '点击加载'}</span>`;
+                div.addEventListener('click', () => {
+                    this.groupIdx = r.groupIdx;
+                    this.subIdx = r.subIdx;
+                    this._searchMode = 'tag';
+                    this.searchModeBtn.textContent = '标签';
+                    this.searchModeBtn.classList.remove('mode-category');
+                    this.searchEl.placeholder = '搜索标签...';
+                    this.searchEl.value = '';
+                    this.render();
+                });
+                this.gridEl.appendChild(div);
+            });
         }
 
         _renderItems(items) {

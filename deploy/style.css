@@ -830,11 +830,43 @@ textarea {
     color: white;
 }
 
+.search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+}
+
+.search-mode-btn {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    line-height: 1.2;
+}
+
+.search-mode-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.search-mode-btn.mode-category {
+    background: var(--accent);
+    color: #fff;
+}
+
 .tag-search {
     width: 120px;
     padding: 4px 8px;
     font-size: 0.7rem;
     flex-shrink: 0;
+    border-radius: 0 4px 4px 0 !important;
 }
 
 .tag-subtabs {
@@ -980,6 +1012,52 @@ textarea {
     color: var(--text-primary);
     font-size: 0.72rem;
     text-align: center;
+}
+
+/* Category search results */
+.category-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.category-result:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.category-result:hover .cat-group,
+.category-result:hover .cat-name,
+.category-result:hover .cat-count {
+    color: #fff;
+}
+
+.cat-group {
+    font-size: 0.65rem;
+    color: var(--accent);
+    background: rgba(99, 102, 241, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.cat-name {
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    flex: 1;
+}
+
+.cat-count {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
 }
 
 /* Artist letter bar */

@@ -1549,6 +1549,19 @@
     let _charGroupIdx = -1;
     const CHAR_BASE_SUBS = 1;
 
+    const _artistCache = {};
+    let _artistGroupIdx = -1;
+    let _artistPage = 1;
+    let _artistTotalPages = 1;
+    let _artistCurrentSort = 'score';
+    let _artistCurrentLetter = 'all';
+    const _ARTIST_SORT_MODES = [
+        { name: '精选', sort: 'score', order: 'desc', icon: '🏆' },
+        { name: '热门', sort: 'count', order: 'desc', icon: '🔥' },
+        { name: '收藏', sort: 'fav', order: 'desc', icon: '❤️' },
+        { name: '字母', sort: 'name', order: 'asc', icon: '🔤' },
+    ];
+
     async function loadTags() {
         try {
             const res = await fetch('tags.json');
@@ -1576,6 +1589,23 @@
         } catch (e) {
             console.warn('[D1] 角色系列加载失败，使用本地数据:', e);
         }
+        try {
+            const artistGroup = {
+                name: '画师风格',
+                _isArtistGroup: true,
+                subgroups: _ARTIST_SORT_MODES.map(mode => ({
+                    name: `${mode.icon} ${mode.name}`,
+                    _artistSort: mode.sort,
+                    _artistOrder: mode.order,
+                    tags: [],
+                }))
+            };
+            tagData.push(artistGroup);
+            _artistGroupIdx = tagData.length - 1;
+            console.log('[D1] Artist group added, loading from database');
+        } catch (e) {
+            console.warn('[D1] 画师分组加载失败:', e);
+        }
     }
 
     async function _fetchSeriesChars(seriesId) {
@@ -1595,6 +1625,45 @@
         } catch { return []; }
     }
 
+    async function _fetchArtists(sort = 'score', order = 'desc', page = 1, letter = 'all') {
+        const key = `${sort}_${order}_${page}_${letter}`;
+        if (_artistCache[key]) return _artistCache[key];
+        try {
+            let url = `/api/artists/list?sort=${sort}&order=${order}&page=${page}&limit=100`;
+            if (letter && letter !== 'all') url += `&letter=${letter}`;
+            const res = await fetch(url);
+            if (!res.ok) return { tags: [], pages: 1 };
+            const data = await res.json();
+            const tags = data.results.map(a => ({
+                t: a.trigger_text,
+                d: a.name,
+                th: a.thumb_url,
+                img: a.img_url,
+                count: a.count,
+                score: a.score,
+                fav: a.fav_count,
+            }));
+            const result = { tags, pages: data.pages, total: data.total };
+            _artistCache[key] = result;
+            return result;
+        } catch { return { tags: [], pages: 1 }; }
+    }
+
+    async function _searchArtistsFromDb(query) {
+        try {
+            const res = await fetch(`/api/artists/search?q=${encodeURIComponent(query)}&limit=100`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.map(a => ({
+                t: a.trigger_text,
+                d: a.name,
+                th: a.thumb_url,
+                img: a.img_url,
+                count: a.count,
+            }));
+        } catch { return []; }
+    }
+
     class TagPicker {
         constructor(pickerId, textarea) {
             this.id = pickerId;
@@ -1605,11 +1674,30 @@
             this.subTabsEl = document.querySelector(`.tag-subtabs[data-picker="${pickerId}"]`);
             this.gridEl = document.querySelector(`.tag-grid[data-picker="${pickerId}"]`);
             this.searchEl = document.querySelector(`.tag-search[data-picker="${pickerId}"]`);
+            this.searchModeBtn = document.querySelector(`.search-mode-btn[data-picker="${pickerId}"]`);
+            this._searchMode = 'tag';
+
+            if (this.searchModeBtn) {
+                this.searchModeBtn.addEventListener('click', () => {
+                    this._searchMode = this._searchMode === 'tag' ? 'category' : 'tag';
+                    this.searchModeBtn.textContent = this._searchMode === 'tag' ? '标签' : '分类';
+                    this.searchModeBtn.classList.toggle('mode-category', this._searchMode === 'category');
+                    this.searchEl.placeholder = this._searchMode === 'tag' ? '搜索标签...' : '搜索分类/作品名...';
+                    this.searchEl.value = '';
+                    this.renderGrid();
+                });
+            }
 
             let debounce;
             this.searchEl.addEventListener('input', () => {
                 clearTimeout(debounce);
-                debounce = setTimeout(() => this.renderGrid(), 200);
+                debounce = setTimeout(() => {
+                    if (this._searchMode === 'category') {
+                        this._renderCategorySearch();
+                    } else {
+                        this.renderGrid();
+                    }
+                }, 200);
             });
 
             this.textarea.addEventListener('input', () => this.refreshHighlights());
@@ -1642,6 +1730,12 @@
                     this.groupIdx = i;
                     this.subIdx = 0;
                     this.searchEl.value = '';
+                    if (i === _artistGroupIdx) {
+                        _artistPage = 1;
+                        _artistCurrentSort = 'score';
+                        _artistCurrentLetter = 'all';
+                    }
+                    this._removePagination();
                     this.render();
                 });
                 this.tabsEl.appendChild(tab);
@@ -1657,6 +1751,11 @@
                 tab.textContent = s.name;
                 tab.addEventListener('click', () => {
                     this.subIdx = i;
+                    if (this.groupIdx === _artistGroupIdx && s._artistSort) {
+                        _artistPage = 1;
+                        _artistCurrentSort = s._artistSort;
+                        _artistCurrentLetter = 'all';
+                    }
                     this.renderSubTabs();
                     if (this.groupIdx === _charGroupIdx && i >= CHAR_BASE_SUBS && s._seriesId && s.tags.length === 0) {
                         this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
@@ -1670,14 +1769,51 @@
                 });
                 this.subTabsEl.appendChild(tab);
             });
+            if (this.groupIdx === _artistGroupIdx) {
+                this._renderArtistLetterBar();
+            }
+        }
+
+        _renderArtistLetterBar() {
+            const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
+            if (!sub || sub._artistSort !== 'name') return;
+            let bar = this.subTabsEl.parentElement.querySelector('.artist-letter-bar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.className = 'artist-letter-bar';
+                this.subTabsEl.parentElement.insertBefore(bar, this.gridEl);
+            }
+            bar.innerHTML = '';
+            const letters = ['all', ...'abcdefghijklmnopqrstuvwxyz'.split(''), 'other'];
+            const labels = { all: '全部', other: '#' };
+            letters.forEach(l => {
+                const btn = document.createElement('span');
+                btn.className = 'letter-btn' + (l === _artistCurrentLetter ? ' active' : '');
+                btn.textContent = labels[l] || l.toUpperCase();
+                btn.addEventListener('click', () => {
+                    _artistCurrentLetter = l;
+                    _artistPage = 1;
+                    this.renderGrid();
+                    bar.querySelectorAll('.letter-btn').forEach(b => b.classList.toggle('active', b.textContent === (labels[l] || l.toUpperCase())));
+                });
+                bar.appendChild(btn);
+            });
         }
 
         renderGrid() {
             if (!this.gridEl || !this.subTabsEl) { console.error('Missing elements!'); return; }
             this.gridEl.innerHTML = '';
+            this._removePagination();
             const search = this.searchEl.value.toLowerCase();
             let items;
             if (search) {
+                if (this.groupIdx === _artistGroupIdx) {
+                    this.gridEl.innerHTML = '<div style="padding:20px;color:#999">搜索中...</div>';
+                    _searchArtistsFromDb(search).then(dbItems => {
+                        this._renderItems(dbItems);
+                    });
+                    return;
+                }
                 items = [];
                 tagData.forEach(g => g.subgroups.forEach(s => (s.tags || []).forEach(t => {
                     if (t.t.toLowerCase().includes(search) || t.d.includes(search)) items.push(t);
@@ -1692,6 +1828,17 @@
                         }
                     });
                 }
+            } else if (this.groupIdx === _artistGroupIdx) {
+                const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
+                if (!sub || !sub._artistSort) return;
+                this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                const letter = sub._artistSort === 'name' ? _artistCurrentLetter : 'all';
+                _fetchArtists(sub._artistSort, sub._artistOrder, _artistPage, letter).then(result => {
+                    _artistTotalPages = result.pages;
+                    this._renderItems(result.tags);
+                    this._renderPagination(result.total);
+                });
+                return;
             } else {
                 const sub = tagData[this.groupIdx]?.subgroups[this.subIdx];
                 if (sub && sub._seriesId && sub.tags.length === 0) {
@@ -1708,6 +1855,91 @@
             this._renderItems(items);
         }
 
+        _renderPagination(total) {
+            this._removePagination();
+            if (_artistTotalPages <= 1) return;
+            const nav = document.createElement('div');
+            nav.className = 'artist-pagination';
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '← 上一页';
+            prevBtn.disabled = _artistPage <= 1;
+            prevBtn.addEventListener('click', () => { _artistPage--; this.renderGrid(); });
+
+            const info = document.createElement('span');
+            info.className = 'page-info';
+            info.textContent = `第 ${_artistPage} / ${_artistTotalPages} 页（共 ${total || '?'} 位画师）`;
+
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '下一页 →';
+            nextBtn.disabled = _artistPage >= _artistTotalPages;
+            nextBtn.addEventListener('click', () => { _artistPage++; this.renderGrid(); });
+
+            const jumpWrap = document.createElement('span');
+            jumpWrap.className = 'page-jump';
+            const jumpInput = document.createElement('input');
+            jumpInput.type = 'number';
+            jumpInput.min = 1;
+            jumpInput.max = _artistTotalPages;
+            jumpInput.placeholder = '跳转';
+            jumpInput.style.width = '50px';
+            const jumpBtn = document.createElement('button');
+            jumpBtn.textContent = 'Go';
+            jumpBtn.addEventListener('click', () => {
+                const p = parseInt(jumpInput.value);
+                if (p >= 1 && p <= _artistTotalPages) { _artistPage = p; this.renderGrid(); }
+            });
+            jumpWrap.append(jumpInput, jumpBtn);
+
+            nav.append(prevBtn, info, nextBtn, jumpWrap);
+            this.gridEl.parentElement.insertBefore(nav, this.gridEl.nextSibling);
+        }
+
+        _removePagination() {
+            const existing = this.gridEl.parentElement?.querySelector('.artist-pagination');
+            if (existing) existing.remove();
+            const letterBar = this.gridEl.parentElement?.querySelector('.artist-letter-bar');
+            if (letterBar && this.groupIdx !== _artistGroupIdx) letterBar.remove();
+        }
+
+        _renderCategorySearch() {
+            const query = this.searchEl.value.toLowerCase().trim();
+            this.gridEl.innerHTML = '';
+            this._removePagination();
+            if (!query) {
+                this.gridEl.innerHTML = '<div style="padding:20px;color:#999;text-align:center">输入作品名搜索分类…</div>';
+                return;
+            }
+            const results = [];
+            tagData.forEach((group, gi) => {
+                (group.subgroups || []).forEach((sub, si) => {
+                    if (!sub || !sub.name) return;
+                    if (sub.name.toLowerCase().includes(query)) {
+                        results.push({ groupIdx: gi, subIdx: si, groupName: group.name, subName: sub.name, tagCount: sub.tags?.length || 0, seriesId: sub._seriesId });
+                    }
+                });
+            });
+            if (results.length === 0) {
+                this.gridEl.innerHTML = '<div style="padding:20px;color:#999;text-align:center">未找到匹配的分类</div>';
+                return;
+            }
+            results.slice(0, 50).forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'category-result';
+                div.innerHTML = `<span class="cat-group">${r.groupName}</span><span class="cat-name">${r.subName}</span><span class="cat-count">${r.tagCount > 0 ? r.tagCount + ' 个标签' : '点击加载'}</span>`;
+                div.addEventListener('click', () => {
+                    this.groupIdx = r.groupIdx;
+                    this.subIdx = r.subIdx;
+                    this._searchMode = 'tag';
+                    this.searchModeBtn.textContent = '标签';
+                    this.searchModeBtn.classList.remove('mode-category');
+                    this.searchEl.placeholder = '搜索标签...';
+                    this.searchEl.value = '';
+                    this.render();
+                });
+                this.gridEl.appendChild(div);
+            });
+        }
+
         _renderItems(items) {
             this.gridEl.innerHTML = '';
             const selected = this.getSelectedTags();
@@ -1718,18 +1950,22 @@
                 const isSelected = selected.has(tag.t);
                 const weight = this.getTagWeight(tag.t);
                 const hasThumb = !!tag.th;
-                div.className = 'tag-item' + (isSelected ? ' selected' : '') + (isArtistGroup ? ' tag-artist' : '') + (hasThumb ? ' tag-char' : '');
+                div.className = 'tag-item' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtistGroup ? ' tag-artist' : '');
                 div.dataset.tag = tag.t;
-                if (isArtistGroup) {
-                    const displayName = tag.t.replace(/_/g, ' ');
-                    const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
-                    div.innerHTML = `<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}<span class="tag-weight">${weight.toFixed(1)}</span>`;
-                } else if (hasThumb) {
+                if (hasThumb) {
                     div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy"><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span><span class="tag-weight">${weight.toFixed(1)}</span>`;
                     div.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        showCharPreview(tag);
+                        if (isArtistGroup) {
+                            showArtistPreview(tag);
+                        } else {
+                            showCharPreview(tag);
+                        }
                     });
+                } else if (isArtistGroup) {
+                    const displayName = tag.t.replace(/_/g, ' ');
+                    const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
+                    div.innerHTML = `<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}<span class="tag-weight">${weight.toFixed(1)}</span>`;
                 } else {
                     div.innerHTML = `<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span><span class="tag-weight">${weight.toFixed(1)}</span>`;
                 }
@@ -1746,7 +1982,7 @@
                 });
                 }
                 div.title = hasThumb
-                    ? '点击添加/移除 | 右键预览 | Shift+点击加权重 | Ctrl+点击减权重'
+                    ? '点击查看详情'
                     : '点击添加/移除 | Shift+点击加权重 | Ctrl+点击减权重';
                 this.gridEl.appendChild(div);
             });
@@ -1877,6 +2113,59 @@
             loraEl.classList.remove('hidden');
         } else {
             loraEl.classList.add('hidden');
+        }
+        overlay.classList.remove('hidden');
+    }
+
+    function showArtistPreview(tag) {
+        const imgUrl = tag.img || (tag.th ? tag.th.replace('/thumbs/', '/').replace('.webp', '.png') : '');
+        if (!imgUrl) return;
+        let overlay = document.getElementById('artist-preview-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'artist-preview-overlay';
+            overlay.className = 'char-preview-overlay';
+            overlay.innerHTML = `
+                <div class="char-preview-card">
+                    <img class="char-preview-img" alt="">
+                    <div class="char-preview-info">
+                        <div class="char-preview-name"></div>
+                        <div class="char-preview-trigger"></div>
+                        <div class="char-preview-tags"></div>
+                        <div class="char-preview-actions">
+                            <button class="char-preview-btn" data-action="trigger">填入画师触发词</button>
+                        </div>
+                    </div>
+                    <button class="char-preview-close">✕</button>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.classList.contains('char-preview-close')) {
+                    overlay.classList.add('hidden');
+                }
+                if (e.target.dataset.action === 'trigger') {
+                    const storedTag = overlay._currentTag;
+                    if (!storedTag) return;
+                    const formatted = isAnimaMode() ? formatAnimaArtistTag(storedTag.t) : storedTag.t;
+                    const ta = dom.txtPositive;
+                    const cur = ta.value.trim();
+                    ta.value = cur ? cur + ', ' + formatted : formatted;
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    overlay.classList.add('hidden');
+                }
+            });
+        }
+        overlay._currentTag = tag;
+        overlay.querySelector('.char-preview-img').src = imgUrl;
+        overlay.querySelector('.char-preview-img').alt = tag.d;
+        overlay.querySelector('.char-preview-name').textContent = tag.d;
+        overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
+        const tagsEl = overlay.querySelector('.char-preview-tags');
+        if (tag.count) {
+            tagsEl.innerHTML = `<span class="char-tag-pill">Danbooru ${tag.count.toLocaleString()} 作品</span>`;
+            tagsEl.classList.remove('hidden');
+        } else {
+            tagsEl.classList.add('hidden');
         }
         overlay.classList.remove('hidden');
     }

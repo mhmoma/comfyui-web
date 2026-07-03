@@ -830,11 +830,43 @@ textarea {
     color: white;
 }
 
+.search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+}
+
+.search-mode-btn {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    line-height: 1.2;
+}
+
+.search-mode-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.search-mode-btn.mode-category {
+    background: var(--accent);
+    color: #fff;
+}
+
 .tag-search {
     width: 120px;
     padding: 4px 8px;
     font-size: 0.7rem;
     flex-shrink: 0;
+    border-radius: 0 4px 4px 0 !important;
 }
 
 .tag-subtabs {
@@ -855,7 +887,7 @@ textarea {
     gap: 5px;
     padding: 10px;
     min-height: 100px;
-    max-height: 300px;
+    max-height: 650px;
     overflow-y: auto;
 }
 
@@ -928,6 +960,136 @@ textarea {
     color: var(--text-secondary);
     font-weight: 400;
     margin-top: 2px;
+}
+
+/* Artist pagination */
+.artist-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 8px;
+    flex-wrap: wrap;
+}
+
+.artist-pagination button {
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.15s;
+}
+
+.artist-pagination button:hover:not(:disabled) {
+    background: var(--accent);
+    color: #fff;
+}
+
+.artist-pagination button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.artist-pagination .page-info {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.artist-pagination .page-jump {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.artist-pagination .page-jump input {
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.72rem;
+    text-align: center;
+}
+
+/* Category search results */
+.category-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.category-result:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.category-result:hover .cat-group,
+.category-result:hover .cat-name,
+.category-result:hover .cat-count {
+    color: #fff;
+}
+
+.cat-group {
+    font-size: 0.65rem;
+    color: var(--accent);
+    background: rgba(99, 102, 241, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.cat-name {
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    flex: 1;
+}
+
+.cat-count {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+/* Artist letter bar */
+.artist-letter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 6px 8px;
+    justify-content: center;
+}
+
+.letter-btn {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 0.68rem;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    min-width: 20px;
+    text-align: center;
+}
+
+.letter-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.letter-btn.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
 }
 
 /* Collapse */
@@ -2811,40 +2973,49 @@ textarea {
 .tag-item.tag-char {
     flex-direction: column;
     align-items: center;
-    gap: 4px;
-    padding: 6px;
-    width: 120px;
-    min-width: 120px;
-    max-width: 120px;
+    gap: 0;
+    padding: 0;
+    width: 180px;
+    min-width: 180px;
+    max-width: 180px;
     cursor: pointer;
+    overflow: hidden;
+    border-radius: 8px;
 }
 
 .tag-thumb {
-    width: 108px;
-    height: 150px;
-    border-radius: 6px;
+    width: 100%;
+    height: 260px;
+    border-radius: 0;
     object-fit: cover;
+    object-position: top;
     flex-shrink: 0;
     background: var(--bg-input);
-    border: 1px solid var(--border);
+    border: none;
+    border-bottom: 1px solid var(--border);
 }
 
 .tag-item.tag-char .tag-desc {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
+    padding: 8px 6px 2px;
+    color: var(--text-primary);
 }
 
 .tag-item.tag-char .tag-text {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
+    padding: 0 6px 8px;
+    color: var(--text-secondary);
 }
 
 /* ==================== 角色预览弹窗 ==================== */
@@ -2868,7 +3039,7 @@ textarea {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 12px;
-    overflow: hidden;
+    overflow-y: auto;
     max-width: 480px;
     max-height: 85vh;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -2876,7 +3047,7 @@ textarea {
 
 .char-preview-img {
     width: 100%;
-    max-height: 65vh;
+    max-height: 55vh;
     object-fit: contain;
     display: block;
     background: var(--bg-input);

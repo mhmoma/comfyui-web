@@ -597,7 +597,10 @@
                             <div class="tag-picker" id="tag-picker-pos">
                                 <div class="tag-group-row">
                                     <div class="tag-tabs" data-picker="pos"></div>
-                                    <input type="text" class="tag-search" data-picker="pos" placeholder="搜索标签...">
+                                    <div class="search-wrap">
+                                        <button class="search-mode-btn" data-picker="pos" title="切换搜索模式">标签</button>
+                                        <input type="text" class="tag-search" data-picker="pos" placeholder="搜索标签...">
+                                    </div>
                                 </div>
                                 <div class="tag-subtabs" data-picker="pos"></div>
                                 <div class="tag-grid" data-picker="pos"></div>
@@ -623,7 +626,10 @@
                             <div class="tag-picker hidden" id="tag-picker-neg">
                                 <div class="tag-group-row">
                                     <div class="tag-tabs" data-picker="neg"></div>
-                                    <input type="text" class="tag-search" data-picker="neg" placeholder="搜索标签...">
+                                    <div class="search-wrap">
+                                        <button class="search-mode-btn" data-picker="neg" title="切换搜索模式">标签</button>
+                                        <input type="text" class="tag-search" data-picker="neg" placeholder="搜索标签...">
+                                    </div>
                                 </div>
                                 <div class="tag-subtabs" data-picker="neg"></div>
                                 <div class="tag-grid" data-picker="neg"></div>
@@ -806,7 +812,6 @@
         </div>
     </div>
 
-    <script src="translate_chars.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
