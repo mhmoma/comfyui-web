@@ -105,36 +105,33 @@ graph TD
 
 ## ☁️ 部署指南 (线上版)
 
-我们已经确认，Cloudflare 与 GitHub 的集成部署存在不可靠的缓存问题，**严禁使用 `git push` 触发的自动部署！**
+本项目的部署与 Cloudflare Pages 深度绑定，采用“**阶段化提交**”策略，`deploy/` 目录是唯一的部署源。
 
-**唯一指定、绝对可靠的部署流程如下：**
+### 1. Cloudflare 平台配置 (一次性)
+- 登录 Cloudflare -> Pages -> 选择 `comfyui-web` 项目。
+- 进入 `设置` > `构建和部署`。
+- 将 **构建输出目录** 设置为 `/deploy`。
+- 将 **构建命令** 设为 **留空**。
 
-1.  **创建纯净的部署目录**:
+### 2. 日常部署步骤
+1.  **同步文件**: 将根目录的最新版核心文件，覆盖到 `deploy/` 目录中。
     ```powershell
-    # 如果 deploy_dir 存在，先删掉
-    if (Test-Path -Path "deploy_dir") { rm deploy_dir -r -fo }
-    mkdir deploy_dir
+    Copy-Item -Path "index.html", "script.js", "style.css" -Destination "deploy/" -Force
+    ```
+    *注意：`tags.json` 和 `characters.json` 等数据文件如果过大或不常变动，可以不每次都同步。*
+
+2.  **提交更改**: 将对 `deploy/` 目录的修改提交到 Git。
+    ```powershell
+    git add deploy/
+    git commit -m "feat: Sync latest changes to deploy directory"
     ```
 
-2.  **精准复制必要文件**:
+3.  **推送部署**: 将 commit 推送到 `origin` 的 `main` 分支，即可触发 Cloudflare 的自动部署。
     ```powershell
-    # 复制核心文件
-    Copy-Item -Path "index.html", "script.js", "style.css", "tags.json", "characters.json" -Destination "deploy_dir"
-
-    # 复制 functions 文件夹
-    Copy-Item -Path "functions" -Destination "deploy_dir" -Recurse
+    # 使用以下命令绕过本地代理进行推送
+    git -c http.proxy="" -c https.proxy="" push origin main
     ```
-
-3.  **执行手动部署**:
-    ```powershell
-    wrangler pages deploy deploy_dir --project-name="comfyui-web"
-    ```
-
-4.  **清理临时目录**:
-    ```powershell
-    rm deploy_dir -r -fo
-    ```
-> **注意**: `wrangler` 是 Cloudflare 的命令行工具，需要先通过 `npm install -g wrangler` 安装。
+    > **⚠️ PowerShell 命令警告**: 在 PowerShell 终端中，**严禁使用 `&&`** 连接多个命令。请将命令分行执行，或使用分号 `;` (如果适用)。
 
 ---
 
