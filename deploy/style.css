@@ -930,6 +930,90 @@ textarea {
     margin-top: 2px;
 }
 
+/* Artist pagination */
+.artist-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 8px;
+    flex-wrap: wrap;
+}
+
+.artist-pagination button {
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.15s;
+}
+
+.artist-pagination button:hover:not(:disabled) {
+    background: var(--accent);
+    color: #fff;
+}
+
+.artist-pagination button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.artist-pagination .page-info {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.artist-pagination .page-jump {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.artist-pagination .page-jump input {
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 0.72rem;
+    text-align: center;
+}
+
+/* Artist letter bar */
+.artist-letter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 6px 8px;
+    justify-content: center;
+}
+
+.letter-btn {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 0.68rem;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    min-width: 20px;
+    text-align: center;
+}
+
+.letter-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.letter-btn.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+
 /* Collapse */
 .tag-collapse-header {
     padding: 8px 12px;

@@ -1,3 +1,6 @@
+const VALID_SORT = { score: 'score', count: 'count', fav: 'fav_count', name: 'name' };
+const VALID_ORDER = { asc: 'ASC', desc: 'DESC' };
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const db = env.DB;
@@ -6,20 +9,30 @@ export async function onRequestGet(context) {
 
   const url = new URL(request.url);
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '60', 10), 200);
-  const minCount = parseInt(url.searchParams.get('min') || '0', 10);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 200);
+  const sortParam = url.searchParams.get('sort') || 'score';
+  const orderParam = url.searchParams.get('order') || (sortParam === 'name' ? 'asc' : 'desc');
+  const letter = (url.searchParams.get('letter') || '').toLowerCase();
   const offset = (page - 1) * limit;
 
-  try {
-    let countQuery = 'SELECT COUNT(*) as total FROM artists';
-    let dataQuery = 'SELECT slug, name, trigger_text, count, score, thumb_url, img_url FROM artists';
+  const sortCol = VALID_SORT[sortParam] || 'score';
+  const sortDir = VALID_ORDER[orderParam] || 'DESC';
 
-    if (minCount > 0) {
-      countQuery += ` WHERE count >= ${minCount}`;
-      dataQuery += ` WHERE count >= ${minCount}`;
+  try {
+    const conditions = [];
+
+    if (letter && letter !== 'all') {
+      if (letter === 'other') {
+        conditions.push("LOWER(SUBSTR(name, 1, 1)) NOT BETWEEN 'a' AND 'z'");
+      } else if (/^[a-z]$/.test(letter)) {
+        conditions.push(`LOWER(SUBSTR(name, 1, 1)) = '${letter}'`);
+      }
     }
 
-    dataQuery += ' ORDER BY count DESC LIMIT ? OFFSET ?';
+    const where = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
+
+    const countQuery = `SELECT COUNT(*) as total FROM artists${where}`;
+    const dataQuery = `SELECT slug, name, trigger_text, count, score, thumb_url, img_url, fav_count FROM artists${where} ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
 
     const [countResult, dataResult] = await Promise.all([
       db.prepare(countQuery).all(),

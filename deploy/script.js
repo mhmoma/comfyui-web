@@ -1551,14 +1551,15 @@
 
     const _artistCache = {};
     let _artistGroupIdx = -1;
-    const _ARTIST_TIERS = [
-        { name: '全部', min: 0 },
-        { name: 'S级 (5000+)', min: 5000 },
-        { name: 'A级 (3000+)', min: 3000 },
-        { name: 'B级 (2000+)', min: 2000 },
-        { name: 'C级 (1000+)', min: 1000 },
-        { name: 'D级 (500+)', min: 500 },
-        { name: 'E级 (200+)', min: 200 },
+    let _artistPage = 1;
+    let _artistTotalPages = 1;
+    let _artistCurrentSort = 'score';
+    let _artistCurrentLetter = 'all';
+    const _ARTIST_SORT_MODES = [
+        { name: '精选', sort: 'score', order: 'desc', icon: '🏆' },
+        { name: '热门', sort: 'count', order: 'desc', icon: '🔥' },
+        { name: '收藏', sort: 'fav', order: 'desc', icon: '❤️' },
+        { name: '字母', sort: 'name', order: 'asc', icon: '🔤' },
     ];
 
     async function loadTags() {
@@ -1591,9 +1592,11 @@
         try {
             const artistGroup = {
                 name: '画师风格',
-                subgroups: _ARTIST_TIERS.map(tier => ({
-                    name: tier.name,
-                    _artistMin: tier.min,
+                _isArtistGroup: true,
+                subgroups: _ARTIST_SORT_MODES.map(mode => ({
+                    name: `${mode.icon} ${mode.name}`,
+                    _artistSort: mode.sort,
+                    _artistOrder: mode.order,
                     tags: [],
                 }))
             };
@@ -1622,12 +1625,14 @@
         } catch { return []; }
     }
 
-    async function _fetchArtists(minCount, page = 1) {
-        const key = `${minCount}_${page}`;
+    async function _fetchArtists(sort = 'score', order = 'desc', page = 1, letter = 'all') {
+        const key = `${sort}_${order}_${page}_${letter}`;
         if (_artistCache[key]) return _artistCache[key];
         try {
-            const res = await fetch(`/api/artists/list?min=${minCount}&page=${page}&limit=120`);
-            if (!res.ok) return [];
+            let url = `/api/artists/list?sort=${sort}&order=${order}&page=${page}&limit=100`;
+            if (letter && letter !== 'all') url += `&letter=${letter}`;
+            const res = await fetch(url);
+            if (!res.ok) return { tags: [], pages: 1 };
             const data = await res.json();
             const tags = data.results.map(a => ({
                 t: a.trigger_text,
@@ -1635,10 +1640,13 @@
                 th: a.thumb_url,
                 img: a.img_url,
                 count: a.count,
+                score: a.score,
+                fav: a.fav_count,
             }));
-            _artistCache[key] = tags;
-            return tags;
-        } catch { return []; }
+            const result = { tags, pages: data.pages, total: data.total };
+            _artistCache[key] = result;
+            return result;
+        } catch { return { tags: [], pages: 1 }; }
     }
 
     async function _searchArtistsFromDb(query) {
@@ -1703,6 +1711,12 @@
                     this.groupIdx = i;
                     this.subIdx = 0;
                     this.searchEl.value = '';
+                    if (i === _artistGroupIdx) {
+                        _artistPage = 1;
+                        _artistCurrentSort = 'score';
+                        _artistCurrentLetter = 'all';
+                    }
+                    this._removePagination();
                     this.render();
                 });
                 this.tabsEl.appendChild(tab);
@@ -1718,16 +1732,15 @@
                 tab.textContent = s.name;
                 tab.addEventListener('click', () => {
                     this.subIdx = i;
+                    if (this.groupIdx === _artistGroupIdx && s._artistSort) {
+                        _artistPage = 1;
+                        _artistCurrentSort = s._artistSort;
+                        _artistCurrentLetter = 'all';
+                    }
                     this.renderSubTabs();
                     if (this.groupIdx === _charGroupIdx && i >= CHAR_BASE_SUBS && s._seriesId && s.tags.length === 0) {
                         this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
                         _fetchSeriesChars(s._seriesId).then(tags => {
-                            s.tags = tags;
-                            this.renderGrid();
-                        });
-                    } else if (this.groupIdx === _artistGroupIdx && s._artistMin !== undefined && s.tags.length === 0) {
-                        this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
-                        _fetchArtists(s._artistMin).then(tags => {
                             s.tags = tags;
                             this.renderGrid();
                         });
@@ -1737,14 +1750,51 @@
                 });
                 this.subTabsEl.appendChild(tab);
             });
+            if (this.groupIdx === _artistGroupIdx) {
+                this._renderArtistLetterBar();
+            }
+        }
+
+        _renderArtistLetterBar() {
+            const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
+            if (!sub || sub._artistSort !== 'name') return;
+            let bar = this.subTabsEl.parentElement.querySelector('.artist-letter-bar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.className = 'artist-letter-bar';
+                this.subTabsEl.parentElement.insertBefore(bar, this.gridEl);
+            }
+            bar.innerHTML = '';
+            const letters = ['all', ...'abcdefghijklmnopqrstuvwxyz'.split(''), 'other'];
+            const labels = { all: '全部', other: '#' };
+            letters.forEach(l => {
+                const btn = document.createElement('span');
+                btn.className = 'letter-btn' + (l === _artistCurrentLetter ? ' active' : '');
+                btn.textContent = labels[l] || l.toUpperCase();
+                btn.addEventListener('click', () => {
+                    _artistCurrentLetter = l;
+                    _artistPage = 1;
+                    this.renderGrid();
+                    bar.querySelectorAll('.letter-btn').forEach(b => b.classList.toggle('active', b.textContent === (labels[l] || l.toUpperCase())));
+                });
+                bar.appendChild(btn);
+            });
         }
 
         renderGrid() {
             if (!this.gridEl || !this.subTabsEl) { console.error('Missing elements!'); return; }
             this.gridEl.innerHTML = '';
+            this._removePagination();
             const search = this.searchEl.value.toLowerCase();
             let items;
             if (search) {
+                if (this.groupIdx === _artistGroupIdx) {
+                    this.gridEl.innerHTML = '<div style="padding:20px;color:#999">搜索中...</div>';
+                    _searchArtistsFromDb(search).then(dbItems => {
+                        this._renderItems(dbItems);
+                    });
+                    return;
+                }
                 items = [];
                 tagData.forEach(g => g.subgroups.forEach(s => (s.tags || []).forEach(t => {
                     if (t.t.toLowerCase().includes(search) || t.d.includes(search)) items.push(t);
@@ -1759,15 +1809,17 @@
                         }
                     });
                 }
-                if (this.groupIdx === _artistGroupIdx) {
-                    _searchArtistsFromDb(search).then(dbItems => {
-                        const existing = new Set(items.map(i => i.t));
-                        const extra = dbItems.filter(d => !existing.has(d.t));
-                        if (extra.length > 0) {
-                            this._renderItems([...items, ...extra.slice(0, 100)]);
-                        }
-                    });
-                }
+            } else if (this.groupIdx === _artistGroupIdx) {
+                const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
+                if (!sub || !sub._artistSort) return;
+                this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                const letter = sub._artistSort === 'name' ? _artistCurrentLetter : 'all';
+                _fetchArtists(sub._artistSort, sub._artistOrder, _artistPage, letter).then(result => {
+                    _artistTotalPages = result.pages;
+                    this._renderItems(result.tags);
+                    this._renderPagination(result.total);
+                });
+                return;
             } else {
                 const sub = tagData[this.groupIdx]?.subgroups[this.subIdx];
                 if (sub && sub._seriesId && sub.tags.length === 0) {
@@ -1778,18 +1830,56 @@
                     });
                     return;
                 }
-                if (sub && sub._artistMin !== undefined && sub.tags.length === 0) {
-                    this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
-                    _fetchArtists(sub._artistMin).then(tags => {
-                        sub.tags = tags;
-                        this._renderItems(tags);
-                    });
-                    return;
-                }
                 items = sub?.tags || [];
             }
 
             this._renderItems(items);
+        }
+
+        _renderPagination(total) {
+            this._removePagination();
+            if (_artistTotalPages <= 1) return;
+            const nav = document.createElement('div');
+            nav.className = 'artist-pagination';
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '← 上一页';
+            prevBtn.disabled = _artistPage <= 1;
+            prevBtn.addEventListener('click', () => { _artistPage--; this.renderGrid(); });
+
+            const info = document.createElement('span');
+            info.className = 'page-info';
+            info.textContent = `第 ${_artistPage} / ${_artistTotalPages} 页（共 ${total || '?'} 位画师）`;
+
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '下一页 →';
+            nextBtn.disabled = _artistPage >= _artistTotalPages;
+            nextBtn.addEventListener('click', () => { _artistPage++; this.renderGrid(); });
+
+            const jumpWrap = document.createElement('span');
+            jumpWrap.className = 'page-jump';
+            const jumpInput = document.createElement('input');
+            jumpInput.type = 'number';
+            jumpInput.min = 1;
+            jumpInput.max = _artistTotalPages;
+            jumpInput.placeholder = '跳转';
+            jumpInput.style.width = '50px';
+            const jumpBtn = document.createElement('button');
+            jumpBtn.textContent = 'Go';
+            jumpBtn.addEventListener('click', () => {
+                const p = parseInt(jumpInput.value);
+                if (p >= 1 && p <= _artistTotalPages) { _artistPage = p; this.renderGrid(); }
+            });
+            jumpWrap.append(jumpInput, jumpBtn);
+
+            nav.append(prevBtn, info, nextBtn, jumpWrap);
+            this.gridEl.parentElement.insertBefore(nav, this.gridEl.nextSibling);
+        }
+
+        _removePagination() {
+            const existing = this.gridEl.parentElement?.querySelector('.artist-pagination');
+            if (existing) existing.remove();
+            const letterBar = this.gridEl.parentElement?.querySelector('.artist-letter-bar');
+            if (letterBar && this.groupIdx !== _artistGroupIdx) letterBar.remove();
         }
 
         _renderItems(items) {
