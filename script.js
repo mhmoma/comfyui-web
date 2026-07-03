@@ -1220,6 +1220,10 @@
         // Settings modal
         dom.btnSettings.addEventListener('click', () => {
             dom.inpServer.value = getComfyUIAddress();
+            const admInput = document.getElementById('inp-admin-key');
+            const admStatus = document.getElementById('admin-status');
+            if (admInput) admInput.value = sessionStorage.getItem('_adm') || '';
+            if (admStatus) admStatus.style.display = sessionStorage.getItem('_adm') ? 'block' : 'none';
             dom.modalSettings.classList.remove('hidden');
         });
 
@@ -1227,6 +1231,15 @@
             const url = dom.inpServer.value.trim();
             if (!url) return;
             setComfyUIAddress(url);
+            const admKey = document.getElementById('inp-admin-key')?.value.trim();
+            if (admKey) {
+                sessionStorage.setItem('_adm', admKey);
+                showToast('管理员模式已激活');
+                const vcRow = document.getElementById('nai-videocode-row');
+                if (vcRow) vcRow.style.display = 'none';
+            } else {
+                sessionStorage.removeItem('_adm');
+            }
             dom.modalSettings.classList.add('hidden');
             init();
         });
@@ -2296,22 +2309,11 @@
         });
 
         // Copy buttons
-        const ADMIN_CODE = 'Tomkk520525';
         document.querySelectorAll('.btn-copy-prompt:not(.btn-clear-prompt)').forEach(btn => {
             if (!btn.dataset.target) return;
             btn.addEventListener('click', () => {
                 const textarea = document.getElementById(btn.dataset.target);
                 if (!textarea) return;
-                if (textarea.value.includes(ADMIN_CODE)) {
-                    textarea.value = textarea.value.replace(ADMIN_CODE, '').trim();
-                    sessionStorage.setItem('_adm', ADMIN_CODE);
-                    showToast('管理员权限已激活');
-                    btn.textContent = '🔓 已激活';
-                    setTimeout(() => btn.textContent = '📋 复制', 2000);
-                    const vcRow = document.getElementById('nai-videocode-row');
-                    if (vcRow) vcRow.style.display = 'none';
-                    return;
-                }
                 navigator.clipboard.writeText(textarea.value).then(() => {
                     btn.textContent = '✓ 已复制';
                     setTimeout(() => btn.textContent = '📋 复制', 1500);

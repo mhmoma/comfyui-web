@@ -682,6 +682,10 @@
                     <option value="google" selected>Google 翻译</option>
                 </select>
             </label>
+            <label>管理员密钥（可选）
+                <input type="password" id="inp-admin-key" placeholder="留空则以普通用户身份使用">
+            </label>
+            <div id="admin-status" style="font-size:0.75rem;color:var(--accent-green);margin-top:-6px;display:none">✓ 管理员模式已激活</div>
             <div class="modal-actions">
                 <button id="btn-save-settings" class="btn-primary">保存</button>
                 <button id="btn-cancel-settings" class="btn-secondary">取消</button>
