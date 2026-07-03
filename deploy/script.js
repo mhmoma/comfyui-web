@@ -2927,19 +2927,11 @@
         }
     }
 
-    const IMG_CACHE_NAME = 'comfyui-char-images-v1';
-    async function getCachedImage(url) {
-        try {
-            const cache = await caches.open(IMG_CACHE_NAME);
-            const cached = await cache.match(url);
-            if (cached) return URL.createObjectURL(await cached.blob());
-            const res = await fetch(url, { mode: 'cors' });
-            if (res.ok) {
-                cache.put(url, res.clone());
-                return URL.createObjectURL(await res.blob());
-            }
-        } catch (_) {}
-        return url;
+    function loadImageWithFade(imgEl, url) {
+        imgEl.style.opacity = '0.3';
+        imgEl.onload = () => { imgEl.style.opacity = '1'; };
+        imgEl.onerror = () => { imgEl.style.opacity = '1'; };
+        imgEl.src = url;
     }
 
     function showCharPreview(tag) {
@@ -3000,12 +2992,7 @@
         overlay._currentTag = tag;
         const previewImg = overlay.querySelector('.char-preview-img');
         previewImg.alt = tag.d;
-        previewImg.src = '';
-        previewImg.style.opacity = '0.3';
-        getCachedImage(imgUrl).then(src => {
-            previewImg.src = src;
-            previewImg.style.opacity = '1';
-        });
+        loadImageWithFade(previewImg, imgUrl);
         overlay.querySelector('.char-preview-name').textContent = tag.d;
         overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
         const tagsEl = overlay.querySelector('.char-preview-tags');
@@ -3086,12 +3073,7 @@
         overlay._currentTag = tag;
         const previewImg2 = overlay.querySelector('.char-preview-img');
         previewImg2.alt = tag.d;
-        previewImg2.src = '';
-        previewImg2.style.opacity = '0.3';
-        getCachedImage(imgUrl).then(src => {
-            previewImg2.src = src;
-            previewImg2.style.opacity = '1';
-        });
+        loadImageWithFade(previewImg2, imgUrl);
         overlay.querySelector('.char-preview-name').textContent = tag.d;
         overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
         const tagsEl = overlay.querySelector('.char-preview-tags');
