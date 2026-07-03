@@ -2813,9 +2813,9 @@ textarea {
     align-items: center;
     gap: 0;
     padding: 0;
-    width: 150px;
-    min-width: 150px;
-    max-width: 150px;
+    width: 180px;
+    min-width: 180px;
+    max-width: 180px;
     cursor: pointer;
     overflow: hidden;
     border-radius: 8px;
@@ -2823,7 +2823,7 @@ textarea {
 
 .tag-thumb {
     width: 100%;
-    height: 200px;
+    height: 260px;
     border-radius: 0;
     object-fit: cover;
     object-position: top;
@@ -2834,25 +2834,25 @@ textarea {
 }
 
 .tag-item.tag-char .tag-desc {
-    font-size: 0.78rem;
-    font-weight: 500;
+    font-size: 0.85rem;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
-    padding: 6px 4px 2px;
+    padding: 8px 6px 2px;
     color: var(--text-primary);
 }
 
 .tag-item.tag-char .tag-text {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
-    padding: 0 4px 6px;
+    padding: 0 6px 8px;
     color: var(--text-secondary);
 }
 
@@ -2885,7 +2885,7 @@ textarea {
 
 .char-preview-img {
     width: 100%;
-    max-height: 45vh;
+    max-height: 55vh;
     object-fit: contain;
     display: block;
     background: var(--bg-input);
