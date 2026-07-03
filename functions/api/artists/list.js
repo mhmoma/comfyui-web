@@ -1,4 +1,4 @@
-const VALID_SORT = { score: 'score', count: 'count', fav: 'fav_count', name: 'name' };
+const VALID_SORT = { score: 'score', count: 'count', fav: 'score', name: 'name' };
 const VALID_ORDER = { asc: 'ASC', desc: 'DESC' };
 
 export async function onRequestGet(context) {
@@ -32,7 +32,7 @@ export async function onRequestGet(context) {
     const where = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
 
     const countQuery = `SELECT COUNT(*) as total FROM artists${where}`;
-    const dataQuery = `SELECT slug, name, trigger_text, count, score, thumb_url, img_url, fav_count FROM artists${where} ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
+    const dataQuery = `SELECT slug, name, trigger_text, count, score, thumb_url, img_url FROM artists${where} ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
 
     const [countResult, dataResult] = await Promise.all([
       db.prepare(countQuery).all(),
