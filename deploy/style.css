@@ -3519,11 +3519,6 @@ textarea {
     opacity: 1;
 }
 
-.tag-item.tag-char .tag-thumb {
-    position: relative;
-    z-index: 1;
-}
-
 .tag-item.tag-char {
     position: relative;
     overflow: hidden;
@@ -3546,10 +3541,6 @@ textarea {
 
 .tag-item.tag-char .thumb-skeleton.hide {
     opacity: 0;
-}
-
-.fav-col-grid .tag-item.fav-mini.tag-char .thumb-skeleton {
-    height: 96px !important;
 }
 
 .skeleton-row {

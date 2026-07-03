@@ -2613,7 +2613,6 @@
             }
             const container = document.createElement('div');
             container.className = 'fav-columns';
-            const lazyImages = [];
             order.forEach(type => {
                 const arr = groups[type];
                 const col = document.createElement('div');
@@ -2643,8 +2642,7 @@
                         const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
                         const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
                         if (hasThumb) {
-                            div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
-                            lazyImages.push(div.querySelector('img.tag-thumb'));
+                            div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
                             div.addEventListener('click', (e) => {
                                 if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
                                 e.stopPropagation();
@@ -2674,7 +2672,6 @@
                 container.appendChild(col);
             });
             this.gridEl.appendChild(container);
-            if (lazyImages.length) _observeLazyImages(lazyImages);
         }
 
         getSelectedTags() {
