@@ -692,11 +692,26 @@
 
         const wtSel = document.getElementById('sel-ipa-weight-type');
         if (wtSel && ipaWeightTypes.length > 0) {
+            const wtLabels = {
+                'standard': '标准 — 均衡混合参考图和提示词',
+                'linear': '线性 — 均匀混合（通用）',
+                'prompt is more important': '提示词优先 — 参考图影响较弱',
+                'style transfer': '风格迁移 — 只提取风格，不复制内容',
+                'composition': '构图迁移 — 保留参考图布局',
+                'original': '原始算法 — 最初的混合方式',
+                'ease in': '渐入 — 前期弱后期强',
+                'ease out': '渐出 — 前期强后期弱',
+                'ease in-out': '渐入渐出 — 中段最强',
+                'reverse in-out': '反向渐入渐出',
+                'weak input': '弱输入 — 参考图影响极弱',
+                'weak output': '弱输出',
+                'strong style transfer': '强风格迁移 — 更强的风格提取',
+            };
             wtSel.innerHTML = '';
             ipaWeightTypes.forEach(wt => {
                 const opt = document.createElement('option');
                 opt.value = wt;
-                opt.textContent = wt;
+                opt.textContent = wtLabels[wt] || wt;
                 wtSel.appendChild(opt);
             });
         }
