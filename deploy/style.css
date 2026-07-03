@@ -3492,6 +3492,78 @@ textarea {
     }
 }
 
+/* ==================== Skeleton & Loading Optimizations ==================== */
+@keyframes skeleton-pulse {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton-card {
+    background: linear-gradient(90deg, var(--bg-input) 25%, var(--border-subtle) 50%, var(--bg-input) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-subtle);
+}
+
+.tag-thumb {
+    background: var(--bg-input);
+    transition: opacity 0.3s ease;
+}
+
+.tag-thumb.img-loading {
+    opacity: 0;
+}
+
+.tag-thumb.img-loaded {
+    opacity: 1;
+}
+
+.tag-item.tag-char {
+    position: relative;
+    overflow: hidden;
+}
+
+.tag-item.tag-char .thumb-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 260px;
+    background: linear-gradient(90deg, var(--bg-input) 25%, var(--border-subtle) 50%, var(--bg-input) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    z-index: 0;
+    border-radius: 8px 8px 0 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.tag-item.tag-char .thumb-skeleton.hide {
+    opacity: 0;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .thumb-skeleton {
+    height: 96px !important;
+}
+
+.skeleton-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px;
+}
+
+.skeleton-row .skeleton-card {
+    width: 180px;
+    height: 300px;
+}
+
+.fav-col .skeleton-row .skeleton-card {
+    width: 80px;
+    height: 120px;
+}
+
 /* ==================== Architecture-aware Panel States ==================== */
 .arch-hidden {
     display: none !important;

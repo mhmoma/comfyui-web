@@ -2049,6 +2049,48 @@
         } catch (e) { console.warn('[API] Artist search error:', e.message); return []; }
     }
 
+    // ==================== 懒加载与骨架屏 ====================
+    let _imgObserver = null;
+    function _getImgObserver() {
+        if (_imgObserver) return _imgObserver;
+        _imgObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const img = entry.target;
+                const src = img.dataset.src;
+                if (!src) return;
+                img.src = src;
+                img.onload = () => {
+                    img.classList.remove('img-loading');
+                    img.classList.add('img-loaded');
+                    const skel = img.parentElement?.querySelector('.thumb-skeleton');
+                    if (skel) skel.classList.add('hide');
+                };
+                img.onerror = () => {
+                    img.style.display = 'none';
+                    const skel = img.parentElement?.querySelector('.thumb-skeleton');
+                    if (skel) skel.classList.add('hide');
+                };
+                _imgObserver.unobserve(img);
+            });
+        }, { rootMargin: '200px' });
+        return _imgObserver;
+    }
+
+    function _observeLazyImages(imgList) {
+        const obs = _getImgObserver();
+        imgList.forEach(img => { if (img) obs.observe(img); });
+    }
+
+    function _buildSkeletonGrid(count) {
+        let html = '<div class="skeleton-row">';
+        for (let i = 0; i < count; i++) {
+            html += '<div class="skeleton-card"></div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
     class TagPicker {
         constructor(pickerId, textarea) {
             this.id = pickerId;
@@ -2197,7 +2239,7 @@
                     }
                     this.renderSubTabs();
                     if (this.groupIdx === _charGroupIdx && i >= CHAR_BASE_SUBS && s._seriesId && s.tags.length === 0) {
-                        this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                        this.gridEl.innerHTML = _buildSkeletonGrid(8);
                         _fetchSeriesChars(s._seriesId).then(tags => {
                             s.tags = tags;
                             this.renderGrid();
@@ -2300,7 +2342,7 @@
             } else if (this.groupIdx === _artistGroupIdx) {
                 const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
                 if (!sub || !sub._artistSort) return;
-                this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                this.gridEl.innerHTML = _buildSkeletonGrid(6);
                 const letter = sub._artistSort === 'name' ? _artistCurrentLetter : 'all';
                 _fetchArtists(sub._artistSort, sub._artistOrder, _artistPage, letter).then(result => {
                     _artistTotalPages = result.pages;
@@ -2311,7 +2353,7 @@
             } else {
                 const sub = tagData[this.groupIdx]?.subgroups[this.subIdx];
                 if (sub && sub._seriesId && sub.tags.length === 0) {
-                    this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                    this.gridEl.innerHTML = _buildSkeletonGrid(8);
                     _fetchSeriesChars(sub._seriesId).then(tags => {
                         sub.tags = tags;
                         this._renderCharPage(tags);
@@ -2483,8 +2525,10 @@
 
         _renderItems(items) {
             this.gridEl.innerHTML = '';
+            const frag = document.createDocumentFragment();
             const selected = this.getSelectedTags();
             const isArtistGroup = !this._virtualMode && tagData[this.groupIdx]?.name?.includes('画师');
+            const lazyImages = [];
 
             items.forEach(tag => {
                 const div = document.createElement('div');
@@ -2500,7 +2544,8 @@
                 const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
 
                 if (hasThumb) {
-                    div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                    div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                    lazyImages.push(div.querySelector('img.tag-thumb'));
                     div.addEventListener('click', (e) => {
                         if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
                         e.stopPropagation();
@@ -2533,8 +2578,10 @@
                 div.title = hasThumb
                     ? '点击查看详情 | 点⭐收藏'
                     : '点击添加/移除 | 点⭐收藏 | Shift+点击加权重 | Ctrl+点击减权重';
-                this.gridEl.appendChild(div);
+                frag.appendChild(div);
             });
+            this.gridEl.appendChild(frag);
+            if (lazyImages.length) _observeLazyImages(lazyImages);
         }
 
         _renderGroupedFavItems(items, emptyMsg) {
@@ -2555,6 +2602,7 @@
             }
             const container = document.createElement('div');
             container.className = 'fav-columns';
+            const lazyImages = [];
             order.forEach(type => {
                 const arr = groups[type];
                 const col = document.createElement('div');
@@ -2584,7 +2632,8 @@
                         const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
                         const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
                         if (hasThumb) {
-                            div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                            div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                            lazyImages.push(div.querySelector('img.tag-thumb'));
                             div.addEventListener('click', (e) => {
                                 if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
                                 e.stopPropagation();
@@ -2614,6 +2663,7 @@
                 container.appendChild(col);
             });
             this.gridEl.appendChild(container);
+            if (lazyImages.length) _observeLazyImages(lazyImages);
         }
 
         getSelectedTags() {
