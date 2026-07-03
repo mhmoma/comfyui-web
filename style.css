@@ -1014,50 +1014,75 @@ textarea {
     text-align: center;
 }
 
-/* Category search results */
-.category-result {
+/* Autocomplete dropdown */
+.ac-dropdown {
+    position: fixed;
+    z-index: 9999;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.ac-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin: 4px 8px;
+    padding: 7px 12px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: background 0.1s;
 }
 
-.category-result:hover {
+.ac-item:hover {
     background: var(--accent);
-    border-color: var(--accent);
 }
 
-.category-result:hover .cat-group,
-.category-result:hover .cat-name,
-.category-result:hover .cat-count {
+.ac-item:hover .ac-group,
+.ac-item:hover .ac-name,
+.ac-item:hover .ac-count {
     color: #fff;
 }
 
-.cat-group {
-    font-size: 0.65rem;
+.ac-group {
+    font-size: 0.62rem;
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
-    padding: 2px 6px;
+    background: rgba(99, 102, 241, 0.15);
+    padding: 1px 5px;
     border-radius: 3px;
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
-.cat-name {
-    font-size: 0.78rem;
+.ac-name {
+    font-size: 0.76rem;
     color: var(--text-primary);
-    font-weight: 500;
     flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.cat-count {
-    font-size: 0.65rem;
+.ac-name mark {
+    background: rgba(99, 102, 241, 0.3);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.ac-count {
+    font-size: 0.6rem;
     color: var(--text-secondary);
     flex-shrink: 0;
+}
+
+.ac-more {
+    padding: 6px 12px;
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    text-align: center;
 }
 
 /* Artist letter bar */

@@ -1688,16 +1688,27 @@
                 });
             }
 
+            this._acDropdown = null;
+
             let debounce;
             this.searchEl.addEventListener('input', () => {
                 clearTimeout(debounce);
-                debounce = setTimeout(() => {
-                    if (this._searchMode === 'category') {
-                        this._renderCategorySearch();
-                    } else {
-                        this.renderGrid();
-                    }
-                }, 200);
+                if (this._searchMode === 'category') {
+                    debounce = setTimeout(() => this._showCategoryAutocomplete(), 100);
+                } else {
+                    this._hideAutocomplete();
+                    debounce = setTimeout(() => this.renderGrid(), 200);
+                }
+            });
+            this.searchEl.addEventListener('focus', () => {
+                if (this._searchMode === 'category' && this.searchEl.value.trim()) {
+                    this._showCategoryAutocomplete();
+                }
+            });
+            document.addEventListener('click', (e) => {
+                if (this._acDropdown && !this._acDropdown.contains(e.target) && e.target !== this.searchEl) {
+                    this._hideAutocomplete();
+                }
             });
 
             this.textarea.addEventListener('input', () => this.refreshHighlights());
@@ -1901,32 +1912,37 @@
             if (letterBar && this.groupIdx !== _artistGroupIdx) letterBar.remove();
         }
 
-        _renderCategorySearch() {
+        _showCategoryAutocomplete() {
             const query = this.searchEl.value.toLowerCase().trim();
-            this.gridEl.innerHTML = '';
-            this._removePagination();
-            if (!query) {
-                this.gridEl.innerHTML = '<div style="padding:20px;color:#999;text-align:center">输入作品名搜索分类…</div>';
-                return;
-            }
+            this._hideAutocomplete();
+            if (!query) return;
+
             const results = [];
             tagData.forEach((group, gi) => {
                 (group.subgroups || []).forEach((sub, si) => {
                     if (!sub || !sub.name) return;
                     if (sub.name.toLowerCase().includes(query)) {
-                        results.push({ groupIdx: gi, subIdx: si, groupName: group.name, subName: sub.name, tagCount: sub.tags?.length || 0, seriesId: sub._seriesId });
+                        results.push({ groupIdx: gi, subIdx: si, groupName: group.name, subName: sub.name, tagCount: sub.tags?.length || 0 });
                     }
                 });
             });
-            if (results.length === 0) {
-                this.gridEl.innerHTML = '<div style="padding:20px;color:#999;text-align:center">未找到匹配的分类</div>';
-                return;
-            }
-            results.slice(0, 50).forEach(r => {
-                const div = document.createElement('div');
-                div.className = 'category-result';
-                div.innerHTML = `<span class="cat-group">${r.groupName}</span><span class="cat-name">${r.subName}</span><span class="cat-count">${r.tagCount > 0 ? r.tagCount + ' 个标签' : '点击加载'}</span>`;
-                div.addEventListener('click', () => {
+
+            if (results.length === 0) return;
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'ac-dropdown';
+            const rect = this.searchEl.getBoundingClientRect();
+            dropdown.style.top = (rect.bottom + 2) + 'px';
+            dropdown.style.left = rect.left + 'px';
+            dropdown.style.width = Math.max(rect.width + 60, 280) + 'px';
+
+            results.slice(0, 15).forEach(r => {
+                const item = document.createElement('div');
+                item.className = 'ac-item';
+                const highlighted = r.subName.replace(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
+                item.innerHTML = `<span class="ac-group">${r.groupName}</span><span class="ac-name">${highlighted}</span><span class="ac-count">${r.tagCount > 0 ? r.tagCount + '个' : '...'}</span>`;
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
                     this.groupIdx = r.groupIdx;
                     this.subIdx = r.subIdx;
                     this._searchMode = 'tag';
@@ -1934,10 +1950,28 @@
                     this.searchModeBtn.classList.remove('mode-category');
                     this.searchEl.placeholder = '搜索标签...';
                     this.searchEl.value = '';
+                    this._hideAutocomplete();
                     this.render();
                 });
-                this.gridEl.appendChild(div);
+                dropdown.appendChild(item);
             });
+
+            if (results.length > 15) {
+                const more = document.createElement('div');
+                more.className = 'ac-more';
+                more.textContent = `还有 ${results.length - 15} 个结果...`;
+                dropdown.appendChild(more);
+            }
+
+            document.body.appendChild(dropdown);
+            this._acDropdown = dropdown;
+        }
+
+        _hideAutocomplete() {
+            if (this._acDropdown) {
+                this._acDropdown.remove();
+                this._acDropdown = null;
+            }
         }
 
         _renderItems(items) {
