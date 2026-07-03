@@ -125,6 +125,23 @@
         panelRegional: $('#panel-regional'),
         regionalList: $('#regional-list'),
         btnAddRegion: $('#btn-add-region'),
+        // IP-Adapter
+        chkIpadapter: $('#chk-ipadapter'),
+        panelIpadapter: $('#panel-ipadapter'),
+        sectionIpadapter: $('#section-ipadapter'),
+        selIpadapterModel: $('#sel-ipadapter-model'),
+        inpIpaImage: $('#inp-ipa-image'),
+        ipaPreviewContainer: $('#ipa-preview-container'),
+        ipaPreview: $('#ipa-preview'),
+        inpIpaWeight: $('#inp-ipa-weight'),
+        inpIpaStart: $('#inp-ipa-start'),
+        inpIpaEnd: $('#inp-ipa-end'),
+        ipaStatus: $('#ipa-status'),
+        ipaDownloadArea: $('#ipa-download-area'),
+        btnIpaDownload: $('#btn-ipa-download'),
+        ipaDownloadProgress: $('#ipa-download-progress'),
+        ipaProgressBar: $('#ipa-progress-bar'),
+        ipaProgressText: $('#ipa-progress-text'),
     };
 
     // ==================== 开关面板逻辑 ====================
@@ -138,6 +155,7 @@
             [dom.chkAdetailer, dom.panelAdetailer],
             [dom.chkRegional, dom.panelRegional],
             [$('#chk-freeu'), $('#panel-freeu')],
+            [dom.chkIpadapter, dom.panelIpadapter],
         ];
         pairs.forEach(([chk, panel]) => {
             const update = () => {
@@ -419,6 +437,7 @@
                 dom.inpSteps.value = SDXL_DEFAULTS.steps;
                 dom.inpCfg.value = SDXL_DEFAULTS.cfg;
             }
+            updateArchAwarePanels();
         });
     }
 
@@ -530,6 +549,200 @@
         }
     }
 
+    // ==================== IP-Adapter 模型管理 ====================
+    let ipaPluginInstalled = false;
+    let ipaModels = [];
+    let hasComfyUIManager = false;
+
+    async function loadIPAdapterModels() {
+        try {
+            const data = await apiGet('/object_info/IPAdapterSimple');
+            ipaPluginInstalled = true;
+            const models = data.IPAdapterSimple?.input?.required?.ipadapter_file?.[0] || [];
+            ipaModels = models;
+            updateIPAdapterUI();
+        } catch (e1) {
+            try {
+                const data = await apiGet('/object_info/IPAdapter');
+                ipaPluginInstalled = true;
+                const models = data.IPAdapter?.input?.required?.ipadapter_file?.[0] || [];
+                ipaModels = models;
+                updateIPAdapterUI();
+            } catch (e2) {
+                ipaPluginInstalled = false;
+                ipaModels = [];
+                updateIPAdapterUI();
+            }
+        }
+
+        try {
+            await apiGet('/api/extensions');
+            hasComfyUIManager = true;
+        } catch (e) {
+            try {
+                const info = await apiGet('/object_info');
+                hasComfyUIManager = !!info['ManagerButton'] || !!info['CLIPTextEncodeAdvanced'];
+            } catch (_) {
+                hasComfyUIManager = false;
+            }
+        }
+    }
+
+    function updateIPAdapterUI() {
+        if (!dom.selIpadapterModel) return;
+
+        dom.selIpadapterModel.innerHTML = '';
+
+        if (!ipaPluginInstalled) {
+            dom.ipaStatus.classList.remove('hidden', 'ipa-ok');
+            dom.ipaStatus.classList.add('ipa-warn');
+            dom.ipaStatus.textContent = '⚠️ 未检测到 IP-Adapter 插件，请先安装 ComfyUI_IPAdapter_plus';
+            dom.selIpadapterModel.innerHTML = '<option value="">需安装插件</option>';
+            dom.ipaDownloadArea.classList.add('hidden');
+            return;
+        }
+
+        if (ipaModels.length === 0) {
+            dom.ipaStatus.classList.remove('hidden', 'ipa-ok');
+            dom.ipaStatus.classList.add('ipa-warn');
+            dom.ipaStatus.textContent = '⚠️ 已安装插件但未检测到模型文件';
+            dom.selIpadapterModel.innerHTML = '<option value="">无可用模型</option>';
+            dom.ipaDownloadArea.classList.remove('hidden');
+            return;
+        }
+
+        dom.ipaStatus.classList.remove('hidden', 'ipa-warn');
+        dom.ipaStatus.classList.add('ipa-ok');
+        dom.ipaStatus.textContent = `✓ 检测到 ${ipaModels.length} 个 IP-Adapter 模型`;
+        dom.ipaDownloadArea.classList.add('hidden');
+
+        ipaModels.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            dom.selIpadapterModel.appendChild(opt);
+        });
+    }
+
+    function setupIPAdapter() {
+        if (!dom.inpIpaImage) return;
+
+        dom.inpIpaImage.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                dom.ipaPreview.src = url;
+                dom.ipaPreviewContainer.classList.remove('hidden');
+            } else {
+                dom.ipaPreviewContainer.classList.add('hidden');
+            }
+        });
+
+        if (dom.btnIpaDownload) {
+            dom.btnIpaDownload.addEventListener('click', downloadIPAdapterModel);
+        }
+    }
+
+    async function downloadIPAdapterModel() {
+        const MODEL_URL = 'https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors';
+        const MODEL_NAME = 'ip-adapter-plus_sdxl_vit-h.safetensors';
+        const SAVE_PATH = 'ipadapter';
+
+        dom.btnIpaDownload.disabled = true;
+        dom.ipaDownloadProgress.classList.remove('hidden');
+        dom.ipaProgressText.textContent = '正在下载...';
+        dom.ipaProgressBar.style.width = '10%';
+
+        try {
+            const managerRes = await fetch(`${getServer()}/api/install-model`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: MODEL_URL,
+                    filename: MODEL_NAME,
+                    save_path: SAVE_PATH,
+                }),
+            });
+
+            if (managerRes.ok) {
+                dom.ipaProgressBar.style.width = '50%';
+                dom.ipaProgressText.textContent = '下载中，请稍候（约850MB）...';
+
+                let attempts = 0;
+                const checkInterval = setInterval(async () => {
+                    attempts++;
+                    dom.ipaProgressBar.style.width = Math.min(90, 50 + attempts * 2) + '%';
+                    try {
+                        await loadIPAdapterModels();
+                        if (ipaModels.length > 0) {
+                            clearInterval(checkInterval);
+                            dom.ipaProgressBar.style.width = '100%';
+                            dom.ipaProgressText.textContent = '下载完成！';
+                            setTimeout(() => {
+                                dom.ipaDownloadProgress.classList.add('hidden');
+                                dom.btnIpaDownload.disabled = false;
+                            }, 2000);
+                        }
+                    } catch (_) { /* keep polling */ }
+                    if (attempts > 120) {
+                        clearInterval(checkInterval);
+                        dom.ipaProgressText.textContent = '下载超时，请手动下载';
+                        dom.btnIpaDownload.disabled = false;
+                    }
+                }, 5000);
+                return;
+            }
+
+            throw new Error('Manager API 不可用');
+        } catch (e) {
+            console.warn('ComfyUI Manager 下载失败，显示手动下载指引:', e);
+            dom.ipaProgressText.textContent = '自动下载失败，请手动下载';
+            dom.btnIpaDownload.disabled = false;
+            setTimeout(() => dom.ipaDownloadProgress.classList.add('hidden'), 3000);
+        }
+    }
+
+    // ==================== 架构感知面板管理 ====================
+    function updateArchAwarePanels() {
+        const isAnima = isAnimaMode();
+
+        const sdxlOnlySections = [
+            { el: document.querySelector('#section-ipadapter'), hint: '仅支持 SDXL' },
+        ];
+
+        const freeuPanel = document.querySelector('#chk-freeu')?.closest('.optional-panel');
+        if (freeuPanel) {
+            sdxlOnlySections.push({ el: freeuPanel, hint: '仅支持 SDXL' });
+        }
+
+        const speedupCheckbox = document.getElementById('chk-speedup');
+        const speedupLabel = speedupCheckbox?.closest('label');
+
+        sdxlOnlySections.forEach(({ el, hint }) => {
+            if (!el) return;
+            if (isAnima) {
+                el.classList.add('arch-disabled');
+                el.setAttribute('data-arch-hint', hint);
+            } else {
+                el.classList.remove('arch-disabled');
+                el.removeAttribute('data-arch-hint');
+            }
+        });
+
+        if (speedupCheckbox && speedupLabel) {
+            if (isAnima) {
+                speedupCheckbox.disabled = true;
+                speedupCheckbox.checked = false;
+                speedupLabel.style.opacity = '0.45';
+                speedupLabel.title = '仅支持 SDXL 架构';
+            } else {
+                speedupCheckbox.disabled = false;
+                speedupLabel.style.opacity = '';
+                speedupLabel.title = '';
+            }
+        }
+    }
+
     // ==================== 动态工作流构建 ====================
     function buildWorkflow(uploadedImages) {
         const seed = parseInt(dom.inpSeed.value);
@@ -545,6 +758,7 @@
         const useImg2img = dom.chkImg2img.checked && (uploadedImages.img2img || refImageUrl);
         const useAdetailer = dom.chkAdetailer.checked;
         const useRegional = dom.chkRegional.checked;
+        const useIpadapter = dom.chkIpadapter?.checked && uploadedImages.ipadapter && !isAnimaMode();
 
         let modelOut, clipOut, vaeOut;
         const isAnima = dom.selArch.value === 'anima';
@@ -609,6 +823,41 @@
                 modelOut = [loraId, 0];
                 clipOut = [loraId, 1];
             }
+        }
+
+        // IP-Adapter (optional) - style/character transfer from reference image
+        if (useIpadapter) {
+            const ipaLoadId = id();
+            nodes[ipaLoadId] = {
+                class_type: "IPAdapterModelLoader",
+                inputs: { ipadapter_file: dom.selIpadapterModel.value },
+            };
+
+            const clipVisionId = id();
+            nodes[clipVisionId] = {
+                class_type: "CLIPVisionLoader",
+                inputs: { clip_name: "sd1.5/model.safetensors" },
+            };
+
+            const ipaImgId = id();
+            nodes[ipaImgId] = {
+                class_type: "LoadImage",
+                inputs: { image: uploadedImages.ipadapter },
+            };
+
+            const ipaApplyId = id();
+            nodes[ipaApplyId] = {
+                class_type: "IPAdapterSimple",
+                inputs: {
+                    model: modelOut,
+                    ipadapter: [ipaLoadId, 0],
+                    image: [ipaImgId, 0],
+                    weight: parseFloat(dom.inpIpaWeight.value),
+                    start_at: parseFloat(dom.inpIpaStart.value),
+                    end_at: parseFloat(dom.inpIpaEnd.value),
+                },
+            };
+            modelOut = [ipaApplyId, 0];
         }
 
         // CLIP Text Encode - Positive (with wildcard resolution)
@@ -966,6 +1215,11 @@
                     const res = await uploadImageFromUrl(refImageUrl);
                     uploadedImages.img2img = res.name;
                 }
+            }
+
+            if (dom.chkIpadapter?.checked && dom.inpIpaImage.files[0] && !isAnimaMode()) {
+                const res = await uploadImage(dom.inpIpaImage.files[0]);
+                uploadedImages.ipadapter = res.name;
             }
 
             const workflow = buildWorkflow(uploadedImages);
@@ -2395,11 +2649,13 @@
             loadVAEs(),
             loadLoRAs(),
             loadControlNets(),
+            loadIPAdapterModels(),
             loadTags(),
             loadAnimaModels(),
         ]);
         renderHistory();
         setupTagPickers();
+        updateArchAwarePanels();
     }
 
     // ==================== 折叠组 ====================
@@ -4927,6 +5183,7 @@
     setupTheme();
     setupToggles();
     setupArchSwitch();
+    setupIPAdapter();
     setupPanelGroups();
     setupSidebarResize();
     setupWildcard();
