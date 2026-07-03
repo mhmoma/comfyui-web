@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.02  
+> **部署版本**: 1.03  
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次推送或填充数据库后，必须更新本文件的版本号和版本历史。
 
@@ -58,7 +58,7 @@ git -c http.proxy='' -c https.proxy='' push deploy main
 ### 3.1 当前数据规模
 
 - 系列 (series): 862 个
-- 角色 (characters): 12,460 个
+- 角色 (characters): 30,609 个（无上限）
 - 数据来源: AnimaDex API (`animadex_raw.json` → `characters.json`)
 
 ### 3.2 数据库 Schema
@@ -75,9 +75,10 @@ git -c http.proxy='' -c https.proxy='' push deploy main
 - **端点**: `POST /api/characters/seed?page=N`
 - **认证**: 请求头 `x-admin-key: Tomkk520525`
 - **ADMIN_KEY**: `Tomkk520525`（已配置在 Cloudflare Pages 环境变量中）
-- **分页**: 每页 50 个系列，总共 18 页 (page=0 到 page=17)
-- **page=0 时**: 自动创建表结构 + 清空旧数据 + 插入前 50 个系列
+- **分页**: 每页 10 个系列，总共 87 页 (page=0 到 page=86)
+- **page=0 时**: 自动创建表结构 + 清空旧数据 + 插入前 10 个系列
 - **最后一页**: 返回 `"done": true`
+- **注意**: 由于 characters.json 接近 10MB，部分页面可能返回 Cloudflare 1102 错误，重试即可
 
 **填充命令（PowerShell）**：
 
@@ -88,11 +89,16 @@ $env:ALL_PROXY=''; $env:HTTP_PROXY=''; $env:HTTPS_PROXY=''
 # 第一页（创建表 + 清空 + 插入）
 curl.exe --max-time 120 -X POST "https://comfyui-web-89u.pages.dev/api/characters/seed?page=0" -H "x-admin-key: Tomkk520525"
 
-# 批量执行剩余页
-foreach ($p in 1..17) {
+# 批量执行剩余页（含自动重试）
+foreach ($p in 1..86) {
     Write-Host "Seeding page $p..."
-    $r = curl.exe --max-time 120 -s -X POST "https://comfyui-web-89u.pages.dev/api/characters/seed?page=$p" -H "x-admin-key: Tomkk520525"
-    Write-Host $r
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $r = curl.exe --max-time 120 -s -X POST "https://comfyui-web-89u.pages.dev/api/characters/seed?page=$p" -H "x-admin-key: Tomkk520525"
+        Write-Host $r
+        if ($r -match '"ok"') { break }
+        Write-Host "Retry $attempt for page $p..."
+        Start-Sleep -Seconds ($attempt * 3)
+    }
     Start-Sleep -Seconds 1
 }
 ```
@@ -161,7 +167,7 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | `build_characters.js` | 从 animadex_raw.json 构建 characters.json |
 | `strip_chars_from_tags.js` | 从 tags.json 移除角色数据 |
 | `fetch_animadex.js` | 从 AnimaDex API 拉取角色数据 |
-| `characters.json` | 完整角色数据（862 系列 / 12,460 角色） |
+| `characters.json` | 完整角色数据（862 系列 / 30,609 角色，~10MB） |
 | `tags.json` | 标签数据（不含角色，416KB） |
 
 ---
@@ -172,3 +178,4 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 |------|------|------|------|
 | 1.01 | 2026-07-02 | 首次推送 + 填充 | D1 数据库整合完成，862 系列 / 12,460 角色写入，前端改为懒加载 |
 | 1.02 | 2026-07-02 | 加入角色特征标签 | characters 表新增 tags 列，API 返回 tags，前端预览弹窗显示特征标签 + Trigger+Tags 按钮 |
+| 1.03 | 2026-07-02 | 取消角色上限 + 重填数据库 | 角色数从 12,460 → 30,609（无上限），seed 批次改为每页 10 系列（共 87 页），填充脚本加自动重试 |
