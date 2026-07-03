@@ -1718,18 +1718,22 @@
                 const isSelected = selected.has(tag.t);
                 const weight = this.getTagWeight(tag.t);
                 const hasThumb = !!tag.th;
-                div.className = 'tag-item' + (isSelected ? ' selected' : '') + (isArtistGroup ? ' tag-artist' : '') + (hasThumb ? ' tag-char' : '');
+                div.className = 'tag-item' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtistGroup ? ' tag-artist' : '');
                 div.dataset.tag = tag.t;
-                if (isArtistGroup) {
-                    const displayName = tag.t.replace(/_/g, ' ');
-                    const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
-                    div.innerHTML = `<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}<span class="tag-weight">${weight.toFixed(1)}</span>`;
-                } else if (hasThumb) {
+                if (hasThumb) {
                     div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy"><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span><span class="tag-weight">${weight.toFixed(1)}</span>`;
                     div.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        showCharPreview(tag);
+                        if (isArtistGroup) {
+                            showArtistPreview(tag);
+                        } else {
+                            showCharPreview(tag);
+                        }
                     });
+                } else if (isArtistGroup) {
+                    const displayName = tag.t.replace(/_/g, ' ');
+                    const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
+                    div.innerHTML = `<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}<span class="tag-weight">${weight.toFixed(1)}</span>`;
                 } else {
                     div.innerHTML = `<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span><span class="tag-weight">${weight.toFixed(1)}</span>`;
                 }
@@ -1877,6 +1881,59 @@
             loraEl.classList.remove('hidden');
         } else {
             loraEl.classList.add('hidden');
+        }
+        overlay.classList.remove('hidden');
+    }
+
+    function showArtistPreview(tag) {
+        const imgUrl = tag.img || (tag.th ? tag.th.replace('/thumbs/', '/').replace('.webp', '.png') : '');
+        if (!imgUrl) return;
+        let overlay = document.getElementById('artist-preview-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'artist-preview-overlay';
+            overlay.className = 'char-preview-overlay';
+            overlay.innerHTML = `
+                <div class="char-preview-card">
+                    <img class="char-preview-img" alt="">
+                    <div class="char-preview-info">
+                        <div class="char-preview-name"></div>
+                        <div class="char-preview-trigger"></div>
+                        <div class="char-preview-tags"></div>
+                        <div class="char-preview-actions">
+                            <button class="char-preview-btn" data-action="trigger">填入画师触发词</button>
+                        </div>
+                    </div>
+                    <button class="char-preview-close">✕</button>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay || e.target.classList.contains('char-preview-close')) {
+                    overlay.classList.add('hidden');
+                }
+                if (e.target.dataset.action === 'trigger') {
+                    const storedTag = overlay._currentTag;
+                    if (!storedTag) return;
+                    const formatted = isAnimaMode() ? formatAnimaArtistTag(storedTag.t) : storedTag.t;
+                    const ta = dom.txtPositive;
+                    const cur = ta.value.trim();
+                    ta.value = cur ? cur + ', ' + formatted : formatted;
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    overlay.classList.add('hidden');
+                }
+            });
+        }
+        overlay._currentTag = tag;
+        overlay.querySelector('.char-preview-img').src = imgUrl;
+        overlay.querySelector('.char-preview-img').alt = tag.d;
+        overlay.querySelector('.char-preview-name').textContent = tag.d;
+        overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
+        const tagsEl = overlay.querySelector('.char-preview-tags');
+        if (tag.count) {
+            tagsEl.innerHTML = `<span class="char-tag-pill">Danbooru ${tag.count.toLocaleString()} 作品</span>`;
+            tagsEl.classList.remove('hidden');
+        } else {
+            tagsEl.classList.add('hidden');
         }
         overlay.classList.remove('hidden');
     }
