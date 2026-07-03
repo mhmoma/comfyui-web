@@ -2927,6 +2927,21 @@
         }
     }
 
+    const IMG_CACHE_NAME = 'comfyui-char-images-v1';
+    async function getCachedImage(url) {
+        try {
+            const cache = await caches.open(IMG_CACHE_NAME);
+            const cached = await cache.match(url);
+            if (cached) return URL.createObjectURL(await cached.blob());
+            const res = await fetch(url, { mode: 'cors' });
+            if (res.ok) {
+                cache.put(url, res.clone());
+                return URL.createObjectURL(await res.blob());
+            }
+        } catch (_) {}
+        return url;
+    }
+
     function showCharPreview(tag) {
         const imgUrl = tag.th ? tag.th.replace('/thumbs/', '/').replace('.webp', '.png') : '';
         if (!imgUrl) return;
@@ -2983,8 +2998,14 @@
             });
         }
         overlay._currentTag = tag;
-        overlay.querySelector('.char-preview-img').src = imgUrl;
-        overlay.querySelector('.char-preview-img').alt = tag.d;
+        const previewImg = overlay.querySelector('.char-preview-img');
+        previewImg.alt = tag.d;
+        previewImg.src = '';
+        previewImg.style.opacity = '0.3';
+        getCachedImage(imgUrl).then(src => {
+            previewImg.src = src;
+            previewImg.style.opacity = '1';
+        });
         overlay.querySelector('.char-preview-name').textContent = tag.d;
         overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
         const tagsEl = overlay.querySelector('.char-preview-tags');
@@ -3063,8 +3084,14 @@
             });
         }
         overlay._currentTag = tag;
-        overlay.querySelector('.char-preview-img').src = imgUrl;
-        overlay.querySelector('.char-preview-img').alt = tag.d;
+        const previewImg2 = overlay.querySelector('.char-preview-img');
+        previewImg2.alt = tag.d;
+        previewImg2.src = '';
+        previewImg2.style.opacity = '0.3';
+        getCachedImage(imgUrl).then(src => {
+            previewImg2.src = src;
+            previewImg2.style.opacity = '1';
+        });
         overlay.querySelector('.char-preview-name').textContent = tag.d;
         overlay.querySelector('.char-preview-trigger').innerHTML = `<span style="color:var(--text-secondary);font-size:0.7rem">触发词：</span>${tag.t}`;
         const tagsEl = overlay.querySelector('.char-preview-tags');

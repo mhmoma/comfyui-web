@@ -3100,6 +3100,7 @@ textarea {
     object-fit: contain;
     display: block;
     background: var(--bg-input);
+    transition: opacity 0.3s ease;
 }
 
 .char-preview-info {
