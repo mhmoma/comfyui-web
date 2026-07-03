@@ -6,9 +6,9 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.04  
+> **部署版本**: 1.05
 > **版本记录**: 见底部「版本历史」  
-> **重要**: 每次推送或填充数据库后，必须更新本文件的**部署版本号**和**版本历史**。如果UI有变化，还需更新 `index.html` 中的**前端版本号**。
+> **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。如果UI有变化，还需更新 `index.html` 中的**前端版本号**。
 
 ---
 
@@ -17,7 +17,7 @@ alwaysApply: true
 - **项目名称**: ComfyUI Web (AI 绘图前端工具)
 - **工作区路径**: `d:\桌宠\comfyui-web`
 - **线上地址**: https://comfyui-web-89u.pages.dev/
-- **部署平台**: Cloudflare Pages (自动部署，推送即生效)
+- **部署平台**: Cloudflare Pages
 - **数据库**: Cloudflare D1
   - 数据库名: `comfyui-characters`
   - 数据库 ID: `3ea1156e-cbaa-40ec-b85c-4b55be6ecc58`
@@ -25,31 +25,66 @@ alwaysApply: true
 
 ---
 
-## 2. Git 仓库与推送
+## 2. 部署流程（唯一指定）
 
-### 2.1 仓库地址
+> **警告**: Cloudflare 与 GitHub 的集成部署存在不可靠的缓存问题，**严禁使用 `git push` 触发的自动部署！** 必须遵循以下手动部署流程。
+
+### 2.1 部署步骤
+
+1.  **创建纯净的部署目录**:
+    ```powershell
+    # 如果 deploy_dir 存在，先删掉
+    if (Test-Path -Path "deploy_dir") { rm deploy_dir -r -fo }
+    mkdir deploy_dir
+    ```
+
+2.  **精准复制必要文件**:
+    ```powershell
+    # 复制核心文件
+    Copy-Item -Path "index.html", "script.js", "style.css", "tags.json", "characters.json" -Destination "deploy_dir"
+
+    # 复制 functions 文件夹
+    Copy-Item -Path "functions" -Destination "deploy_dir" -Recurse
+    ```
+
+3.  **执行手动部署**:
+    ```powershell
+    wrangler pages deploy deploy_dir --project-name="comfyui-web"
+    ```
+
+4.  **清理临时目录**:
+    ```powershell
+    rm deploy_dir -r -fo
+    ```
+
+### 2.2 验证部署
+
+部署成功后，Wrangler 会输出一个本次部署专属的预览地址，形如 `https://<hash>.comfyui-web-89u.pages.dev`。**请优先访问此地址验证修改是否生效。**
+
+主域名 `https://comfyui-web-89u.pages.dev/` 的 CDN 缓存更新可能存在延迟。
+
+---
+
+## 2.x Git 仓库（仅用于代码版本管理）
+
+### 2.x.1 仓库地址
 
 | 远程名 | 地址 | 用途 |
 |--------|------|------|
-| `origin` | https://github.com/mhmoma/comfyui-Web.git | 主仓库，Cloudflare Pages 连接此仓库自动部署 |
-| `deploy` | https://github.com/mhmoma/arcane-survivors-kcn2id.git | 备用部署仓库 |
+| `origin` | https://github.com/mhmoma/comfyui-Web.git | 主代码仓库，**禁止**用于自动部署 |
+| `deploy` | https://github.com/mhmoma/arcane-survivors-kcn2id.git | 备用代码仓库 |
 
-### 2.2 推送命令（必须绕过代理）
+### 2.x.2 推送命令（必须绕过代理）
 
-本机 git 配置了代理 `http://127.0.0.1:7890` 和 `http://127.0.0.1:18888`，直连 GitHub 时代理可能不通。**必须用以下方式绕过代理推送**：
+本机 git 配置了代理，直连 GitHub 时代理可能不通。**必须用以下方式绕过代理推送**：
 
 ```powershell
 # PowerShell 环境下推送（清除环境变量 + git 参数绕过）
 $env:ALL_PROXY=''; $env:HTTP_PROXY=''; $env:HTTPS_PROXY=''
-git -c http.proxy='' -c https.proxy='' push origin main
-git -c http.proxy='' -c https.proxy='' push deploy main
+git push origin main
+# 可选推送到备用库
+# git push deploy main
 ```
-
-> **注意**: 不要用 `&&` 连接命令（PowerShell 不支持旧版 `&&`），用 `;` 分隔或分开执行。
-
-### 2.3 推送后
-
-推送到 `origin` 后 Cloudflare Pages 会自动部署，通常 1-2 分钟生效。推送到 `deploy` 仅为备份。
 
 ---
 
@@ -180,3 +215,4 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.02 | 2026-07-02 | 加入角色特征标签 | characters 表新增 tags 列，API 返回 tags，前端预览弹窗显示特征标签 + Trigger+Tags 按钮 |
 | 1.03 | 2026-07-02 | 取消角色上限 + 重填数据库 | 角色数从 12,460 → 30,609（无上限），seed 批次改为每页 10 系列（共 87 页），填充脚本加自动重试 |
 | 1.04 | 2026-07-03 | 调整UI | 角色标签预览图尺寸从 48px 增加到 64px |
+| 1.05 | 2026-07-03 | 修复部署流程 | 废弃不可靠的Git自动部署，改用Wrangler手动部署纯净目录的方案，确保部署结果的确定性。 |
