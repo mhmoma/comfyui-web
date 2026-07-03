@@ -2821,9 +2821,10 @@ textarea {
 
 .tag-thumb {
     width: 108px;
-    height: 150px;
+    height: 160px;
     border-radius: 6px;
     object-fit: cover;
+    object-position: top;
     flex-shrink: 0;
     background: var(--bg-input);
     border: 1px solid var(--border);
