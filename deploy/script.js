@@ -552,18 +552,21 @@
     // ==================== IP-Adapter 模型管理 ====================
     let ipaPluginInstalled = false;
     let ipaModels = [];
+    let ipaLoaderNode = 'IPAdapterModelLoader';
+    let ipaApplyNode = 'IPAdapterSimple';
     let hasComfyUIManager = false;
 
     async function loadIPAdapterModels() {
-        const nodeNames = ['IPAdapterModelLoader', 'IPAdapterSimple', 'IPAdapter'];
+        const loaderNodes = ['IPAdapterModelLoader', 'IPAdapterSimple', 'IPAdapter'];
         let found = false;
-        for (const nodeName of nodeNames) {
+        for (const nodeName of loaderNodes) {
             try {
                 const data = await apiGet('/object_info/' + nodeName);
                 ipaPluginInstalled = true;
                 const nodeInfo = data[nodeName]?.input?.required;
                 const models = nodeInfo?.ipadapter_file?.[0] || nodeInfo?.model_name?.[0] || [];
                 ipaModels = models;
+                ipaLoaderNode = nodeName;
                 found = true;
                 break;
             } catch (_) {}
@@ -572,6 +575,16 @@
             ipaPluginInstalled = false;
             ipaModels = [];
         }
+
+        const applyNodes = ['IPAdapterApply', 'IPAdapterSimple', 'IPAdapter', 'IPAdapterAdvanced'];
+        for (const nodeName of applyNodes) {
+            try {
+                await apiGet('/object_info/' + nodeName);
+                ipaApplyNode = nodeName;
+                break;
+            } catch (_) {}
+        }
+
         updateIPAdapterUI();
 
         try {
@@ -812,7 +825,7 @@
         if (useIpadapter) {
             const ipaLoadId = id();
             nodes[ipaLoadId] = {
-                class_type: "IPAdapterModelLoader",
+                class_type: ipaLoaderNode,
                 inputs: { ipadapter_file: dom.selIpadapterModel.value },
             };
 
@@ -829,16 +842,20 @@
             };
 
             const ipaApplyId = id();
+            const applyInputs = {
+                model: modelOut,
+                ipadapter: [ipaLoadId, 0],
+                image: [ipaImgId, 0],
+                weight: parseFloat(dom.inpIpaWeight.value),
+                start_at: parseFloat(dom.inpIpaStart.value),
+                end_at: parseFloat(dom.inpIpaEnd.value),
+            };
+            if (ipaApplyNode === 'IPAdapterApply') {
+                applyInputs.clip_vision = [clipVisionId, 0];
+            }
             nodes[ipaApplyId] = {
-                class_type: "IPAdapterSimple",
-                inputs: {
-                    model: modelOut,
-                    ipadapter: [ipaLoadId, 0],
-                    image: [ipaImgId, 0],
-                    weight: parseFloat(dom.inpIpaWeight.value),
-                    start_at: parseFloat(dom.inpIpaStart.value),
-                    end_at: parseFloat(dom.inpIpaEnd.value),
-                },
+                class_type: ipaApplyNode,
+                inputs: applyInputs,
             };
             modelOut = [ipaApplyId, 0];
         }
