@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.06
+> **部署版本**: 1.07
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。如果UI有变化，还需更新 `index.html` 中的**前端版本号**。
 
@@ -49,8 +49,8 @@ alwaysApply: true
 
 3.  **推送部署**: 将 commit 推送到 `origin` 的 `main` 分支，即可触发 Cloudflare 的自动部署。
     ```powershell
-    # 使用以下命令绕过本地代理进行推送
-    git -c http.proxy="" -c https.proxy="" push origin main
+    # 必须使用 18888 端口代理进行推送
+    git -c http.proxy="http://127.0.0.1:18888" -c https.proxy="http://127.0.0.1:18888" push origin main
     ```
     > **⚠️ PowerShell 命令警告**: 在 PowerShell 终端中，**严禁使用 `&&`** 连接多个命令。请将命令分行执行，或使用分号 `;` (如果适用)。
 
@@ -206,3 +206,4 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.04 | 2026-07-03 | 调整UI | 角色标签预览图尺寸从 48px 增加到 64px |
 | 1.05 | 2026-07-03 | 修复部署流程 | 废弃了错误的 Wrangler 手动部署方案，回归并明确了正确的 `/deploy` 目录部署策略。|
 | 1.06 | 2026-07-03 | 终极规则修正 | 再次修正部署流程，并增加了 PowerShell 命令使用警告。 |
+| 1.07 | 2026-07-03 | 修正代理规则 | 明确了 Git 推送必须通过 18888 端口代理，而非绕过。 |
