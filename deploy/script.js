@@ -1548,6 +1548,8 @@
     const _charCache = {};
     let _charGroupIdx = -1;
     const CHAR_BASE_SUBS = 1;
+    let _charPage = 1;
+    const CHARS_PER_PAGE = 100;
 
     const _artistCache = {};
     let _artistGroupIdx = -1;
@@ -1767,6 +1769,9 @@
                         _artistCurrentSort = s._artistSort;
                         _artistCurrentLetter = 'all';
                     }
+                    if (this.groupIdx === _charGroupIdx && s._seriesId) {
+                        _charPage = 1;
+                    }
                     this.renderSubTabs();
                     if (this.groupIdx === _charGroupIdx && i >= CHAR_BASE_SUBS && s._seriesId && s.tags.length === 0) {
                         this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
@@ -1857,11 +1862,15 @@
                     this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
                     _fetchSeriesChars(sub._seriesId).then(tags => {
                         sub.tags = tags;
-                        this._renderItems(tags);
+                        this._renderCharPage(tags);
                     });
                     return;
                 }
                 items = sub?.tags || [];
+                if (sub && sub._seriesId && items.length > CHARS_PER_PAGE) {
+                    this._renderCharPage(items);
+                    return;
+                }
             }
 
             this._renderItems(items);
@@ -1899,6 +1908,54 @@
             jumpBtn.addEventListener('click', () => {
                 const p = parseInt(jumpInput.value);
                 if (p >= 1 && p <= _artistTotalPages) { _artistPage = p; this.renderGrid(); }
+            });
+            jumpWrap.append(jumpInput, jumpBtn);
+
+            nav.append(prevBtn, info, nextBtn, jumpWrap);
+            this.gridEl.parentElement.insertBefore(nav, this.gridEl.nextSibling);
+        }
+
+        _renderCharPage(allTags) {
+            const total = allTags.length;
+            const totalPages = Math.ceil(total / CHARS_PER_PAGE);
+            if (_charPage > totalPages) _charPage = totalPages;
+            if (_charPage < 1) _charPage = 1;
+            const start = (_charPage - 1) * CHARS_PER_PAGE;
+            const pageItems = allTags.slice(start, start + CHARS_PER_PAGE);
+            this._renderItems(pageItems);
+            if (totalPages > 1) this._renderCharPagination(total, totalPages);
+        }
+
+        _renderCharPagination(total, totalPages) {
+            const nav = document.createElement('div');
+            nav.className = 'artist-pagination';
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '← 上一页';
+            prevBtn.disabled = _charPage <= 1;
+            prevBtn.addEventListener('click', () => { _charPage--; this.renderGrid(); });
+
+            const info = document.createElement('span');
+            info.className = 'page-info';
+            info.textContent = `第 ${_charPage} / ${totalPages} 页（共 ${total} 个角色）`;
+
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '下一页 →';
+            nextBtn.disabled = _charPage >= totalPages;
+            nextBtn.addEventListener('click', () => { _charPage++; this.renderGrid(); });
+
+            const jumpWrap = document.createElement('span');
+            jumpWrap.className = 'page-jump';
+            const jumpInput = document.createElement('input');
+            jumpInput.type = 'number';
+            jumpInput.min = 1;
+            jumpInput.max = totalPages;
+            jumpInput.placeholder = '跳转';
+            jumpInput.style.width = '50px';
+            const jumpBtn = document.createElement('button');
+            jumpBtn.textContent = 'Go';
+            jumpBtn.addEventListener('click', () => {
+                const p = parseInt(jumpInput.value);
+                if (p >= 1 && p <= totalPages) { _charPage = p; this.renderGrid(); }
             });
             jumpWrap.append(jumpInput, jumpBtn);
 
@@ -1946,6 +2003,7 @@
                     e.preventDefault();
                     this.groupIdx = r.groupIdx;
                     this.subIdx = r.subIdx;
+                    _charPage = 1;
                     this.searchEl.value = '';
                     this._hideAutocomplete();
                     this.render();
