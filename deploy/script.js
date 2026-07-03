@@ -2584,6 +2584,80 @@
             }
         }
 
+        _renderGroupedFavItems(items) {
+            this.gridEl.innerHTML = '';
+            const groups = [
+                { type: 'character', label: '👤 角色', items: [] },
+                { type: 'artist', label: '🎨 画师', items: [] },
+                { type: 'tag', label: '🏷️ 标签', items: [] },
+            ];
+            const typeMap = { character: 0, artist: 1, tag: 2 };
+            items.forEach(it => groups[typeMap[it.type] ?? 2].items.push(it));
+            const nonEmpty = groups.filter(g => g.items.length > 0);
+            if (nonEmpty.length <= 1) { this._renderItems(items); return; }
+            const allLazy = [];
+            nonEmpty.forEach(group => {
+                const section = document.createElement('div');
+                section.className = 'fav-section';
+                const header = document.createElement('div');
+                header.className = 'fav-section-header';
+                header.innerHTML = `<span class="fav-section-label">${group.label}</span><span class="fav-section-count">${group.items.length}</span>`;
+                section.appendChild(header);
+                const grid = document.createElement('div');
+                grid.className = 'fav-section-grid';
+                const lazy = this._renderItemsInto(grid, group.items, group.type === 'artist');
+                allLazy.push(...lazy);
+                section.appendChild(grid);
+                this.gridEl.appendChild(section);
+            });
+            if (allLazy.length) _observeLazyImages(allLazy);
+        }
+
+        _renderItemsInto(container, items, forceArtist) {
+            const selected = this.getSelectedTags();
+            const lazyImages = [];
+            items.forEach(tag => {
+                const div = document.createElement('div');
+                const isSelected = selected.has(tag.t);
+                const weight = this.getTagWeight(tag.t);
+                const hasThumb = !!tag.th;
+                const isFav = FavManager.has(tag.t);
+                const useCount = tag._count || UsageTracker.getCount(tag.t);
+                const isArtistItem = forceArtist || tag.type === 'artist';
+                div.className = 'tag-item' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtistItem ? ' tag-artist' : '');
+                div.dataset.tag = tag.t;
+                const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
+                const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
+                if (hasThumb) {
+                    div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                    lazyImages.push(div.querySelector('img.tag-thumb'));
+                    div.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
+                        e.stopPropagation();
+                        if (isArtistItem) { showArtistPreview(tag); } else { showCharPreview(tag); }
+                    });
+                } else if (isArtistItem) {
+                    const displayName = tag.t.replace(/_/g, ' ');
+                    const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
+                    div.innerHTML = `${favStar}<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                } else {
+                    div.innerHTML = `${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                }
+                if (!hasThumb) {
+                    div.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
+                        if (e.shiftKey && isSelected) { this.adjustWeight(tag.t, 0.1); }
+                        else if (e.ctrlKey && isSelected) { this.adjustWeight(tag.t, -0.1); }
+                        else { this.toggleTag(tag.t, tag.d, tag.th); }
+                        this.renderGrid();
+                    });
+                }
+                div.title = hasThumb ? '点击查看详情 | 点⭐收藏' : '点击添加/移除 | 点⭐收藏 | Shift+点击加权重 | Ctrl+点击减权重';
+                container.appendChild(div);
+            });
+            return lazyImages;
+        }
+
         _renderItems(items) {
             this.gridEl.innerHTML = '';
             const frag = document.createDocumentFragment();
