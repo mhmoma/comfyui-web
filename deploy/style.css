@@ -855,7 +855,7 @@ textarea {
     gap: 5px;
     padding: 10px;
     min-height: 100px;
-    max-height: 300px;
+    max-height: 650px;
     overflow-y: auto;
 }
 
