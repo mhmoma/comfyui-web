@@ -1,7 +1,7 @@
 export async function onRequestGet(context) {
   const { env, params } = context;
   const db = env.DB;
-  const seriesId = params.id;
+  const seriesId = decodeURIComponent(params.id);
 
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not configured' }), {
