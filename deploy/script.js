@@ -1987,8 +1987,14 @@
         }
     }
 
+    function _ssGet(key) { try { const v = sessionStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; } }
+    function _ssSet(key, val) { try { sessionStorage.setItem(key, JSON.stringify(val)); } catch { } }
+
     async function _fetchSeriesChars(seriesId) {
         if (_charCache[seriesId]) return _charCache[seriesId];
+        const ssKey = '_ch_' + seriesId;
+        const ss = _ssGet(ssKey);
+        if (ss) { _charCache[seriesId] = ss; return ss; }
         const res = await fetch(`/api/characters/${encodeURIComponent(seriesId)}`);
         if (!res.ok) return [];
         const data = await res.json();
@@ -1996,6 +2002,7 @@
             delete _charCache[Object.keys(_charCache)[0]];
         }
         _charCache[seriesId] = data;
+        _ssSet(ssKey, data);
         return data;
     }
 
@@ -2010,6 +2017,9 @@
     async function _fetchArtists(sort = 'score', order = 'desc', page = 1, letter = 'all') {
         const key = `${sort}_${order}_${page}_${letter}`;
         if (_artistCache[key]) return _artistCache[key];
+        const ssKey = '_ar_' + key;
+        const ss = _ssGet(ssKey);
+        if (ss) { _artistCache[key] = ss; return ss; }
         try {
             let url = `/api/artists/list?sort=${sort}&order=${order}&page=${page}&limit=100`;
             if (letter && letter !== 'all') url += `&letter=${letter}`;
@@ -2030,6 +2040,7 @@
                 delete _artistCache[Object.keys(_artistCache)[0]];
             }
             _artistCache[key] = result;
+            _ssSet(ssKey, result);
             return result;
         } catch (e) { console.warn('[API] Artist list error:', e.message); return { tags: [], pages: 1 }; }
     }
@@ -2319,7 +2330,7 @@
             let items;
             if (search) {
                 if (this.groupIdx === _artistGroupIdx) {
-                    this.gridEl.innerHTML = '<div style="padding:20px;color:#999">搜索中...</div>';
+                    this.gridEl.innerHTML = _buildSkeletonGrid(4);
                     _searchArtistsFromDb(search).then(dbItems => {
                         this._renderItems(dbItems);
                     });
