@@ -639,9 +639,12 @@
         if (ipaModels.length === 0) {
             dom.ipaStatus.classList.remove('hidden', 'ipa-ok');
             dom.ipaStatus.classList.add('ipa-warn');
-            dom.ipaStatus.textContent = '⚠️ 已安装插件但未检测到模型文件';
+            dom.ipaStatus.textContent = '⚠️ 已安装插件但未检测到 IPA 模型';
             dom.selIpadapterModel.innerHTML = '<option value="">无可用模型</option>';
             dom.ipaDownloadArea.classList.remove('hidden');
+            const hint = dom.ipaDownloadArea.querySelector('.ipa-download-hint');
+            if (hint) hint.textContent = '需要下载 IP-Adapter 模型和 CLIP Vision 模型';
+            if (dom.btnIpaDownload) dom.btnIpaDownload.textContent = '📥 一键下载全部所需模型';
             return;
         }
 
@@ -669,7 +672,8 @@
         if (ipaClipVisionModels.length === 0) {
             dom.ipaDownloadArea.classList.remove('hidden');
             const hint = dom.ipaDownloadArea.querySelector('.ipa-download-hint');
-            if (hint) hint.textContent = '需要下载 CLIP Vision 模型才能使用 IP-Adapter';
+            if (hint) hint.textContent = '⚠️ 缺少 CLIP Vision 模型（IP-Adapter 必需）';
+            if (dom.btnIpaDownload) dom.btnIpaDownload.textContent = '📥 一键下载 CLIP Vision 模型';
             const manualHint = dom.ipaDownloadArea.querySelector('.ipa-manual-hint');
             if (manualHint) manualHint.innerHTML = '手动下载: <a href="https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors" target="_blank" rel="noopener">CLIP-ViT-H model.safetensors</a> → 放入 <code>models/clip_vision/</code>';
         } else {
@@ -704,49 +708,72 @@
     }
 
     async function downloadIPAdapterModel() {
-        const MODEL_URL = 'https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors';
-        const MODEL_NAME = 'ip-adapter-plus_sdxl_vit-h.safetensors';
-        const SAVE_PATH = 'ipadapter';
+        const needsIPA = ipaModels.length === 0;
+        const needsCLIP = ipaClipVisionModels.length === 0;
+
+        const downloads = [];
+        if (needsIPA) {
+            downloads.push({
+                url: 'https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors',
+                filename: 'ip-adapter-plus_sdxl_vit-h.safetensors',
+                save_path: 'ipadapter',
+                size: '~850MB',
+            });
+        }
+        if (needsCLIP) {
+            downloads.push({
+                url: 'https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors',
+                filename: 'model.safetensors',
+                save_path: 'clip_vision',
+                size: '~2.5GB',
+            });
+        }
+
+        if (downloads.length === 0) return;
 
         dom.btnIpaDownload.disabled = true;
         dom.ipaDownloadProgress.classList.remove('hidden');
-        dom.ipaProgressText.textContent = '正在下载...';
+        const totalLabel = downloads.map(d => `${d.filename} (${d.size})`).join(' + ');
+        dom.ipaProgressText.textContent = `正在下载 ${totalLabel}...`;
         dom.ipaProgressBar.style.width = '10%';
 
         try {
-            const managerRes = await fetch(`${getServer()}/api/install-model`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: MODEL_URL,
-                    filename: MODEL_NAME,
-                    save_path: SAVE_PATH,
-                }),
-            });
+            for (const dl of downloads) {
+                await fetch(`${getServer()}/api/install-model`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: dl.url,
+                        filename: dl.filename,
+                        save_path: dl.save_path,
+                    }),
+                });
+            }
 
-            if (managerRes.ok) {
-                dom.ipaProgressBar.style.width = '50%';
-                dom.ipaProgressText.textContent = '下载中，请稍候（约850MB）...';
+            dom.ipaProgressBar.style.width = '30%';
+            dom.ipaProgressText.textContent = `下载中，请稍候（${totalLabel}）...`;
 
-                let attempts = 0;
-                const checkInterval = setInterval(async () => {
-                    attempts++;
-                    dom.ipaProgressBar.style.width = Math.min(90, 50 + attempts * 2) + '%';
-                    try {
-                        await loadIPAdapterModels();
-                        if (ipaModels.length > 0) {
-                            clearInterval(checkInterval);
-                            dom.ipaProgressBar.style.width = '100%';
-                            dom.ipaProgressText.textContent = '下载完成！';
-                            setTimeout(() => {
-                                dom.ipaDownloadProgress.classList.add('hidden');
-                                dom.btnIpaDownload.disabled = false;
-                            }, 2000);
-                        }
-                    } catch (_) { /* keep polling */ }
-                    if (attempts > 120) {
+            let attempts = 0;
+            const checkInterval = setInterval(async () => {
+                attempts++;
+                dom.ipaProgressBar.style.width = Math.min(90, 30 + attempts * 2) + '%';
+                try {
+                    await loadIPAdapterModels();
+                    const ipaOk = !needsIPA || ipaModels.length > 0;
+                    const clipOk = !needsCLIP || ipaClipVisionModels.length > 0;
+                    if (ipaOk && clipOk) {
                         clearInterval(checkInterval);
-                        dom.ipaProgressText.textContent = '下载超时，请手动下载';
+                        dom.ipaProgressBar.style.width = '100%';
+                        dom.ipaProgressText.textContent = '全部下载完成！';
+                        setTimeout(() => {
+                            dom.ipaDownloadProgress.classList.add('hidden');
+                            dom.btnIpaDownload.disabled = false;
+                        }, 2000);
+                    }
+                } catch (_) {}
+                if (attempts > 180) {
+                    clearInterval(checkInterval);
+                    dom.ipaProgressText.textContent = '下载超时，请手动下载';
                         dom.btnIpaDownload.disabled = false;
                     }
                 }, 5000);
