@@ -3351,45 +3351,134 @@ textarea {
     border-color: #fbbf24 !important;
 }
 
-/* ==================== 收藏分组视图 ==================== */
-.fav-group-header {
+/* ==================== 收藏分组视图（三列） ==================== */
+.fav-columns {
     display: flex;
-    align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 8px 4px 4px;
-    margin-top: 4px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-secondary, #aaa);
-    border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+    min-height: 120px;
 }
 
-.fav-group-header:first-child {
-    margin-top: 0;
+.fav-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border, rgba(255,255,255,0.06));
+    overflow: hidden;
+}
+
+.fav-col-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary, #aaa);
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.06));
+    flex-shrink: 0;
 }
 
 .fav-group-count {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 400;
     background: var(--accent, #7c3aed);
     color: #fff;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 10px;
-    min-width: 18px;
+    min-width: 16px;
     text-align: center;
 }
 
-.fav-group-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 0 4px;
-    width: 100%;
+.fav-col-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary, #666);
+    font-size: 0.75rem;
 }
 
-.fav-group-grid .tag-item {
-    position: relative;
+.fav-col-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char {
+    width: 48px;
+    height: 68px;
+    font-size: 0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .tag-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .tag-desc {
+    font-size: 0.55rem;
+    line-height: 1.1;
+    padding: 1px 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 48px;
+    display: block;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .tag-text {
+    display: none;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .tag-weight {
+    display: none;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .tag-fav-star {
+    top: 1px;
+    left: 1px;
+    font-size: 12px;
+    padding: 1px;
+}
+
+.fav-col-grid .tag-item.fav-mini.tag-char .tag-use-count {
+    font-size: 0.5rem;
+    padding: 0 3px;
+    bottom: -2px;
+    left: -2px;
+}
+
+.fav-col-grid .tag-item.fav-mini:not(.tag-char) {
+    font-size: 0.7rem;
+    padding: 3px 6px 3px 16px;
+}
+
+.fav-col-grid .tag-item.fav-mini:not(.tag-char) .tag-fav-star {
+    font-size: 10px;
+    top: 2px;
+    left: 2px;
+}
+
+.fav-col-grid .tag-item.fav-mini:not(.tag-char) .tag-weight {
+    font-size: 0.55rem;
+}
+
+@media (max-width: 700px) {
+    .fav-columns {
+        flex-direction: column;
+    }
+    .fav-col-grid {
+        max-height: 200px;
+    }
 }
 
 /* ==================== Architecture-aware Panel States ==================== */

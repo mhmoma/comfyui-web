@@ -2262,9 +2262,10 @@
                     this.gridEl.innerHTML = `<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%;font-size:0.85rem">${msg}</div>`;
                     return;
                 }
-                const isAllFav = this._virtualMode === 'fav' && (this._virtualSub || 0) === 0;
-                if (isAllFav && items.length > 0) {
-                    this._renderGroupedFavItems(items);
+                const useGrouped = (this._virtualMode === 'fav' && (this._virtualSub || 0) === 0) || this._virtualMode === 'recent' || this._virtualMode === 'frequent';
+                if (useGrouped && items.length > 0) {
+                    const emptyMsg = this._virtualMode === 'fav' ? '还没有收藏任何标签，在标签卡片上点击 ⭐ 来收藏' : '还没有使用记录';
+                    this._renderGroupedFavItems(items, emptyMsg);
                 } else {
                     this._renderItems(items);
                 }
@@ -2535,72 +2536,83 @@
             });
         }
 
-        _renderGroupedFavItems(items) {
+        _renderGroupedFavItems(items, emptyMsg) {
             this.gridEl.innerHTML = '';
-            const groups = { character: [], artist: [], tag: [] };
+            const groups = { artist: [], character: [], tag: [] };
             items.forEach(item => {
-                const type = item.type || 'tag';
+                const type = item.type || (item.th ? (item.img ? 'artist' : 'character') : 'tag');
                 if (groups[type]) groups[type].push(item);
                 else groups.tag.push(item);
             });
-            const labels = { character: '👤 角色', artist: '🎨 画师', tag: '🏷️ 标签' };
-            const order = ['character', 'artist', 'tag'];
+            const labels = { artist: '🎨 画师', character: '👤 角色', tag: '🏷️ 标签' };
+            const order = ['artist', 'character', 'tag'];
             const selected = this.getSelectedTags();
-            let hasContent = false;
+            const hasAny = order.some(t => groups[t].length > 0);
+            if (!hasAny) {
+                this.gridEl.innerHTML = `<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%;font-size:0.85rem">${emptyMsg || '暂无内容'}</div>`;
+                return;
+            }
+            const container = document.createElement('div');
+            container.className = 'fav-columns';
             order.forEach(type => {
                 const arr = groups[type];
-                if (!arr.length) return;
-                hasContent = true;
+                const col = document.createElement('div');
+                col.className = 'fav-col fav-col-' + type;
                 const header = document.createElement('div');
-                header.className = 'fav-group-header';
+                header.className = 'fav-col-header';
                 header.innerHTML = `<span>${labels[type]}</span><span class="fav-group-count">${arr.length}</span>`;
-                this.gridEl.appendChild(header);
-                const section = document.createElement('div');
-                section.className = 'fav-group-grid';
-                arr.forEach(tag => {
-                    const div = document.createElement('div');
-                    const isSelected = selected.has(tag.t);
-                    const weight = this.getTagWeight(tag.t);
-                    const hasThumb = !!tag.th;
-                    const isFav = FavManager.has(tag.t);
-                    const useCount = tag._count || UsageTracker.getCount(tag.t);
-                    const isArtist = type === 'artist';
-                    div.className = 'tag-item' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtist ? ' tag-artist' : '');
-                    div.dataset.tag = tag.t;
-                    const favStar = `<span class="tag-fav-star fav-active" title="取消收藏">★</span>`;
-                    const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
-                    if (hasThumb) {
-                        div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
-                        div.addEventListener('click', (e) => {
-                            if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
-                            e.stopPropagation();
-                            if (isArtist) showArtistPreview(tag);
-                            else showCharPreview(tag);
-                        });
-                    } else if (isArtist) {
-                        const displayName = tag.t.replace(/_/g, ' ');
-                        const desc = tag.d && !tag.d.match(/^\d+作品$/) ? tag.d : '';
-                        div.innerHTML = `${favStar}<span class="tag-text">${displayName}</span>${desc ? `<span class="tag-desc">${desc}</span>` : ''}${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
-                    } else {
-                        div.innerHTML = `${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
-                    }
-                    if (!hasThumb) {
-                        div.addEventListener('click', (e) => {
-                            if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
-                            if (e.shiftKey && isSelected) this.adjustWeight(tag.t, 0.1);
-                            else if (e.ctrlKey && isSelected) this.adjustWeight(tag.t, -0.1);
-                            else this.toggleTag(tag.t, tag.d, tag.th);
-                            this.renderGrid();
-                        });
-                    }
-                    div.title = hasThumb ? '点击查看详情 | 点⭐收藏' : '点击添加/移除 | 点⭐收藏';
-                    section.appendChild(div);
-                });
-                this.gridEl.appendChild(section);
+                col.appendChild(header);
+                if (!arr.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'fav-col-empty';
+                    empty.textContent = '暂无';
+                    col.appendChild(empty);
+                } else {
+                    const grid = document.createElement('div');
+                    grid.className = 'fav-col-grid fav-col-grid-' + type;
+                    arr.forEach(tag => {
+                        const div = document.createElement('div');
+                        const isSelected = selected.has(tag.t);
+                        const weight = this.getTagWeight(tag.t);
+                        const hasThumb = !!tag.th;
+                        const isFav = FavManager.has(tag.t);
+                        const useCount = tag._count || UsageTracker.getCount(tag.t);
+                        const isArtist = type === 'artist';
+                        div.className = 'tag-item fav-mini' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtist ? ' tag-artist' : '');
+                        div.dataset.tag = tag.t;
+                        const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
+                        const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
+                        if (hasThumb) {
+                            div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                            div.addEventListener('click', (e) => {
+                                if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
+                                e.stopPropagation();
+                                if (isArtist) showArtistPreview(tag);
+                                else showCharPreview(tag);
+                            });
+                        } else if (isArtist) {
+                            const displayName = tag.t.replace(/_/g, ' ');
+                            div.innerHTML = `${favStar}<span class="tag-text">${displayName}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                        } else {
+                            div.innerHTML = `${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
+                        }
+                        if (!hasThumb) {
+                            div.addEventListener('click', (e) => {
+                                if (e.target.classList.contains('tag-fav-star')) { e.stopPropagation(); FavManager.toggle(tag); this.renderGrid(); return; }
+                                if (e.shiftKey && isSelected) this.adjustWeight(tag.t, 0.1);
+                                else if (e.ctrlKey && isSelected) this.adjustWeight(tag.t, -0.1);
+                                else this.toggleTag(tag.t, tag.d, tag.th);
+                                this.renderGrid();
+                            });
+                        }
+                        div.title = hasThumb ? '点击查看详情' : '点击添加/移除';
+                        grid.appendChild(div);
+                    });
+                    col.appendChild(grid);
+                }
+                container.appendChild(col);
             });
-            if (!hasContent) {
-                this.gridEl.innerHTML = `<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%;font-size:0.85rem">还没有收藏任何标签，在标签卡片上点击 ⭐ 来收藏</div>`;
-            }
+            this.gridEl.appendChild(container);
         }
 
         getSelectedTags() {
