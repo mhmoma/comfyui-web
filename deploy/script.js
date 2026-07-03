@@ -554,6 +554,7 @@
     let ipaModels = [];
     let ipaLoaderNode = '';
     let ipaApplyNode = '';
+    let ipaWeightTypes = [];
     let ipaClipVisionModels = [];
     let hasComfyUIManager = false;
 
@@ -586,7 +587,9 @@
                     const data = await apiGet('/object_info/' + nodeName);
                     if (data[nodeName] && data[nodeName].input) {
                         ipaApplyNode = nodeName;
-                        console.log('[IPA] Apply node:', nodeName);
+                        const req = data[nodeName].input.required || {};
+                        if (req.weight_type) ipaWeightTypes = req.weight_type[0] || [];
+                        console.log('[IPA] Apply node:', nodeName, 'weight_types:', ipaWeightTypes);
                         break;
                     }
                 } catch (_) {}
@@ -686,6 +689,17 @@
             opt.textContent = m;
             dom.selIpadapterModel.appendChild(opt);
         });
+
+        const wtSel = document.getElementById('sel-ipa-weight-type');
+        if (wtSel && ipaWeightTypes.length > 0) {
+            wtSel.innerHTML = '';
+            ipaWeightTypes.forEach(wt => {
+                const opt = document.createElement('option');
+                opt.value = wt;
+                opt.textContent = wt;
+                wtSel.appendChild(opt);
+            });
+        }
     }
 
     function setupIPAdapter() {
