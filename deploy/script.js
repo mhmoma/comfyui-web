@@ -706,39 +706,22 @@
     function updateArchAwarePanels() {
         const isAnima = isAnimaMode();
 
-        const sdxlOnlySections = [
-            { el: document.querySelector('#section-ipadapter'), hint: '仅支持 SDXL' },
+        const sdxlOnlyEls = [
+            document.querySelector('#section-ipadapter'),
+            document.querySelector('#chk-freeu')?.closest('.optional-panel'),
         ];
 
-        const freeuPanel = document.querySelector('#chk-freeu')?.closest('.optional-panel');
-        if (freeuPanel) {
-            sdxlOnlySections.push({ el: freeuPanel, hint: '仅支持 SDXL' });
-        }
+        sdxlOnlyEls.forEach(el => {
+            if (!el) return;
+            el.classList.toggle('arch-hidden', isAnima);
+        });
 
         const speedupCheckbox = document.getElementById('chk-speedup');
         const speedupLabel = speedupCheckbox?.closest('label');
-
-        sdxlOnlySections.forEach(({ el, hint }) => {
-            if (!el) return;
-            if (isAnima) {
-                el.classList.add('arch-disabled');
-                el.setAttribute('data-arch-hint', hint);
-            } else {
-                el.classList.remove('arch-disabled');
-                el.removeAttribute('data-arch-hint');
-            }
-        });
-
         if (speedupCheckbox && speedupLabel) {
+            speedupLabel.classList.toggle('arch-hidden', isAnima);
             if (isAnima) {
-                speedupCheckbox.disabled = true;
                 speedupCheckbox.checked = false;
-                speedupLabel.style.opacity = '0.45';
-                speedupLabel.title = '仅支持 SDXL 架构';
-            } else {
-                speedupCheckbox.disabled = false;
-                speedupLabel.style.opacity = '';
-                speedupLabel.title = '';
             }
         }
     }

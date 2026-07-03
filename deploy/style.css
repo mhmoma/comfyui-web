@@ -3258,23 +3258,6 @@ textarea {
 }
 
 /* ==================== Architecture-aware Panel States ==================== */
-.arch-disabled {
-    opacity: 0.45;
-    pointer-events: none;
-    position: relative;
-}
-.arch-disabled::after {
-    content: attr(data-arch-hint);
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.75);
-    color: #ffb400;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    pointer-events: auto;
-    z-index: 5;
+.arch-hidden {
+    display: none !important;
 }
