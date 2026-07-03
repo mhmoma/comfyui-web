@@ -3612,7 +3612,28 @@
 
     // ==================== 图片元数据解析 ====================
     const MetaParser = {
-        parsePNG(buffer) {
+        async _inflate(data) {
+            try {
+                const ds = new DecompressionStream('deflate');
+                const writer = ds.writable.getWriter();
+                writer.write(data);
+                writer.close();
+                const reader = ds.readable.getReader();
+                const chunks = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                }
+                const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+                const result = new Uint8Array(totalLen);
+                let pos = 0;
+                for (const c of chunks) { result.set(c, pos); pos += c.length; }
+                return new TextDecoder('utf-8').decode(result);
+            } catch { return null; }
+        },
+
+        async parsePNG(buffer) {
             const view = new DataView(buffer);
             if (view.getUint32(0) !== 0x89504E47) return null;
             const texts = {};
@@ -3629,6 +3650,18 @@
                         const val = new TextDecoder().decode(data.slice(nullIdx + 1));
                         texts[key] = val;
                     }
+                } else if (type === 'zTXt') {
+                    const data = new Uint8Array(buffer, offset + 8, len);
+                    const nullIdx = data.indexOf(0);
+                    if (nullIdx > 0) {
+                        const key = new TextDecoder().decode(data.slice(0, nullIdx));
+                        const compMethod = data[nullIdx + 1];
+                        const compressed = data.slice(nullIdx + 2);
+                        if (compMethod === 0) {
+                            const val = await this._inflate(compressed);
+                            if (val) texts[key] = val;
+                        }
+                    }
                 } else if (type === 'iTXt') {
                     const data = new Uint8Array(buffer, offset + 8, len);
                     const nullIdx = data.indexOf(0);
@@ -3636,19 +3669,15 @@
                         const key = new TextDecoder().decode(data.slice(0, nullIdx));
                         let rest = nullIdx + 1;
                         const compressionFlag = data[rest]; rest++;
-                        rest++; // compression method
+                        rest++;
                         const langEnd = data.indexOf(0, rest); rest = langEnd + 1;
                         const kwEnd = data.indexOf(0, rest); rest = kwEnd + 1;
                         let val;
                         if (compressionFlag === 0) {
                             val = new TextDecoder('utf-8').decode(data.slice(rest));
                         } else {
-                            try {
-                                const ds = new DecompressionStream('deflate');
-                                const readable = new Blob([data.slice(rest)]).stream().pipeThrough(ds);
-                                // fallback: skip compressed iTXt if we can't decompress synchronously
-                                val = new TextDecoder('utf-8').decode(data.slice(rest));
-                            } catch { val = ''; }
+                            val = await this._inflate(data.slice(rest));
+                            if (!val) val = new TextDecoder('utf-8', { fatal: false }).decode(data.slice(rest));
                         }
                         texts[key] = val;
                     }
@@ -3660,29 +3689,100 @@
             return Object.keys(texts).length ? texts : null;
         },
 
-        parseEXIF(buffer) {
+        parseWebP(buffer) {
+            const view = new DataView(buffer);
+            if (view.getUint32(0) !== 0x52494646) return null; // 'RIFF'
+            if (view.getUint32(8) !== 0x57454250) return null; // 'WEBP'
+            const texts = {};
+            let offset = 12;
+            while (offset < buffer.byteLength - 8) {
+                const chunkId = String.fromCharCode(
+                    view.getUint8(offset), view.getUint8(offset + 1),
+                    view.getUint8(offset + 2), view.getUint8(offset + 3)
+                );
+                const chunkLen = view.getUint32(offset + 4, true);
+                if (chunkId === 'EXIF') {
+                    const exifData = new Uint8Array(buffer, offset + 8, chunkLen);
+                    const str = new TextDecoder('utf-8', { fatal: false }).decode(exifData);
+                    this._extractExifStrings(str, texts);
+                } else if (chunkId === 'XMP ') {
+                    const xmpData = new Uint8Array(buffer, offset + 8, chunkLen);
+                    const xmpStr = new TextDecoder('utf-8', { fatal: false }).decode(xmpData);
+                    this._extractXmpStrings(xmpStr, texts);
+                }
+                offset += 8 + chunkLen + (chunkLen % 2);
+            }
+            return Object.keys(texts).length ? texts : null;
+        },
+
+        _extractExifStrings(str, texts) {
+            if (str.includes('parameters')) {
+                const pIdx = str.indexOf('parameters');
+                if (pIdx >= 0) texts['parameters'] = str.substring(pIdx + 10).replace(/^\0+/, '').trim();
+            }
+            if (str.includes('UserComment')) {
+                const ucIdx = str.indexOf('UserComment');
+                if (ucIdx >= 0) {
+                    let val = str.substring(ucIdx + 11).replace(/^\0+/, '').trim();
+                    if (val.startsWith('UNICODE')) val = val.substring(7).replace(/^\0+/, '');
+                    texts['UserComment'] = val;
+                }
+            }
+            const jsonPatterns = [/"prompt"\s*:/, /"uc"\s*:/, /"steps"\s*:/];
+            if (jsonPatterns.some(p => p.test(str))) {
+                const braceStart = str.indexOf('{');
+                if (braceStart >= 0) {
+                    let depth = 0, end = braceStart;
+                    for (let i = braceStart; i < str.length; i++) {
+                        if (str[i] === '{') depth++;
+                        else if (str[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+                    }
+                    const jsonStr = str.substring(braceStart, end);
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        if (parsed.prompt || parsed.uc) texts['Comment'] = jsonStr;
+                    } catch {}
+                }
+            }
+        },
+
+        _extractXmpStrings(xmpStr, texts) {
+            const descMatch = xmpStr.match(/<dc:description[^>]*>[\s\S]*?<rdf:li[^>]*>([\s\S]*?)<\/rdf:li>/);
+            if (descMatch) texts['Description'] = descMatch[1].trim();
+            const paramMatch = xmpStr.match(/parameters="([^"]*)"/);
+            if (paramMatch) texts['parameters'] = paramMatch[1];
+            const commentMatch = xmpStr.match(/UserComment="([^"]*)"/);
+            if (commentMatch) texts['UserComment'] = commentMatch[1];
+        },
+
+        parseJPEG(buffer) {
             const view = new DataView(buffer);
             if (view.getUint16(0) !== 0xFFD8) return null;
             const texts = {};
             let offset = 2;
             while (offset < buffer.byteLength - 2) {
                 const marker = view.getUint16(offset);
-                if (marker === 0xFFE1) { // APP1 (EXIF)
+                if (marker === 0xFFE1) {
                     const segLen = view.getUint16(offset + 2);
                     const segData = new Uint8Array(buffer, offset + 4, segLen - 2);
                     const str = new TextDecoder('utf-8', { fatal: false }).decode(segData);
-                    if (str.includes('parameters')) {
-                        const pIdx = str.indexOf('parameters');
-                        if (pIdx >= 0) texts['parameters'] = str.substring(pIdx + 10).replace(/^\0+/, '').trim();
+                    if (str.startsWith('Exif\0\0') || str.includes('parameters') || str.includes('UserComment')) {
+                        this._extractExifStrings(str, texts);
                     }
-                    if (str.includes('UserComment')) {
-                        const ucIdx = str.indexOf('UserComment');
-                        if (ucIdx >= 0) {
-                            let val = str.substring(ucIdx + 11).replace(/^\0+/, '').trim();
-                            if (val.startsWith('UNICODE')) val = val.substring(7).replace(/^\0+/, '');
-                            texts['UserComment'] = val;
-                        }
+                    if (str.startsWith('http://ns.adobe.com/xap/') || str.includes('<x:xmpmeta')) {
+                        this._extractXmpStrings(str, texts);
                     }
+                    offset += 2 + segLen;
+                    continue;
+                } else if (marker === 0xFFE0) {
+                    const segLen = view.getUint16(offset + 2);
+                    offset += 2 + segLen;
+                    continue;
+                } else if (marker === 0xFFFE) {
+                    const segLen = view.getUint16(offset + 2);
+                    const data = new Uint8Array(buffer, offset + 4, segLen - 2);
+                    const comment = new TextDecoder('utf-8', { fatal: false }).decode(data);
+                    if (comment.trim()) texts['Comment'] = comment.trim();
                     offset += 2 + segLen;
                     continue;
                 } else if (marker === 0xFFDA) {
@@ -3721,6 +3821,8 @@
             } else {
                 result.positive = text.trim();
             }
+
+            this.extractLoras(result);
             return result;
         },
 
@@ -3742,7 +3844,30 @@
             const clipSkip = extract('Clip skip'); if (clipSkip) r.clipSkip = parseInt(clipSkip);
             const denoise = extract('Denoising strength'); if (denoise) r.denoise = parseFloat(denoise);
             const scheduler = extract('Schedule type'); if (scheduler) r.scheduler = scheduler;
+            const refinerModel = extract('Refiner'); if (refinerModel) r.refinerModel = refinerModel;
+            const refinerSwitch = extract('Refiner switch at'); if (refinerSwitch) r.refinerSwitch = parseFloat(refinerSwitch);
+            const adModel = extract('ADetailer model'); if (adModel) r.adetailerModel = adModel;
+            const adPrompt = extract('ADetailer prompt'); if (adPrompt) r.adetailerPrompt = adPrompt;
+            const hiresUpscaler = extract('Hires upscaler'); if (hiresUpscaler) r.hiresUpscaler = hiresUpscaler;
+            const hiresSteps = extract('Hires steps'); if (hiresSteps) r.hiresSteps = parseInt(hiresSteps);
+            const hiresScale = extract('Hires upscale'); if (hiresScale) r.hiresScale = parseFloat(hiresScale);
             return r;
+        },
+
+        extractLoras(result) {
+            const loraRegex = /<lora:([^:>]+):([\d.]+)>/g;
+            const tiRegex = /\b(embedding:)?([a-zA-Z0-9_-]+\.(?:pt|safetensors))\b/g;
+            const loras = [];
+            for (const field of ['positive', 'negative']) {
+                const text = result[field];
+                if (!text) continue;
+                let match;
+                while ((match = loraRegex.exec(text)) !== null) {
+                    loras.push({ name: match[1], weight: parseFloat(match[2]) });
+                }
+                loraRegex.lastIndex = 0;
+            }
+            if (loras.length > 0) result.loras = loras;
         },
 
         tokenJsonToText(val) {
@@ -3761,6 +3886,7 @@
 
         parseComfyUI(promptStr, workflowStr) {
             const result = { source: 'ComfyUI' };
+            const loras = [];
             try {
                 const prompt = JSON.parse(promptStr);
                 for (const [nodeId, node] of Object.entries(prompt)) {
@@ -3787,11 +3913,18 @@
                     if (ct === 'CheckpointLoaderSimple' || ct === 'UNETLoader') {
                         result.model = node.inputs?.ckpt_name || node.inputs?.unet_name || '';
                     }
+                    if (ct === 'LoraLoader' || ct === 'LoraLoaderModelOnly') {
+                        const loraName = node.inputs?.lora_name;
+                        const strength = node.inputs?.strength_model ?? node.inputs?.strength ?? 1;
+                        if (loraName) loras.push({ name: loraName, weight: strength });
+                    }
                 }
             } catch {}
+            if (loras.length > 0) result.loras = loras;
             if (workflowStr) {
                 try { result.workflow = JSON.parse(workflowStr); } catch {}
             }
+            this.extractLoras(result);
             return result;
         },
 
@@ -3807,6 +3940,50 @@
                 if (data.sampler) result.sampler = data.sampler;
                 if (data.width) result.width = data.width;
                 if (data.height) result.height = data.height;
+                if (data.noise_schedule) result.scheduler = data.noise_schedule;
+                if (data.sm !== undefined) result.smea = data.sm;
+                if (data.sm_dyn !== undefined) result.smeaDyn = data.sm_dyn;
+                if (data.strength) result.denoise = data.strength;
+            } catch {
+                result.positive = text;
+            }
+            return result;
+        },
+
+        parseInvokeAI(text) {
+            const result = { source: 'InvokeAI' };
+            try {
+                const data = JSON.parse(text);
+                result.positive = data.positive_prompt || data.prompt || '';
+                result.negative = data.negative_prompt || '';
+                if (data.steps) result.steps = data.steps;
+                if (data.cfg_scale) result.cfg = data.cfg_scale;
+                if (data.seed) result.seed = String(data.seed);
+                if (data.scheduler) result.sampler = data.scheduler;
+                if (data.width) result.width = data.width;
+                if (data.height) result.height = data.height;
+                if (data.model?.model_name) result.model = data.model.model_name;
+                if (data.strength) result.denoise = data.strength;
+            } catch {
+                result.positive = text;
+            }
+            return result;
+        },
+
+        parseSwarmUI(text) {
+            const result = { source: 'SwarmUI' };
+            try {
+                const data = JSON.parse(text);
+                result.positive = data.prompt || '';
+                result.negative = data.negativeprompt || data.negative_prompt || '';
+                if (data.steps) result.steps = data.steps;
+                if (data.cfgscale) result.cfg = data.cfgscale;
+                if (data.seed) result.seed = String(data.seed);
+                if (data.sampler) result.sampler = data.sampler;
+                if (data.width) result.width = data.width;
+                if (data.height) result.height = data.height;
+                if (data.model) result.model = data.model;
+                if (data.scheduler) result.scheduler = data.scheduler;
             } catch {
                 result.positive = text;
             }
@@ -3818,9 +3995,11 @@
             let texts = null;
 
             if (file.type === 'image/png') {
-                texts = this.parsePNG(buffer);
+                texts = await this.parsePNG(buffer);
+            } else if (file.type === 'image/webp') {
+                texts = this.parseWebP(buffer);
             } else {
-                texts = this.parseEXIF(buffer);
+                texts = this.parseJPEG(buffer);
             }
 
             if (!texts) return { source: '未检测到元数据', noData: true };
@@ -3838,9 +4017,31 @@
                 return this.parseA1111(texts.parameters);
             }
 
+            // InvokeAI: has "invokeai_metadata" key
+            if (texts.invokeai_metadata) {
+                return this.parseInvokeAI(texts.invokeai_metadata);
+            }
+            if (texts['sd-metadata']) {
+                return this.parseInvokeAI(texts['sd-metadata']);
+            }
+
+            // SwarmUI: has "sui_image_params" key
+            if (texts.sui_image_params) {
+                return this.parseSwarmUI(texts.sui_image_params);
+            }
+
             // NovelAI: has "Comment" or "Description"
             if (texts.Comment) return this.parseNovelAI(texts.Comment);
             if (texts.Description) return this.parseNovelAI(texts.Description);
+
+            // UserComment fallback
+            if (texts.UserComment) {
+                try {
+                    const parsed = JSON.parse(texts.UserComment);
+                    if (parsed.prompt || parsed.uc) return this.parseNovelAI(texts.UserComment);
+                } catch {}
+                if (texts.UserComment.includes('Steps:')) return this.parseA1111(texts.UserComment);
+            }
 
             // Unknown format: return raw texts
             const firstVal = Object.values(texts)[0] || '';
@@ -3891,6 +4092,7 @@
             fields.innerHTML = '';
 
             if (!parsedData.noData) {
+                const loraStr = parsedData.loras?.map(l => `${l.name} (${l.weight})`).join(', ');
                 const rows = [
                     ['正面提示词', parsedData.positive, 'positive'],
                     ['负面提示词', parsedData.negative, 'negative'],
@@ -3903,6 +4105,16 @@
                     ['尺寸', parsedData.width && parsedData.height ? `${parsedData.width}×${parsedData.height}` : null, 'size'],
                     ['重绘强度', parsedData.denoise, 'denoise'],
                     ['Clip Skip', parsedData.clipSkip, 'clipSkip'],
+                    ['LoRA', loraStr, 'loras'],
+                    ['Refiner', parsedData.refinerModel, 'refiner'],
+                    ['Refiner 切换', parsedData.refinerSwitch, 'refinerSwitch'],
+                    ['ADetailer 模型', parsedData.adetailerModel, 'adetailer'],
+                    ['ADetailer 提示词', parsedData.adetailerPrompt, 'adetailerPrompt'],
+                    ['Hires 放大器', parsedData.hiresUpscaler, 'hiresUpscaler'],
+                    ['Hires 步数', parsedData.hiresSteps, 'hiresSteps'],
+                    ['Hires 缩放', parsedData.hiresScale, 'hiresScale'],
+                    ['SMEA', parsedData.smea !== undefined ? (parsedData.smea ? '开' : '关') : null, 'smea'],
+                    ['SMEA Dyn', parsedData.smeaDyn !== undefined ? (parsedData.smeaDyn ? '开' : '关') : null, 'smeaDyn'],
                 ];
                 rows.forEach(([label, value, key]) => {
                     if (value == null || value === '') return;
