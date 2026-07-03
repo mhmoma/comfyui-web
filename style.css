@@ -2821,7 +2821,7 @@ textarea {
 
 .tag-thumb {
     width: 108px;
-    height: 108px;
+    height: 150px;
     border-radius: 6px;
     object-fit: cover;
     flex-shrink: 0;
