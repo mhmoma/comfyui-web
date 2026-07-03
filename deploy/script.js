@@ -709,6 +709,7 @@
         const sdxlOnlyEls = [
             document.querySelector('#section-ipadapter'),
             document.querySelector('#chk-freeu')?.closest('.optional-panel'),
+            document.querySelector('#chk-controlnet')?.closest('.optional-panel'),
         ];
 
         sdxlOnlyEls.forEach(el => {
