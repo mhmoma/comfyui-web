@@ -566,8 +566,9 @@
         for (const nodeName of loaderNodes) {
             try {
                 const data = await apiGet('/object_info/' + nodeName);
+                if (!data[nodeName] || !data[nodeName].input) continue;
                 ipaPluginInstalled = true;
-                const nodeInfo = data[nodeName]?.input?.required;
+                const nodeInfo = data[nodeName].input.required;
                 const models = nodeInfo?.ipadapter_file?.[0] || nodeInfo?.model_name?.[0] || [];
                 ipaModels = models;
                 ipaLoaderNode = nodeName;
@@ -581,10 +582,12 @@
                                 'IPAdapterTiled', 'IPAdapterBatch', 'IPAdapterEmbeds'];
             for (const nodeName of applyNodes) {
                 try {
-                    await apiGet('/object_info/' + nodeName);
-                    ipaApplyNode = nodeName;
-                    console.log('[IPA] Apply node:', nodeName);
-                    break;
+                    const data = await apiGet('/object_info/' + nodeName);
+                    if (data[nodeName] && data[nodeName].input) {
+                        ipaApplyNode = nodeName;
+                        console.log('[IPA] Apply node:', nodeName);
+                        break;
+                    }
                 } catch (_) {}
             }
             if (!ipaApplyNode) {
