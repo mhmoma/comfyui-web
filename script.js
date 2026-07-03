@@ -1945,10 +1945,6 @@
                     e.preventDefault();
                     this.groupIdx = r.groupIdx;
                     this.subIdx = r.subIdx;
-                    this._searchMode = 'tag';
-                    this.searchModeBtn.textContent = '标签';
-                    this.searchModeBtn.classList.remove('mode-category');
-                    this.searchEl.placeholder = '搜索标签...';
                     this.searchEl.value = '';
                     this._hideAutocomplete();
                     this.render();
