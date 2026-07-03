@@ -1,10 +1,3 @@
-dist/
-build/
-*.spec
-__pycache__/
-*.pyc
-launcher_config.json
-*.zip
-.netlify/
-deploy/.netlify/
+
+# 忽略超大原始数据文件
 animadex_raw.json
