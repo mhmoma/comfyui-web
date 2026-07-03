@@ -1746,7 +1746,7 @@
                 });
                 }
                 div.title = hasThumb
-                    ? '点击添加/移除 | 右键预览 | Shift+点击加权重 | Ctrl+点击减权重'
+                    ? '点击查看详情'
                     : '点击添加/移除 | Shift+点击加权重 | Ctrl+点击减权重';
                 this.gridEl.appendChild(div);
             });
