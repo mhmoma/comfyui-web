@@ -554,6 +554,7 @@
     let ipaModels = [];
     let ipaLoaderNode = '';
     let ipaApplyNode = '';
+    let ipaClipVisionModels = [];
     let hasComfyUIManager = false;
 
     async function loadIPAdapterModels() {
@@ -597,6 +598,14 @@
                 }
             }
         }
+
+        try {
+            const cvData = await apiGet('/object_info/CLIPVisionLoader');
+            if (cvData.CLIPVisionLoader?.input?.required) {
+                ipaClipVisionModels = cvData.CLIPVisionLoader.input.required.clip_name[0] || [];
+                console.log('[IPA] CLIP Vision models:', ipaClipVisionModels.length);
+            }
+        } catch (_) {}
 
         updateIPAdapterUI();
 
@@ -852,9 +861,10 @@
             };
 
             const clipVisionId = id();
+            const cvModel = ipaClipVisionModels.length > 0 ? ipaClipVisionModels[0] : 'sd1.5/model.safetensors';
             nodes[clipVisionId] = {
                 class_type: "CLIPVisionLoader",
-                inputs: { clip_name: "sd1.5/model.safetensors" },
+                inputs: { clip_name: cvModel },
             };
 
             const ipaImgId = id();
@@ -864,6 +874,7 @@
             };
 
             const ipaApplyId = id();
+            const weightType = document.getElementById('sel-ipa-weight-type')?.value || 'linear';
             const applyInputs = {
                 model: modelOut,
                 ipadapter: [ipaLoadId, 0],
@@ -872,11 +883,8 @@
                 start_at: parseFloat(dom.inpIpaStart.value),
                 end_at: parseFloat(dom.inpIpaEnd.value),
             };
-            if (ipaApplyNode === 'IPAdapter' || ipaApplyNode === 'IPAdapterAdvanced') {
-                applyInputs.weight_type = 'linear';
-                applyInputs.clip_vision = [clipVisionId, 0];
-            }
-            if (ipaApplyNode === 'IPAdapterApply') {
+            if (ipaApplyNode !== 'IPAdapterSimple') {
+                applyInputs.weight_type = weightType;
                 applyInputs.clip_vision = [clipVisionId, 0];
             }
             nodes[ipaApplyId] = {
