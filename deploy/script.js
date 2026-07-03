@@ -552,13 +552,17 @@
     // ==================== IP-Adapter 模型管理 ====================
     let ipaPluginInstalled = false;
     let ipaModels = [];
-    let ipaLoaderNode = 'IPAdapterModelLoader';
-    let ipaApplyNode = 'IPAdapterSimple';
+    let ipaLoaderNode = '';
+    let ipaApplyNode = '';
     let hasComfyUIManager = false;
 
     async function loadIPAdapterModels() {
-        const loaderNodes = ['IPAdapterModelLoader', 'IPAdapterSimple', 'IPAdapter'];
-        let found = false;
+        const loaderNodes = ['IPAdapterModelLoader', 'IPAdapterUnifiedLoader', 'IPAdapterSimple', 'IPAdapter'];
+        ipaPluginInstalled = false;
+        ipaModels = [];
+        ipaLoaderNode = '';
+        ipaApplyNode = '';
+
         for (const nodeName of loaderNodes) {
             try {
                 const data = await apiGet('/object_info/' + nodeName);
@@ -567,22 +571,28 @@
                 const models = nodeInfo?.ipadapter_file?.[0] || nodeInfo?.model_name?.[0] || [];
                 ipaModels = models;
                 ipaLoaderNode = nodeName;
-                found = true;
+                console.log('[IPA] Loader node:', nodeName, 'models:', models.length);
                 break;
             } catch (_) {}
-        }
-        if (!found) {
-            ipaPluginInstalled = false;
-            ipaModels = [];
         }
 
-        const applyNodes = ['IPAdapterApply', 'IPAdapterSimple', 'IPAdapter', 'IPAdapterAdvanced'];
-        for (const nodeName of applyNodes) {
-            try {
-                await apiGet('/object_info/' + nodeName);
-                ipaApplyNode = nodeName;
-                break;
-            } catch (_) {}
+        if (ipaPluginInstalled) {
+            const applyNodes = ['IPAdapterApply', 'IPAdapterSimple', 'IPAdapter', 'IPAdapterAdvanced',
+                                'IPAdapterTiled', 'IPAdapterBatch', 'IPAdapterEmbeds'];
+            for (const nodeName of applyNodes) {
+                try {
+                    await apiGet('/object_info/' + nodeName);
+                    ipaApplyNode = nodeName;
+                    console.log('[IPA] Apply node:', nodeName);
+                    break;
+                } catch (_) {}
+            }
+            if (!ipaApplyNode) {
+                console.warn('[IPA] No apply node found, trying unified loader as apply');
+                if (ipaLoaderNode === 'IPAdapterUnifiedLoader') {
+                    ipaApplyNode = 'IPAdapterUnifiedLoader';
+                }
+            }
         }
 
         updateIPAdapterUI();
@@ -623,9 +633,18 @@
             return;
         }
 
+        if (!ipaApplyNode) {
+            dom.ipaStatus.classList.remove('hidden', 'ipa-ok');
+            dom.ipaStatus.classList.add('ipa-warn');
+            dom.ipaStatus.textContent = `⚠️ 检测到 ${ipaModels.length} 个模型但未找到兼容的应用节点 (Loader: ${ipaLoaderNode})`;
+            dom.selIpadapterModel.innerHTML = '<option value="">节点不兼容</option>';
+            dom.ipaDownloadArea.classList.add('hidden');
+            return;
+        }
+
         dom.ipaStatus.classList.remove('hidden', 'ipa-warn');
         dom.ipaStatus.classList.add('ipa-ok');
-        dom.ipaStatus.textContent = `✓ 检测到 ${ipaModels.length} 个 IP-Adapter 模型`;
+        dom.ipaStatus.textContent = `✓ 检测到 ${ipaModels.length} 个模型 (${ipaApplyNode})`;
         dom.ipaDownloadArea.classList.add('hidden');
 
         ipaModels.forEach(m => {
@@ -822,7 +841,7 @@
         }
 
         // IP-Adapter (optional) - style/character transfer from reference image
-        if (useIpadapter) {
+        if (useIpadapter && ipaApplyNode && ipaLoaderNode) {
             const ipaLoadId = id();
             nodes[ipaLoadId] = {
                 class_type: ipaLoaderNode,
