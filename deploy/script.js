@@ -2070,7 +2070,7 @@
                 const img = entry.target;
                 const src = img.dataset.src;
                 if (!src) return;
-                img.src = src;
+                _imgObserver.unobserve(img);
                 img.onload = () => {
                     img.classList.remove('img-loading');
                     img.classList.add('img-loaded');
@@ -2082,7 +2082,7 @@
                     const skel = img.parentElement?.querySelector('.thumb-skeleton');
                     if (skel) skel.classList.add('hide');
                 };
-                _imgObserver.unobserve(img);
+                img.src = src;
             });
         }, { rootMargin: '200px' });
         return _imgObserver;

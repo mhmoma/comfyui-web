@@ -3517,7 +3517,11 @@ textarea {
 
 .tag-thumb.img-loaded {
     opacity: 1;
-    transition: opacity 0.25s ease;
+}
+
+.tag-item.tag-char .tag-thumb {
+    position: relative;
+    z-index: 1;
 }
 
 .tag-item.tag-char {
