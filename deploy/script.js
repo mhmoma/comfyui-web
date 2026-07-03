@@ -137,6 +137,7 @@
             [dom.chkImg2img, dom.panelImg2img],
             [dom.chkAdetailer, dom.panelAdetailer],
             [dom.chkRegional, dom.panelRegional],
+            [$('#chk-freeu'), $('#panel-freeu')],
         ];
         pairs.forEach(([chk, panel]) => {
             const update = () => {
@@ -770,6 +771,43 @@
                 },
             };
             latentOut = [emptyId, 0];
+        }
+
+        // FreeU (quality enhancement)
+        const useFreeu = document.getElementById('chk-freeu')?.checked;
+        if (useFreeu) {
+            const freeuId = id();
+            nodes[freeuId] = {
+                class_type: "FreeU_V2",
+                inputs: {
+                    model: modelOut,
+                    b1: parseFloat(document.getElementById('inp-freeu-b1')?.value || 1.3),
+                    b2: parseFloat(document.getElementById('inp-freeu-b2')?.value || 1.4),
+                    s1: parseFloat(document.getElementById('inp-freeu-s1')?.value || 0.9),
+                    s2: parseFloat(document.getElementById('inp-freeu-s2')?.value || 0.2),
+                },
+            };
+            modelOut = [freeuId, 0];
+        }
+
+        // PatchModelAddDownscale (speed boost)
+        const useSpeedup = document.getElementById('chk-speedup')?.checked;
+        if (useSpeedup) {
+            const downscaleId = id();
+            nodes[downscaleId] = {
+                class_type: "PatchModelAddDownscale",
+                inputs: {
+                    model: modelOut,
+                    block_number: 3,
+                    downscale_factor: 2.0,
+                    start_percent: 0.0,
+                    end_percent: 0.35,
+                    downscale_after_skip: true,
+                    downscale_method: "bicubic",
+                    upscale_method: "bicubic",
+                },
+            };
+            modelOut = [downscaleId, 0];
         }
 
         // KSampler
