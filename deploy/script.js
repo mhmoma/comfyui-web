@@ -1549,6 +1549,18 @@
     let _charGroupIdx = -1;
     const CHAR_BASE_SUBS = 1;
 
+    const _artistCache = {};
+    let _artistGroupIdx = -1;
+    const _ARTIST_TIERS = [
+        { name: '全部', min: 0 },
+        { name: 'S级 (5000+)', min: 5000 },
+        { name: 'A级 (3000+)', min: 3000 },
+        { name: 'B级 (2000+)', min: 2000 },
+        { name: 'C级 (1000+)', min: 1000 },
+        { name: 'D级 (500+)', min: 500 },
+        { name: 'E级 (200+)', min: 200 },
+    ];
+
     async function loadTags() {
         try {
             const res = await fetch('tags.json');
@@ -1576,6 +1588,21 @@
         } catch (e) {
             console.warn('[D1] 角色系列加载失败，使用本地数据:', e);
         }
+        try {
+            const artistGroup = {
+                name: '画师风格',
+                subgroups: _ARTIST_TIERS.map(tier => ({
+                    name: tier.name,
+                    _artistMin: tier.min,
+                    tags: [],
+                }))
+            };
+            tagData.push(artistGroup);
+            _artistGroupIdx = tagData.length - 1;
+            console.log('[D1] Artist group added, loading from database');
+        } catch (e) {
+            console.warn('[D1] 画师分组加载失败:', e);
+        }
     }
 
     async function _fetchSeriesChars(seriesId) {
@@ -1592,6 +1619,40 @@
             const res = await fetch(`/api/characters/search?q=${encodeURIComponent(query)}&limit=100`);
             if (!res.ok) return [];
             return await res.json();
+        } catch { return []; }
+    }
+
+    async function _fetchArtists(minCount, page = 1) {
+        const key = `${minCount}_${page}`;
+        if (_artistCache[key]) return _artistCache[key];
+        try {
+            const res = await fetch(`/api/artists/list?min=${minCount}&page=${page}&limit=120`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            const tags = data.results.map(a => ({
+                t: a.trigger_text,
+                d: a.name,
+                th: a.thumb_url,
+                img: a.img_url,
+                count: a.count,
+            }));
+            _artistCache[key] = tags;
+            return tags;
+        } catch { return []; }
+    }
+
+    async function _searchArtistsFromDb(query) {
+        try {
+            const res = await fetch(`/api/artists/search?q=${encodeURIComponent(query)}&limit=100`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.map(a => ({
+                t: a.trigger_text,
+                d: a.name,
+                th: a.thumb_url,
+                img: a.img_url,
+                count: a.count,
+            }));
         } catch { return []; }
     }
 
@@ -1664,6 +1725,12 @@
                             s.tags = tags;
                             this.renderGrid();
                         });
+                    } else if (this.groupIdx === _artistGroupIdx && s._artistMin !== undefined && s.tags.length === 0) {
+                        this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                        _fetchArtists(s._artistMin).then(tags => {
+                            s.tags = tags;
+                            this.renderGrid();
+                        });
                     } else {
                         this.renderGrid();
                     }
@@ -1692,11 +1759,28 @@
                         }
                     });
                 }
+                if (this.groupIdx === _artistGroupIdx) {
+                    _searchArtistsFromDb(search).then(dbItems => {
+                        const existing = new Set(items.map(i => i.t));
+                        const extra = dbItems.filter(d => !existing.has(d.t));
+                        if (extra.length > 0) {
+                            this._renderItems([...items, ...extra.slice(0, 100)]);
+                        }
+                    });
+                }
             } else {
                 const sub = tagData[this.groupIdx]?.subgroups[this.subIdx];
                 if (sub && sub._seriesId && sub.tags.length === 0) {
                     this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
                     _fetchSeriesChars(sub._seriesId).then(tags => {
+                        sub.tags = tags;
+                        this._renderItems(tags);
+                    });
+                    return;
+                }
+                if (sub && sub._artistMin !== undefined && sub.tags.length === 0) {
+                    this.gridEl.innerHTML = '<div style="padding:20px;color:#999">加载中...</div>';
+                    _fetchArtists(sub._artistMin).then(tags => {
                         sub.tags = tags;
                         this._renderItems(tags);
                     });
