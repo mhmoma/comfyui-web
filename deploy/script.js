@@ -872,6 +872,10 @@
                 start_at: parseFloat(dom.inpIpaStart.value),
                 end_at: parseFloat(dom.inpIpaEnd.value),
             };
+            if (ipaApplyNode === 'IPAdapter' || ipaApplyNode === 'IPAdapterAdvanced') {
+                applyInputs.weight_type = 'linear';
+                applyInputs.clip_vision = [clipVisionId, 0];
+            }
             if (ipaApplyNode === 'IPAdapterApply') {
                 applyInputs.clip_vision = [clipVisionId, 0];
             }
