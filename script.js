@@ -3704,7 +3704,7 @@
                 if (chunkId === 'EXIF') {
                     const exifData = new Uint8Array(buffer, offset + 8, chunkLen);
                     const str = new TextDecoder('utf-8', { fatal: false }).decode(exifData);
-                    this._extractExifStrings(str, texts);
+                    this._extractExifStrings(str, texts, true);
                 } else if (chunkId === 'XMP ') {
                     const xmpData = new Uint8Array(buffer, offset + 8, chunkLen);
                     const xmpStr = new TextDecoder('utf-8', { fatal: false }).decode(xmpData);
@@ -3715,12 +3715,33 @@
             return Object.keys(texts).length ? texts : null;
         },
 
-        _extractExifStrings(str, texts) {
-            if (str.includes('parameters')) {
+        _extractExifStrings(str, texts, rawBytes) {
+            if (rawBytes) {
+                const ucMarker = 'UNICODE';
+                const markerIdx = str.indexOf(ucMarker);
+                if (markerIdx >= 0) {
+                    const start = markerIdx + ucMarker.length;
+                    const filtered = [];
+                    for (let i = start; i < str.length; i++) {
+                        const code = str.charCodeAt(i);
+                        if (code > 0 && code < 128) filtered.push(String.fromCharCode(code));
+                        else if (code === 0x0A) filtered.push('\n');
+                    }
+                    const decodedText = filtered.join('').trim();
+                    if (decodedText.length > 5) {
+                        if (decodedText.includes('Steps:') || decodedText.includes('Negative prompt:')) {
+                            texts['parameters'] = decodedText;
+                        } else {
+                            texts['UserComment'] = decodedText;
+                        }
+                    }
+                }
+            }
+            if (!texts['parameters'] && str.includes('parameters')) {
                 const pIdx = str.indexOf('parameters');
                 if (pIdx >= 0) texts['parameters'] = str.substring(pIdx + 10).replace(/^\0+/, '').trim();
             }
-            if (str.includes('UserComment')) {
+            if (!texts['UserComment'] && str.includes('UserComment')) {
                 const ucIdx = str.indexOf('UserComment');
                 if (ucIdx >= 0) {
                     let val = str.substring(ucIdx + 11).replace(/^\0+/, '').trim();
@@ -3729,15 +3750,17 @@
                 }
             }
             const jsonPatterns = [/"prompt"\s*:/, /"uc"\s*:/, /"steps"\s*:/];
-            if (jsonPatterns.some(p => p.test(str))) {
-                const braceStart = str.indexOf('{');
+            const searchStr = texts['UserComment'] || str;
+            if (jsonPatterns.some(p => p.test(searchStr))) {
+                const target = jsonPatterns.some(p => p.test(texts['UserComment'] || '')) ? texts['UserComment'] : str;
+                const braceStart = target.indexOf('{');
                 if (braceStart >= 0) {
                     let depth = 0, end = braceStart;
-                    for (let i = braceStart; i < str.length; i++) {
-                        if (str[i] === '{') depth++;
-                        else if (str[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+                    for (let i = braceStart; i < target.length; i++) {
+                        if (target[i] === '{') depth++;
+                        else if (target[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
                     }
-                    const jsonStr = str.substring(braceStart, end);
+                    const jsonStr = target.substring(braceStart, end);
                     try {
                         const parsed = JSON.parse(jsonStr);
                         if (parsed.prompt || parsed.uc) texts['Comment'] = jsonStr;
@@ -3766,8 +3789,8 @@
                     const segLen = view.getUint16(offset + 2);
                     const segData = new Uint8Array(buffer, offset + 4, segLen - 2);
                     const str = new TextDecoder('utf-8', { fatal: false }).decode(segData);
-                    if (str.startsWith('Exif\0\0') || str.includes('parameters') || str.includes('UserComment')) {
-                        this._extractExifStrings(str, texts);
+                    if (str.startsWith('Exif\0\0') || str.includes('parameters') || str.includes('UserComment') || str.includes('UNICODE')) {
+                        this._extractExifStrings(str, texts, true);
                     }
                     if (str.startsWith('http://ns.adobe.com/xap/') || str.includes('<x:xmpmeta')) {
                         this._extractXmpStrings(str, texts);
@@ -3990,11 +4013,27 @@
             return result;
         },
 
+        _detectFormat(buffer) {
+            const view = new DataView(buffer);
+            const b0 = view.getUint32(0);
+            if (b0 === 0x89504E47) return 'png';
+            if (b0 === 0x52494646 && view.getUint32(8) === 0x57454250) return 'webp';
+            if (view.getUint16(0) === 0xFFD8) return 'jpeg';
+            return null;
+        },
+
         async parseFile(file) {
             const buffer = await file.arrayBuffer();
             let texts = null;
 
-            if (file.type === 'image/png') {
+            const format = this._detectFormat(buffer);
+            if (format === 'png') {
+                texts = await this.parsePNG(buffer);
+            } else if (format === 'webp') {
+                texts = this.parseWebP(buffer);
+            } else if (format === 'jpeg') {
+                texts = this.parseJPEG(buffer);
+            } else if (file.type === 'image/png') {
                 texts = await this.parsePNG(buffer);
             } else if (file.type === 'image/webp') {
                 texts = this.parseWebP(buffer);
