@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.43</title>
+<title>ComfyUI Web v3.44</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.43</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.44</span></h1>
             <a href="https://discord.gg/da9PMeAGGK" target="_blank" rel="noopener noreferrer" class="btn-icon btn-discord" title="加入绘画Discord交流群">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
             </a>
@@ -639,6 +639,10 @@
                             <div id="prompt-tags-pos" class="prompt-tags" data-for="txt-positive"></div>
                             <button id="btn-translate-toggle" class="btn-translate-toggle" title="切换原文/中文">译</button>
                         </div>
+                        <div class="mobile-prompt-shortcuts">
+                            <button type="button" class="mobile-shortcut-btn" data-mobile-tab="characters">👤 选角色</button>
+                            <button type="button" class="mobile-shortcut-btn" data-mobile-tab="tags">🏷 选标签</button>
+                        </div>
                         <div id="wildcard-hint" class="wildcard-hint hidden"></div>
                         <div id="wildcard-panel" class="wildcard-panel hidden">
                             <div class="wildcard-panel-header">
@@ -693,6 +697,9 @@
                         <div class="prompt-tags-bar">
                             <div id="prompt-tags-neg" class="prompt-tags" data-for="txt-negative"></div>
                         </div>
+                        <div class="mobile-prompt-shortcuts mobile-prompt-shortcuts-neg">
+                            <button type="button" class="mobile-shortcut-btn" data-mobile-tab="tags" data-tags-focus="neg">🏷 选标签</button>
+                        </div>
                         <div class="tag-picker-collapse">
                             <div class="tag-collapse-header" id="neg-collapse-toggle">▶ 展开标签选择器</div>
                             <div class="tag-picker hidden" id="tag-picker-neg">
@@ -740,12 +747,41 @@
                 <div id="history-grid" class="history-grid"></div>
                 <button id="btn-clear-history" class="btn-danger">清空历史</button>
             </aside>
+
+            <!-- 手机端：角色 Tab 面板 -->
+            <section class="mobile-panel mobile-panel-characters" id="mobile-panel-characters" aria-label="角色选择">
+                <div class="char-panel-intro">选择作品 → 浏览角色 → 点击插入到正向提示词</div>
+                <div class="char-panel-toolbar">
+                    <input type="text" id="char-series-search" class="char-series-search" placeholder="搜索作品名（如：命运、原神）">
+                </div>
+                <div id="char-series-scroll" class="char-series-scroll"></div>
+                <p class="char-panel-hint">点击作品，全屏浏览角色</p>
+            </section>
+
+            <!-- 手机端：标签 Tab 面板（由 JS/CSS 接管创作区内的 tag-picker） -->
+            <section class="mobile-panel mobile-panel-tags" id="mobile-panel-tags" aria-label="标签选择">
+                <div class="mobile-tags-switch">
+                    <button type="button" class="mobile-tags-switch-btn active" data-tags-pane="pos">正向标签</button>
+                    <button type="button" class="mobile-tags-switch-btn" data-tags-pane="neg">反向标签</button>
+                </div>
+                <div id="mobile-tags-mount" class="mobile-tags-mount"></div>
+            </section>
         </main>
+
+        <button type="button" id="btn-generate-fab" class="generate-fab" title="生成图片" aria-label="生成">✨</button>
 
         <nav class="mobile-nav" id="mobile-nav" aria-label="手机主导航">
             <button type="button" class="mobile-nav-btn active" data-mobile-tab="create" aria-label="创作">
                 <span class="mobile-nav-icon">✏️</span>
                 <span class="mobile-nav-label">创作</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="characters" aria-label="角色">
+                <span class="mobile-nav-icon">👤</span>
+                <span class="mobile-nav-label">角色</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="tags" aria-label="标签">
+                <span class="mobile-nav-icon">🏷</span>
+                <span class="mobile-nav-label">标签</span>
             </button>
             <button type="button" class="mobile-nav-btn" data-mobile-tab="settings" aria-label="设置">
                 <span class="mobile-nav-icon">⚙️</span>
@@ -756,6 +792,19 @@
                 <span class="mobile-nav-label">历史</span>
             </button>
         </nav>
+    </div>
+
+    <!-- 手机端：全屏角色浏览浮层 -->
+    <div id="char-browser-overlay" class="char-browser-overlay hidden" aria-hidden="true">
+        <header class="char-browser-header">
+            <button type="button" id="char-browser-back" class="char-browser-back">← 作品</button>
+            <span id="char-browser-title" class="char-browser-title">作品</span>
+        </header>
+        <div class="char-browser-search-wrap">
+            <input type="text" id="char-browser-search" class="char-browser-search" placeholder="搜索本作品角色...">
+        </div>
+        <div id="char-browser-grid" class="char-browser-grid"></div>
+        <div id="char-browser-pagination" class="char-browser-pagination"></div>
     </div>
 
     <!-- 设置弹窗 -->

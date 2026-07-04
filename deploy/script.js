@@ -2035,6 +2035,9 @@
     const CHAR_BASE_SUBS = 1;
     let _charPage = 1;
     const CHARS_PER_PAGE = 100;
+    const CHAR_BROWSER_PER_PAGE = 40;
+    let posTagPicker = null;
+    let negTagPicker = null;
 
     const _artistCache = {};
     let _artistGroupIdx = -1;
@@ -2048,6 +2051,34 @@
         { name: '收藏', sort: 'fav', order: 'desc', icon: '❤️' },
         { name: '字母', sort: 'name', order: 'asc', icon: '🔤' },
     ];
+
+    async function _loadSeriesFromApi() {
+        if (_charGroupIdx < 0) {
+            _charGroupIdx = tagData.findIndex(g => g.name === '人物');
+        }
+        if (_charGroupIdx < 0) return false;
+        const group = tagData[_charGroupIdx];
+        if (!group) return false;
+        if (group.subgroups.some(s => s && s._seriesId)) return true;
+
+        try {
+            const res = await fetch('/api/characters/series');
+            if (!res.ok) return false;
+            const seriesList = await res.json();
+            const baseSubs = group.subgroups.filter(s => s && (s.name === '对象' || s.name === '属性'));
+            const dbSubs = seriesList.map(s => ({
+                name: _SERIES_CN[s.name] || s.name,
+                _seriesId: s.id,
+                tags: [],
+            }));
+            group.subgroups = [...baseSubs, ...dbSubs];
+            console.log(`[D1] Loaded ${seriesList.length} series from database`);
+            return true;
+        } catch (e) {
+            console.warn('[D1] 角色系列加载失败:', e.message);
+            return false;
+        }
+    }
 
     async function loadTags() {
         try {
@@ -2302,37 +2333,20 @@
             return !!(sub && sub._seriesId);
         }
 
+        _shouldHideGroup(groupIdx) {
+            if (_charGroupIdx < 0) return false;
+            const main = document.querySelector('.main');
+            if (!this._isMobilePicker() || !main) return false;
+            if (main.classList.contains('mobile-tab-tags') && groupIdx === _charGroupIdx) return true;
+            return false;
+        }
+
         _updateMobileCharLayout() {
             const picker = this.gridEl?.closest('.tag-picker');
             if (!picker) return;
-
-            const charView = this._isMobilePicker() && this._isCharSeriesActive();
-            picker.classList.toggle('mobile-char-view', charView);
-
-            let bar = picker.querySelector('.char-series-bar');
-            if (charView) {
-                const sub = tagData[this.groupIdx].subgroups[this.subIdx];
-                if (!bar) {
-                    bar = document.createElement('div');
-                    bar.className = 'char-series-bar';
-                    this.subTabsEl.insertAdjacentElement('afterend', bar);
-                }
-                bar.innerHTML = '';
-                const backBtn = document.createElement('button');
-                backBtn.type = 'button';
-                backBtn.className = 'char-series-back';
-                backBtn.textContent = '← 作品';
-                backBtn.addEventListener('click', () => {
-                    picker.classList.remove('mobile-char-view');
-                    this.subTabsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                });
-                const title = document.createElement('span');
-                title.className = 'char-series-title';
-                title.textContent = sub.name;
-                bar.append(backBtn, title);
-            } else if (bar) {
-                bar.remove();
-            }
+            picker.classList.remove('mobile-char-view');
+            const bar = picker.querySelector('.char-series-bar');
+            if (bar) bar.remove();
         }
 
         render() {
@@ -2344,6 +2358,7 @@
         renderTabs() {
             this.tabsEl.innerHTML = '';
             tagData.forEach((g, i) => {
+                if (this._shouldHideGroup(i)) return;
                 const tab = document.createElement('span');
                 tab.className = 'tab' + (i === this.groupIdx && !this._virtualMode ? ' active' : '');
                 tab.textContent = g.name;
@@ -2417,6 +2432,10 @@
                     }
                     if (this.groupIdx === _charGroupIdx && s._seriesId) {
                         _charPage = 1;
+                        if (this._isMobilePicker()) {
+                            openCharBrowser(s._seriesId, s.name);
+                            return;
+                        }
                     }
                     this.renderSubTabs();
                     if (this.groupIdx === _charGroupIdx && i >= CHAR_BASE_SUBS && s._seriesId && s.tags.length === 0) {
@@ -3156,8 +3175,8 @@
 
     function setupTagPickers() {
         if (tagData.length === 0) return;
-        new TagPicker('pos', dom.txtPositive);
-        new TagPicker('neg', dom.txtNegative);
+        posTagPicker = new TagPicker('pos', dom.txtPositive);
+        negTagPicker = new TagPicker('neg', dom.txtNegative);
 
         // Collapse toggle for positive
         const posToggle = document.getElementById('pos-collapse-toggle');
@@ -3218,7 +3237,283 @@
         ]);
         renderHistory();
         setupTagPickers();
+        setupMobileTagsMount();
+        setupMobileCharBrowser();
+        renderMobileSeriesList('');
         updateArchAwarePanels();
+    }
+
+    // ==================== 手机端角色全屏浏览 ====================
+    const _charBrowserState = { seriesId: null, seriesName: '', page: 1, query: '', allTags: [] };
+
+    function _rememberRecentSeries(seriesId) {
+        try {
+            const key = 'comfyui_recent_series';
+            let list = JSON.parse(localStorage.getItem(key) || '[]');
+            list = list.filter(id => id !== seriesId);
+            list.unshift(seriesId);
+            if (list.length > 8) list.length = 8;
+            localStorage.setItem(key, JSON.stringify(list));
+        } catch { /* ignore */ }
+    }
+
+    function openCharBrowser(seriesId, seriesName) {
+        if (!seriesId) return;
+        _charBrowserState.seriesId = seriesId;
+        _charBrowserState.seriesName = seriesName || seriesId;
+        _charBrowserState.page = 1;
+        _charBrowserState.query = '';
+        _rememberRecentSeries(seriesId);
+
+        const overlay = document.getElementById('char-browser-overlay');
+        const title = document.getElementById('char-browser-title');
+        const search = document.getElementById('char-browser-search');
+        if (!overlay) return;
+
+        if (title) title.textContent = _charBrowserState.seriesName;
+        if (search) search.value = '';
+        overlay.classList.remove('hidden');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('char-browser-open');
+        _renderCharBrowserGrid(true);
+    }
+
+    function closeCharBrowser() {
+        const overlay = document.getElementById('char-browser-overlay');
+        if (overlay) {
+            overlay.classList.add('hidden');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+        document.body.classList.remove('char-browser-open');
+    }
+
+    function _getCharBrowserPageItems() {
+        const q = _charBrowserState.query.toLowerCase().trim();
+        let items = _charBrowserState.allTags;
+        if (q) {
+            items = items.filter(t =>
+                t.t.toLowerCase().includes(q) || (t.d || '').toLowerCase().includes(q)
+            );
+        }
+        const totalPages = Math.max(1, Math.ceil(items.length / CHAR_BROWSER_PER_PAGE));
+        if (_charBrowserState.page > totalPages) _charBrowserState.page = totalPages;
+        if (_charBrowserState.page < 1) _charBrowserState.page = 1;
+        const start = (_charBrowserState.page - 1) * CHAR_BROWSER_PER_PAGE;
+        return { items: items.slice(start, start + CHAR_BROWSER_PER_PAGE), total: items.length, totalPages };
+    }
+
+    function _renderCharBrowserPagination(total, totalPages) {
+        const nav = document.getElementById('char-browser-pagination');
+        if (!nav) return;
+        nav.innerHTML = '';
+        if (totalPages <= 1) return;
+
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.textContent = '← 上一页';
+        prevBtn.disabled = _charBrowserState.page <= 1;
+        prevBtn.addEventListener('click', () => { _charBrowserState.page--; _renderCharBrowserGrid(false); });
+
+        const info = document.createElement('span');
+        info.className = 'page-info';
+        info.textContent = `第 ${_charBrowserState.page} / ${totalPages} 页（共 ${total} 个角色）`;
+
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.textContent = '下一页 →';
+        nextBtn.disabled = _charBrowserState.page >= totalPages;
+        nextBtn.addEventListener('click', () => { _charBrowserState.page++; _renderCharBrowserGrid(false); });
+
+        nav.append(prevBtn, info, nextBtn);
+    }
+
+    async function _renderCharBrowserGrid(showLoading) {
+        const grid = document.getElementById('char-browser-grid');
+        if (!grid) return;
+        if (showLoading) grid.innerHTML = _buildSkeletonGrid(6);
+
+        const tags = await _fetchSeriesChars(_charBrowserState.seriesId);
+        _charBrowserState.allTags = tags;
+
+        const { items, total, totalPages } = _getCharBrowserPageItems();
+        grid.innerHTML = '';
+        if (!items.length) {
+            grid.innerHTML = '<div class="char-browser-empty">暂无匹配角色</div>';
+            _renderCharBrowserPagination(0, 1);
+            return;
+        }
+
+        const selected = posTagPicker ? posTagPicker.getSelectedTags() : new Set();
+        const lazyImages = [];
+        items.forEach(tag => {
+            const div = document.createElement('div');
+            const isSelected = selected.has(tag.t);
+            const isFav = FavManager.has(tag.t);
+            div.className = 'tag-item tag-char char-browser-card' + (isSelected ? ' selected' : '');
+            div.dataset.tag = tag.t;
+            div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
+            lazyImages.push(div.querySelector('img.tag-thumb'));
+            div.addEventListener('click', (e) => {
+                if (e.target.classList.contains('tag-fav-star')) {
+                    e.stopPropagation();
+                    FavManager.toggle(tag);
+                    _renderCharBrowserGrid(false);
+                    return;
+                }
+                showCharPreview(tag);
+            });
+            grid.appendChild(div);
+        });
+        if (lazyImages.length) _observeLazyImages(lazyImages);
+        _renderCharBrowserPagination(total, totalPages);
+    }
+
+    function renderMobileSeriesList(filter) {
+        const scroll = document.getElementById('char-series-scroll');
+        if (!scroll || _charGroupIdx < 0) return;
+        const q = (filter || '').toLowerCase().trim();
+        const subs = (tagData[_charGroupIdx]?.subgroups || []).filter(s => s && s._seriesId);
+        let list = subs;
+        if (q) list = subs.filter(s => s.name.toLowerCase().includes(q));
+
+        let recentIds = [];
+        try { recentIds = JSON.parse(localStorage.getItem('comfyui_recent_series') || '[]'); } catch { /* ignore */ }
+
+        scroll.innerHTML = '';
+        if (!q && recentIds.length) {
+            const recentLabel = document.createElement('div');
+            recentLabel.className = 'char-series-section-label';
+            recentLabel.textContent = '最近浏览';
+            scroll.appendChild(recentLabel);
+            const recentRow = document.createElement('div');
+            recentRow.className = 'char-series-row';
+            recentIds.forEach(id => {
+                const s = subs.find(x => x._seriesId === id);
+                if (!s) return;
+                recentRow.appendChild(_createSeriesChip(s));
+            });
+            if (recentRow.childElementCount) scroll.appendChild(recentRow);
+        }
+
+        const allLabel = document.createElement('div');
+        allLabel.className = 'char-series-section-label';
+        allLabel.textContent = q ? `搜索结果（${list.length}）` : '全部作品';
+        scroll.appendChild(allLabel);
+
+        const row = document.createElement('div');
+        row.className = 'char-series-row char-series-row-all';
+        list.forEach(s => row.appendChild(_createSeriesChip(s)));
+        scroll.appendChild(row);
+
+        if (!list.length) {
+            scroll.innerHTML = '<div class="char-browser-empty">未找到匹配作品</div>';
+        }
+    }
+
+    function _createSeriesChip(series) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'char-series-chip';
+        btn.textContent = series.name;
+        btn.addEventListener('click', () => openCharBrowser(series._seriesId, series.name));
+        return btn;
+    }
+
+    function setupMobileCharBrowser() {
+        document.getElementById('char-browser-back')?.addEventListener('click', closeCharBrowser);
+        document.getElementById('char-browser-overlay')?.addEventListener('click', (e) => {
+            if (e.target.id === 'char-browser-overlay') closeCharBrowser();
+        });
+
+        const search = document.getElementById('char-browser-search');
+        if (search) {
+            let debounce;
+            search.addEventListener('input', () => {
+                clearTimeout(debounce);
+                debounce = setTimeout(() => {
+                    _charBrowserState.query = search.value;
+                    _charBrowserState.page = 1;
+                    _renderCharBrowserGrid(false);
+                }, 250);
+            });
+        }
+
+        const seriesSearch = document.getElementById('char-series-search');
+        if (seriesSearch) {
+            let debounce;
+            seriesSearch.addEventListener('input', () => {
+                clearTimeout(debounce);
+                debounce = setTimeout(() => renderMobileSeriesList(seriesSearch.value), 200);
+            });
+        }
+    }
+
+    function setupMobileTagsMount() {
+        document.getElementById('tag-picker-neg')?.closest('.tag-picker-collapse')?.classList.add('mobile-tags-hidden');
+
+        document.querySelectorAll('.mobile-tags-switch-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pane = btn.dataset.tagsPane;
+                document.querySelectorAll('.mobile-tags-switch-btn').forEach(b => {
+                    b.classList.toggle('active', b === btn);
+                });
+                const posCollapse = document.getElementById('tag-picker-pos')?.closest('.tag-picker-collapse');
+                const negCollapse = document.getElementById('tag-picker-neg')?.closest('.tag-picker-collapse');
+                posCollapse?.classList.toggle('mobile-tags-hidden', pane !== 'pos');
+                negCollapse?.classList.toggle('mobile-tags-hidden', pane !== 'neg');
+                document.getElementById('tag-picker-pos')?.classList.remove('hidden');
+                document.getElementById('tag-picker-neg')?.classList.remove('hidden');
+                if (pane === 'pos') posTagPicker?.render();
+                if (pane === 'neg') negTagPicker?.render();
+            });
+        });
+    }
+
+    function switchMobileTab(tab, options = {}) {
+        const nav = document.getElementById('mobile-nav');
+        const main = document.querySelector('.main');
+        if (!nav || !main) return;
+
+        const tabs = ['create', 'characters', 'tags', 'settings', 'history'];
+        main.classList.remove(...tabs.map(t => 'mobile-tab-' + t));
+        main.classList.add('mobile-tab-' + tab);
+        nav.querySelectorAll('.mobile-nav-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.mobileTab === tab);
+        });
+
+        const fab = document.getElementById('btn-generate-fab');
+        if (fab) fab.classList.toggle('hidden', tab === 'settings');
+
+        if (tab === 'characters') renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
+        if (tab === 'tags') {
+            const focus = options.tagsFocus || 'pos';
+            document.querySelectorAll('.mobile-tags-switch-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.tagsPane === focus);
+            });
+            const posCollapse = document.getElementById('tag-picker-pos')?.closest('.tag-picker-collapse');
+            const negCollapse = document.getElementById('tag-picker-neg')?.closest('.tag-picker-collapse');
+            posCollapse?.classList.toggle('mobile-tags-hidden', focus !== 'pos');
+            negCollapse?.classList.toggle('mobile-tags-hidden', focus !== 'neg');
+            document.getElementById('tag-picker-pos')?.classList.remove('hidden');
+            document.getElementById('tag-picker-neg')?.classList.remove('hidden');
+            if (focus === 'pos') posTagPicker?.render();
+            if (focus === 'neg') negTagPicker?.render();
+        }
+        posTagPicker?.render();
+        negTagPicker?.render();
+    }
+
+    function setupGenerateFab() {
+        const fab = document.getElementById('btn-generate-fab');
+        if (!fab) return;
+        fab.addEventListener('click', () => {
+            const modeNai = document.querySelector('.mode-tab[data-mode="nai"]')?.classList.contains('active');
+            if (modeNai) {
+                document.getElementById('btn-nai-generate')?.click();
+            } else {
+                document.getElementById('btn-generate')?.click();
+            }
+        });
     }
 
     // ==================== 手机端导航 & 结果区 ====================
@@ -3258,17 +3553,17 @@
 
     function setupMobileNav() {
         const nav = document.getElementById('mobile-nav');
-        const main = document.querySelector('.main');
-        if (!nav || !main) return;
+        if (!nav) return;
 
         nav.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchMobileTab(btn.dataset.mobileTab));
+        });
+
+        document.querySelectorAll('.mobile-shortcut-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.mobileTab;
-                main.classList.remove('mobile-tab-create', 'mobile-tab-settings', 'mobile-tab-history');
-                main.classList.add('mobile-tab-' + tab);
-                nav.querySelectorAll('.mobile-nav-btn').forEach(b => {
-                    b.classList.toggle('active', b === btn);
-                });
+                const tagsFocus = btn.dataset.tagsFocus || 'pos';
+                switchMobileTab(tab, { tagsFocus });
             });
         });
     }
@@ -5804,6 +6099,7 @@
     setupPanelGroups();
     setupMobileNav();
     setupMobileResultExpand();
+    setupGenerateFab();
     setupSidebarResize();
     setupWildcard();
     setupWorkflowMode();
