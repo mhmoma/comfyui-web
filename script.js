@@ -2052,6 +2052,12 @@
         { name: '字母', sort: 'name', order: 'asc', icon: '🔤' },
     ];
 
+    function _isArtistGroupIndex(groupIdx) {
+        const g = tagData[groupIdx];
+        if (!g) return false;
+        return groupIdx === _artistGroupIdx || g.name === '画师风格' || g._isArtistGroup === true;
+    }
+
     async function _loadSeriesFromApi() {
         if (_charGroupIdx < 0) {
             _charGroupIdx = tagData.findIndex(g => g.name === '人物');
@@ -2315,12 +2321,58 @@
             return !!(sub && sub._seriesId);
         }
 
-        _shouldHideGroup(groupIdx) {
-            if (_charGroupIdx < 0) return false;
+        _getMobileTabContext() {
+            if (!this._isMobilePicker()) return null;
             const main = document.querySelector('.main');
-            if (!this._isMobilePicker() || !main) return false;
-            if (main.classList.contains('mobile-tab-tags') && groupIdx === _charGroupIdx) return true;
+            if (!main) return null;
+            if (main.classList.contains('mobile-tab-tags')) return 'tags';
+            if (main.classList.contains('mobile-tab-artists')) return 'artists';
+            return null;
+        }
+
+        _shouldHideGroup(groupIdx) {
+            const ctx = this._getMobileTabContext();
+            if (!ctx) return false;
+            if (ctx === 'tags' && _isArtistGroupIndex(groupIdx)) return true;
+            if (ctx === 'artists' && !_isArtistGroupIndex(groupIdx)) return true;
             return false;
+        }
+
+        _shouldHideSubgroup(groupIdx, subIdx) {
+            const ctx = this._getMobileTabContext();
+            if (ctx !== 'tags' || groupIdx !== _charGroupIdx) return false;
+            const sub = tagData[groupIdx]?.subgroups[subIdx];
+            return !!(sub && sub._seriesId);
+        }
+
+        _ensureValidGroupForMobile() {
+            const ctx = this._getMobileTabContext();
+            if (!ctx) return;
+            if (ctx === 'artists' && this.id !== 'tag-picker-pos') return;
+
+            if (this._shouldHideGroup(this.groupIdx)) {
+                if (ctx === 'tags') {
+                    this.groupIdx = _charGroupIdx >= 0 ? _charGroupIdx : 0;
+                    this.subIdx = 0;
+                } else if (ctx === 'artists' && _artistGroupIdx >= 0) {
+                    this.groupIdx = _artistGroupIdx;
+                    this.subIdx = 0;
+                }
+                this._virtualMode = null;
+                this.searchEl.value = '';
+                _charPage = 1;
+            }
+
+            if (ctx === 'tags' && this.groupIdx === _charGroupIdx && this._shouldHideSubgroup(this.groupIdx, this.subIdx)) {
+                this.subIdx = 0;
+            }
+
+            if (ctx === 'artists' && _artistGroupIdx >= 0) {
+                this.groupIdx = _artistGroupIdx;
+                const maxSub = tagData[_artistGroupIdx]?.subgroups?.length || 0;
+                if (this.subIdx < 0 || this.subIdx >= maxSub) this.subIdx = 0;
+                this._virtualMode = null;
+            }
         }
 
         _updateMobileCharLayout() {
@@ -2332,6 +2384,7 @@
         }
 
         render() {
+            this._ensureValidGroupForMobile();
             this.renderTabs();
             this.renderSubTabs();
             this.renderGrid();
@@ -2350,6 +2403,9 @@
                     this._virtualMode = null;
                     this.searchEl.value = '';
                     _charPage = 1;
+                    if (i === _charGroupIdx && this._getMobileTabContext() === 'tags') {
+                        this.subIdx = 0;
+                    }
                     if (i === _artistGroupIdx) {
                         _artistPage = 1;
                         _artistCurrentSort = 'score';
@@ -2357,6 +2413,7 @@
                     }
                     this._removePagination();
                     this.render();
+                    if (this._getMobileTabContext() === 'artists') syncMobileArtistNav(this.subIdx);
                 });
                 this.tabsEl.appendChild(tab);
             });
@@ -2401,7 +2458,19 @@
                 return;
             }
             const subs = (tagData[this.groupIdx]?.subgroups || []).filter(Boolean);
-            subs.forEach((s, i) => {
+            const ctx = this._getMobileTabContext();
+            const visibleEntries = subs.map((s, i) => ({ s, i })).filter(({ i }) => !this._shouldHideSubgroup(this.groupIdx, i));
+
+            if (ctx === 'artists' && this.groupIdx === _artistGroupIdx) {
+                return;
+            }
+
+            if (ctx === 'tags' && this.groupIdx === _charGroupIdx && visibleEntries.length <= 1) {
+                if (visibleEntries.length) this.subIdx = visibleEntries[0].i;
+                return;
+            }
+
+            visibleEntries.forEach(({ s, i }) => {
                 const tab = document.createElement('span');
                 tab.className = 'tab' + (i === this.subIdx ? ' active' : '');
                 tab.textContent = s.name;
@@ -2411,10 +2480,11 @@
                         _artistPage = 1;
                         _artistCurrentSort = s._artistSort;
                         _artistCurrentLetter = 'all';
+                        syncMobileArtistNav(i);
                     }
                     if (this.groupIdx === _charGroupIdx && s._seriesId) {
                         _charPage = 1;
-                        if (this._isMobilePicker()) {
+                        if (this._isMobilePicker() && ctx !== 'tags') {
                             openCharBrowser(s._seriesId, s.name);
                             return;
                         }
@@ -3220,6 +3290,7 @@
         renderHistory();
         setupTagPickers();
         setupMobileTagsMount();
+        setupMobileArtistNav();
         setupMobileCharBrowser();
         renderMobileSeriesList('');
         updateArchAwarePanels();
@@ -3312,7 +3383,9 @@
     async function _renderCharBrowserGrid(showLoading) {
         const grid = document.getElementById('char-browser-grid');
         if (!grid) return;
-        if (showLoading) grid.innerHTML = _buildSkeletonGrid(6);
+        if (showLoading) {
+            grid.innerHTML = Array(6).fill('<div class="tag-item tag-char char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div></div>').join('');
+        }
 
         const tags = await _fetchSeriesChars(_charBrowserState.seriesId);
         _charBrowserState.allTags = tags;
@@ -3333,7 +3406,7 @@
             const isFav = FavManager.has(tag.t);
             div.className = 'tag-item tag-char char-browser-card' + (isSelected ? ' selected' : '');
             div.dataset.tag = tag.t;
-            div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
+            div.innerHTML = `<div class="char-browser-thumb"><div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"></div><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
             lazyImages.push(div.querySelector('img.tag-thumb'));
             div.addEventListener('click', (e) => {
                 if (e.target.classList.contains('tag-fav-star')) {
@@ -3467,17 +3540,48 @@
         });
     }
 
+    function syncMobileArtistNav(subIdx) {
+        document.querySelectorAll('#mobile-artist-nav .mobile-artist-nav-btn').forEach((btn, i) => {
+            btn.classList.toggle('active', i === subIdx);
+        });
+    }
+
+    function setupMobileArtistNav() {
+        const nav = document.getElementById('mobile-artist-nav');
+        if (!nav) return;
+        nav.querySelectorAll('.mobile-artist-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = parseInt(btn.dataset.artistMode, 10);
+                if (!posTagPicker || _artistGroupIdx < 0 || Number.isNaN(mode)) return;
+                posTagPicker.groupIdx = _artistGroupIdx;
+                posTagPicker.subIdx = mode;
+                posTagPicker._virtualMode = null;
+                posTagPicker.searchEl.value = '';
+                _artistPage = 1;
+                const sub = tagData[_artistGroupIdx]?.subgroups[mode];
+                if (sub?._artistSort) {
+                    _artistCurrentSort = sub._artistSort;
+                    _artistCurrentLetter = 'all';
+                }
+                syncMobileArtistNav(mode);
+                posTagPicker.render();
+            });
+        });
+    }
+
     function switchMobileTab(tab, options = {}) {
         const nav = document.getElementById('mobile-nav');
         const main = document.querySelector('.main');
         if (!nav || !main) return;
 
-        const tabs = ['create', 'characters', 'tags', 'settings', 'history'];
+        const tabs = ['create', 'characters', 'tags', 'artists', 'settings', 'history'];
         main.classList.remove(...tabs.map(t => 'mobile-tab-' + t));
         main.classList.add('mobile-tab-' + tab);
         nav.querySelectorAll('.mobile-nav-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.mobileTab === tab);
         });
+
+        document.body.classList.toggle('mobile-artist-nav-visible', tab === 'artists');
 
         const fab = document.getElementById('btn-generate-fab');
         if (fab) fab.classList.toggle('hidden', tab === 'settings');
@@ -3494,11 +3598,25 @@
             negCollapse?.classList.toggle('mobile-tags-hidden', focus !== 'neg');
             document.getElementById('tag-picker-pos')?.classList.remove('hidden');
             document.getElementById('tag-picker-neg')?.classList.remove('hidden');
+            posTagPicker?._ensureValidGroupForMobile();
+            negTagPicker?._ensureValidGroupForMobile();
             if (focus === 'pos') posTagPicker?.render();
             if (focus === 'neg') negTagPicker?.render();
         }
-        posTagPicker?.render();
-        negTagPicker?.render();
+        if (tab === 'artists') {
+            const posCollapse = document.getElementById('tag-picker-pos')?.closest('.tag-picker-collapse');
+            const negCollapse = document.getElementById('tag-picker-neg')?.closest('.tag-picker-collapse');
+            posCollapse?.classList.remove('mobile-tags-hidden');
+            negCollapse?.classList.add('mobile-tags-hidden');
+            document.getElementById('tag-picker-pos')?.classList.remove('hidden');
+            posTagPicker?._ensureValidGroupForMobile();
+            syncMobileArtistNav(posTagPicker?.subIdx ?? 0);
+            posTagPicker?.render();
+        }
+        if (tab !== 'tags' && tab !== 'artists') {
+            posTagPicker?.render();
+            negTagPicker?.render();
+        }
     }
 
     function setupGenerateFab() {
