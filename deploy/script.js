@@ -2086,38 +2086,42 @@
         return true;
     }
 
-    async function _loadSeriesFromApi() {
+    function _injectArtistGroup() {
+        tagData = tagData.filter(g => !g._isArtistGroup);
+        const artistGroup = {
+            name: '画师风格',
+            _isArtistGroup: true,
+            subgroups: _ARTIST_SORT_MODES.map(mode => ({
+                name: `${mode.icon} ${mode.name}`,
+                _artistSort: mode.sort,
+                _artistOrder: mode.order,
+                tags: [],
+            }))
+        };
+        tagData.push(artistGroup);
+        _artistGroupIdx = tagData.length - 1;
+    }
+
+    function _applySeriesListToTagData(seriesList) {
         if (_charGroupIdx < 0) {
             _charGroupIdx = tagData.findIndex(g => g.name === '人物');
         }
-        if (_charGroupIdx < 0) return false;
+        if (_charGroupIdx < 0 || !Array.isArray(seriesList) || !seriesList.length) return false;
         const group = tagData[_charGroupIdx];
         if (!group) return false;
 
         const hasDbSeries = group.subgroups.some(s => s && s._seriesId);
-        const seriesSubs = group.subgroups.filter(s => s && s._seriesId);
-        if (hasDbSeries && seriesSubs.length && seriesSubs.every(s => s._coverUrl !== undefined)) {
-            return true;
-        }
-
-        try {
-            const res = await fetch('/api/characters/series');
-            if (!res.ok) return false;
-            const seriesList = await res.json();
+        if (hasDbSeries) {
             const seriesMap = Object.fromEntries(seriesList.map(s => [s.id, s]));
-
-            if (hasDbSeries) {
-                group.subgroups.forEach(sub => {
-                    if (!sub?._seriesId) return;
-                    const row = seriesMap[sub._seriesId];
-                    if (row) {
-                        sub._coverUrl = row.cover_url || '';
-                        sub._seriesCount = row.count || 0;
-                    }
-                });
-                return true;
-            }
-
+            group.subgroups.forEach(sub => {
+                if (!sub?._seriesId) return;
+                const row = seriesMap[sub._seriesId];
+                if (row) {
+                    sub._coverUrl = row.cover_url || '';
+                    sub._seriesCount = row.count || 0;
+                }
+            });
+        } else {
             const baseSubs = group.subgroups.filter(s => s && (s.name === '对象' || s.name === '属性'));
             const dbSubs = seriesList.map(s => ({
                 name: _SERIES_CN[s.name] || s.name,
@@ -2127,6 +2131,55 @@
                 tags: [],
             }));
             group.subgroups = [...baseSubs, ...dbSubs];
+        }
+        return true;
+    }
+
+    function _loadSeriesFromLocalCache() {
+        try {
+            const raw = localStorage.getItem('_series_cache');
+            if (!raw) return false;
+            return _applySeriesListToTagData(JSON.parse(raw));
+        } catch {
+            return false;
+        }
+    }
+
+    function _saveSeriesLocalCache(seriesList) {
+        try {
+            const compact = seriesList.map(s => ({
+                id: s.id,
+                name: s.name,
+                count: s.count,
+                cover_url: s.cover_url || null,
+            }));
+            localStorage.setItem('_series_cache', JSON.stringify(compact));
+            localStorage.setItem('_series_cache_ts', String(Date.now()));
+        } catch (e) {
+            console.warn('[D1] series cache save failed:', e.message);
+        }
+    }
+
+    async function _loadSeriesFromApi(forceRefresh = false) {
+        if (_charGroupIdx < 0) {
+            _charGroupIdx = tagData.findIndex(g => g.name === '人物');
+        }
+        if (_charGroupIdx < 0) return false;
+        const group = tagData[_charGroupIdx];
+        if (!group) return false;
+
+        const seriesSubs = group.subgroups.filter(s => s && s._seriesId);
+        const hasDbSeries = seriesSubs.length > 0;
+        if (!forceRefresh && hasDbSeries && seriesSubs.every(s => s._coverUrl !== undefined)) {
+            return false;
+        }
+
+        try {
+            const res = await fetch('/api/characters/series');
+            if (!res.ok) return false;
+            const seriesList = await res.json();
+            _applySeriesListToTagData(seriesList);
+            _saveSeriesLocalCache(seriesList);
             console.log(`[D1] Loaded ${seriesList.length} series from database`);
             return true;
         } catch (e) {
@@ -2135,52 +2188,74 @@
         }
     }
 
-    async function loadTags() {
+    const SERIES_CACHE_MAX_AGE = 60 * 60 * 1000;
+
+    async function _refreshTagsAndSeriesInBackground() {
+        let tagsChanged = false;
         try {
-            const cached = localStorage.getItem('_tags_cache');
-            const cachedVer = localStorage.getItem('_tags_ver');
             const res = await fetch('tags.json');
-            const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
-            if (cached && cachedVer && cachedVer === currentVer && currentVer !== '') {
+            if (res.ok) {
+                const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
+                const cachedVer = localStorage.getItem('_tags_ver') || '';
+                if (currentVer && currentVer !== cachedVer) {
+                    const newData = await res.json();
+                    tagData = newData;
+                    try {
+                        localStorage.setItem('_tags_cache', JSON.stringify(tagData));
+                        localStorage.setItem('_tags_ver', currentVer);
+                    } catch { /* ignore */ }
+                    _charGroupIdx = tagData.findIndex(g => g.name === '人物');
+                    _loadSeriesFromLocalCache();
+                    _injectArtistGroup();
+                    tagsChanged = true;
+                }
+            }
+        } catch { /* offline — keep cache */ }
+
+        const cacheTs = parseInt(localStorage.getItem('_series_cache_ts') || '0', 10);
+        const seriesStale = !cacheTs || Date.now() - cacheTs > SERIES_CACHE_MAX_AGE;
+        const seriesChanged = seriesStale ? await _loadSeriesFromApi(true) : false;
+        if (tagsChanged || seriesChanged) {
+            posTagPicker?.render();
+            negTagPicker?.render();
+            if (document.querySelector('.main')?.classList.contains('mobile-tab-characters')) {
+                renderMobileSeriesList(_seriesListState.filter || '');
+            }
+        }
+    }
+
+    async function loadTags() {
+        const cached = localStorage.getItem('_tags_cache');
+        if (cached) {
+            try {
                 tagData = JSON.parse(cached);
-            } else {
+            } catch {
+                tagData = [];
+            }
+        }
+
+        if (!tagData.length) {
+            try {
+                const res = await fetch('tags.json');
                 tagData = await res.json();
+                const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
                 try {
                     localStorage.setItem('_tags_cache', JSON.stringify(tagData));
-                    localStorage.setItem('_tags_ver', currentVer);
+                    if (currentVer) localStorage.setItem('_tags_ver', currentVer);
                 } catch (storageErr) {
                     console.warn('localStorage full, skipping cache');
                 }
-            }
-        } catch (e) {
-            const cached = localStorage.getItem('_tags_cache');
-            if (cached) {
-                tagData = JSON.parse(cached);
-                console.log('[Tags] Loaded from cache (offline)');
-            } else {
+            } catch (e) {
                 console.warn('标签数据加载失败:', e);
+                tagData = tagData || [];
             }
         }
+
         _charGroupIdx = tagData.findIndex(g => g.name === '人物');
-        await _loadSeriesFromApi();
-        try {
-            tagData = tagData.filter(g => !g._isArtistGroup);
-            const artistGroup = {
-                name: '画师风格',
-                _isArtistGroup: true,
-                subgroups: _ARTIST_SORT_MODES.map(mode => ({
-                    name: `${mode.icon} ${mode.name}`,
-                    _artistSort: mode.sort,
-                    _artistOrder: mode.order,
-                    tags: [],
-                }))
-            };
-            tagData.push(artistGroup);
-            _artistGroupIdx = tagData.length - 1;
-            console.log('[D1] Artist group added, loading from database');
-        } catch (e) {
-            console.warn('[D1] 画师分组加载失败:', e);
-        }
+        _loadSeriesFromLocalCache();
+        _injectArtistGroup();
+
+        _refreshTagsAndSeriesInBackground();
     }
 
     function _ssGet(key) { try { const v = sessionStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; } }
@@ -3642,6 +3717,7 @@
         } else {
             const fb = document.createElement('div');
             fb.className = 'char-series-cover-fallback';
+            fb.style.display = 'flex';
             fb.textContent = '📁';
             coverEl.appendChild(fb);
         }
