@@ -2194,32 +2194,84 @@ textarea {
         font-size: 13px;
     }
 
-    /* Character cards mobile */
+    /* ===== Mobile: Character cards 3 per row ===== */
     .tag-item.tag-char {
-        width: calc(50% - 3px) !important;
+        flex-grow: 1;
+        flex-basis: 90px;
         min-width: 0 !important;
         max-width: none !important;
     }
 
     .tag-thumb {
-        height: 200px !important;
+        height: 140px !important;
     }
 
     .tag-item.tag-char .tag-desc {
-        font-size: 0.75rem;
-        padding: 4px 4px 1px;
+        font-size: 0.65rem;
+        padding: 3px 3px 0;
     }
 
     .tag-item.tag-char .tag-text {
-        font-size: 0.6rem;
-        padding: 0 4px 4px;
+        font-size: 0.55rem;
+        padding: 0 3px 3px;
     }
 
     .tag-grid {
         justify-content: flex-start;
     }
 
-    /* Character preview overlay mobile */
+    /* ===== Mobile: Tag picker maximized ===== */
+    .tag-picker {
+        max-height: 60vh !important;
+    }
+
+    /* ===== Mobile: Panel groups auto-collapse ===== */
+    .panel-group {
+        max-height: 42px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .panel-group.open {
+        max-height: 2000px;
+    }
+
+    .panel-group-header {
+        cursor: pointer;
+        position: relative;
+    }
+
+    .panel-group-header::after {
+        content: '▸';
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 12px;
+        color: var(--text-secondary);
+        transition: transform 0.2s;
+    }
+
+    .panel-group.open .panel-group-header::after {
+        transform: translateY(-50%) rotate(90deg);
+    }
+
+    /* ===== Mobile: Content/result area compact ===== */
+    .content {
+        padding: 8px !important;
+    }
+
+    .result-wrapper {
+        max-height: 200px;
+        overflow: hidden;
+        transition: max-height 0.3s;
+    }
+
+    .result-wrapper.expanded {
+        max-height: 1000px;
+    }
+
+    /* ===== Mobile: Character preview fullscreen ===== */
     .char-preview-overlay {
         padding: 0 !important;
         align-items: flex-start !important;
@@ -2234,11 +2286,11 @@ textarea {
     }
 
     .char-preview-img {
-        max-height: 60vh !important;
+        max-height: 55vh !important;
     }
 
     .char-preview-info {
-        padding: 10px 12px !important;
+        padding: 8px 10px !important;
     }
 
     .char-preview-name {
@@ -2264,7 +2316,7 @@ textarea {
         font-size: 18px !important;
     }
 
-    /* Tag tabs mobile - horizontal scroll */
+    /* ===== Mobile: Tag navigation horizontal scroll ===== */
     .tag-tabs {
         flex-wrap: nowrap !important;
         overflow-x: auto;
@@ -2273,13 +2325,13 @@ textarea {
         padding-bottom: 4px;
     }
 
-    .tag-tabs::-webkit-scrollbar {
-        display: none;
-    }
+    .tag-tabs::-webkit-scrollbar { display: none; }
 
     .tag-tabs .tab {
         white-space: nowrap;
         flex-shrink: 0;
+        padding: 5px 8px;
+        font-size: 11px;
     }
 
     .tag-subtabs {
@@ -2289,34 +2341,38 @@ textarea {
         scrollbar-width: none;
     }
 
-    .tag-subtabs::-webkit-scrollbar {
-        display: none;
-    }
+    .tag-subtabs::-webkit-scrollbar { display: none; }
 
     .tag-subtabs .tab {
         white-space: nowrap;
         flex-shrink: 0;
+        font-size: 11px;
     }
 
-    /* Fav columns mobile */
+    /* ===== Mobile: Fav columns stack ===== */
     .fav-columns {
         flex-direction: column !important;
     }
 
     .fav-col-grid {
-        max-height: 250px !important;
+        max-height: 200px !important;
     }
 
     .fav-col-grid .tag-item.fav-mini.tag-char {
-        width: 70px !important;
-        min-width: 70px !important;
-        max-width: 70px !important;
-        height: 105px !important;
+        width: 60px !important;
+        min-width: 60px !important;
+        max-width: 60px !important;
+        height: 90px !important;
     }
 
     .fav-col-grid .tag-item.fav-mini.tag-char .tag-thumb {
-        width: 70px !important;
-        height: 84px !important;
+        width: 60px !important;
+        height: 72px !important;
+    }
+
+    /* ===== Mobile: History compact ===== */
+    .history-panel {
+        max-height: 120px !important;
     }
 
     /* Modals mobile */
@@ -2674,7 +2730,7 @@ textarea {
     gap: 5px;
     padding: 6px 8px;
     min-height: 0;
-    max-height: 200px;
+    max-height: 30vh;
     overflow-y: auto;
     border-radius: 0 0 var(--radius) var(--radius);
     background: rgba(0, 0, 0, 0.15);
