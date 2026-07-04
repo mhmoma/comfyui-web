@@ -11,10 +11,22 @@ export async function onRequestGet(context) {
 
   try {
     const { results } = await db.prepare(
-      'SELECT id, name, count FROM series ORDER BY count DESC'
+      `SELECT s.id, s.name, s.count,
+              (SELECT c.thumb_url FROM characters c
+               WHERE c.series_id = s.id AND c.thumb_url IS NOT NULL AND c.thumb_url != ''
+               ORDER BY c.count DESC LIMIT 1) AS cover_url
+       FROM series s
+       ORDER BY s.count DESC`
     ).all();
 
-    return new Response(JSON.stringify(results), {
+    const mapped = results.map(r => ({
+      id: r.id,
+      name: r.name,
+      count: r.count,
+      cover_url: r.cover_url || null,
+    }));
+
+    return new Response(JSON.stringify(mapped), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=3600' },
     });
   } catch (e) {

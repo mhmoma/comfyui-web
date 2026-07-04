@@ -2093,16 +2093,36 @@
         if (_charGroupIdx < 0) return false;
         const group = tagData[_charGroupIdx];
         if (!group) return false;
-        if (group.subgroups.some(s => s && s._seriesId)) return true;
+
+        const hasDbSeries = group.subgroups.some(s => s && s._seriesId);
+        if (hasDbSeries && group.subgroups.some(s => s._seriesId && s._coverUrl !== undefined)) {
+            return true;
+        }
 
         try {
             const res = await fetch('/api/characters/series');
             if (!res.ok) return false;
             const seriesList = await res.json();
+            const seriesMap = Object.fromEntries(seriesList.map(s => [s.id, s]));
+
+            if (hasDbSeries) {
+                group.subgroups.forEach(sub => {
+                    if (!sub?._seriesId) return;
+                    const row = seriesMap[sub._seriesId];
+                    if (row) {
+                        sub._coverUrl = row.cover_url || '';
+                        sub._seriesCount = row.count || 0;
+                    }
+                });
+                return true;
+            }
+
             const baseSubs = group.subgroups.filter(s => s && (s.name === '对象' || s.name === '属性'));
             const dbSubs = seriesList.map(s => ({
                 name: _SERIES_CN[s.name] || s.name,
                 _seriesId: s.id,
+                _seriesCount: s.count || 0,
+                _coverUrl: s.cover_url || '',
                 tags: [],
             }));
             group.subgroups = [...baseSubs, ...dbSubs];
@@ -3538,6 +3558,85 @@
         _renderCharBrowserPagination(total, totalPages);
     }
 
+    let _seriesCoverObserver = null;
+    function _observeSeriesCoverImages(imgList) {
+        const root = document.getElementById('char-series-scroll');
+        if (!root || !imgList.length) return;
+        if (!_seriesCoverObserver) {
+            _seriesCoverObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    const img = entry.target;
+                    const src = img.dataset.src;
+                    if (!src) return;
+                    _seriesCoverObserver.unobserve(img);
+                    img.onload = () => {
+                        img.classList.remove('img-loading');
+                        img.classList.add('img-loaded');
+                        img.parentElement?.querySelector('.char-series-cover-skel')?.classList.add('hide');
+                    };
+                    img.onerror = () => {
+                        img.style.display = 'none';
+                        const fb = img.parentElement?.querySelector('.char-series-cover-fallback');
+                        if (fb) fb.style.display = 'flex';
+                        img.parentElement?.querySelector('.char-series-cover-skel')?.classList.add('hide');
+                    };
+                    img.src = src;
+                });
+            }, { root, rootMargin: '120px' });
+        }
+        imgList.forEach(img => { if (img) _seriesCoverObserver.observe(img); });
+    }
+
+    function _createSeriesCard(series) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'char-series-card';
+        const count = series._seriesCount || 0;
+        const countText = count > 0 ? `${count} 角色` : '';
+        const cover = series._coverUrl || '';
+
+        const coverEl = document.createElement('div');
+        coverEl.className = 'char-series-cover';
+        coverEl.innerHTML = '<div class="char-series-cover-skel"></div>';
+        if (cover) {
+            const img = document.createElement('img');
+            img.className = 'char-series-cover-img img-loading';
+            img.dataset.src = cover;
+            img.alt = series.name;
+            coverEl.appendChild(img);
+        } else {
+            const fb = document.createElement('div');
+            fb.className = 'char-series-cover-fallback';
+            fb.textContent = '📁';
+            coverEl.appendChild(fb);
+        }
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'char-series-name';
+        nameEl.textContent = series.name;
+
+        const countEl = document.createElement('span');
+        countEl.className = 'char-series-count';
+        countEl.textContent = countText;
+
+        btn.append(coverEl, nameEl, countEl);
+        btn.addEventListener('click', () => openCharBrowser(series._seriesId, series.name));
+        return btn;
+    }
+
+    function _appendSeriesGrid(container, seriesList, lazyImages) {
+        const grid = document.createElement('div');
+        grid.className = 'char-series-grid';
+        seriesList.forEach(s => {
+            const card = _createSeriesCard(s);
+            const img = card.querySelector('img.char-series-cover-img');
+            if (img) lazyImages.push(img);
+            grid.appendChild(card);
+        });
+        container.appendChild(grid);
+    }
+
     function renderMobileSeriesList(filter) {
         const scroll = document.getElementById('char-series-scroll');
         if (!scroll) return;
@@ -3559,6 +3658,14 @@
             return;
         }
 
+        if (!subs.some(s => s._coverUrl !== undefined)) {
+            scroll.innerHTML = '<div class="char-browser-empty">正在加载作品封面…</div>';
+            _loadSeriesFromApi().then(ok => {
+                if (ok) renderMobileSeriesList(filter);
+            });
+            return;
+        }
+
         let list = subs;
         if (q) list = subs.filter(s => s.name.toLowerCase().includes(q));
 
@@ -3566,43 +3673,50 @@
         try { recentIds = JSON.parse(localStorage.getItem('comfyui_recent_series') || '[]'); } catch { /* ignore */ }
 
         scroll.innerHTML = '';
+        const lazyImages = [];
+
         if (!q && recentIds.length) {
             const recentLabel = document.createElement('div');
             recentLabel.className = 'char-series-section-label';
             recentLabel.textContent = '最近浏览';
             scroll.appendChild(recentLabel);
-            const recentRow = document.createElement('div');
-            recentRow.className = 'char-series-row';
+            const recentList = [];
             recentIds.forEach(id => {
                 const s = subs.find(x => x._seriesId === id);
-                if (!s) return;
-                recentRow.appendChild(_createSeriesChip(s));
+                if (s) recentList.push(s);
             });
-            if (recentRow.childElementCount) scroll.appendChild(recentRow);
+            if (recentList.length) {
+                const recentWrap = document.createElement('div');
+                recentWrap.className = 'char-series-recent-scroll';
+                const recentGrid = document.createElement('div');
+                recentGrid.className = 'char-series-grid char-series-grid-recent';
+                recentList.forEach(s => {
+                    const card = _createSeriesCard(s);
+                    const img = card.querySelector('img.char-series-cover-img');
+                    if (img) lazyImages.push(img);
+                    recentGrid.appendChild(card);
+                });
+                recentWrap.appendChild(recentGrid);
+                scroll.appendChild(recentWrap);
+            }
         }
 
         const allLabel = document.createElement('div');
         allLabel.className = 'char-series-section-label';
-        allLabel.textContent = q ? `搜索结果（${list.length}）` : '全部作品';
+        allLabel.textContent = q ? `搜索结果（${list.length}）` : `全部作品（${list.length}）`;
         scroll.appendChild(allLabel);
 
-        const row = document.createElement('div');
-        row.className = 'char-series-row char-series-row-all';
-        list.forEach(s => row.appendChild(_createSeriesChip(s)));
-        scroll.appendChild(row);
-
         if (!list.length) {
-            scroll.innerHTML = '<div class="char-browser-empty">未找到匹配作品</div>';
+            const empty = document.createElement('div');
+            empty.className = 'char-browser-empty';
+            empty.textContent = '未找到匹配作品';
+            scroll.appendChild(empty);
+            if (lazyImages.length) _observeSeriesCoverImages(lazyImages);
+            return;
         }
-    }
 
-    function _createSeriesChip(series) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'char-series-chip';
-        btn.textContent = series.name;
-        btn.addEventListener('click', () => openCharBrowser(series._seriesId, series.name));
-        return btn;
+        _appendSeriesGrid(scroll, list, lazyImages);
+        if (lazyImages.length) _observeSeriesCoverImages(lazyImages);
     }
 
     function setupMobileCharBrowser() {
