@@ -2367,6 +2367,60 @@ textarea {
         overflow-y: auto;
     }
 
+    /* 画师 Tab：三列紧凑卡片 */
+    .main.mobile-tab-artists .tag-grid {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px;
+        padding: 6px;
+        align-content: flex-start;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-char {
+        width: calc((100% - 12px) / 3) !important;
+        flex: 0 0 calc((100% - 12px) / 3) !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-char .tag-thumb {
+        height: 120px !important;
+        object-fit: contain !important;
+        object-position: top center !important;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-char .thumb-skeleton {
+        height: 120px !important;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-char .tag-desc {
+        font-size: 0.68rem;
+        padding: 4px 3px 1px;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-char .tag-text {
+        font-size: 0.55rem;
+        padding: 0 3px 4px;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-artist {
+        width: calc((100% - 12px) / 3) !important;
+        flex: 0 0 calc((100% - 12px) / 3) !important;
+        min-width: 0 !important;
+        padding: 6px 3px;
+        box-sizing: border-box;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-artist .tag-text {
+        font-size: 0.62rem;
+    }
+
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-artist .tag-desc {
+        font-size: 0.55rem;
+    }
+
     .main.mobile-tab-tags .mobile-tags-switch {
         display: flex;
         flex-shrink: 0;
@@ -2615,7 +2669,7 @@ textarea {
         min-height: 0;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding: 10px;
+        padding: 6px;
         align-content: flex-start;
     }
 
@@ -4694,21 +4748,21 @@ textarea {
     display: none !important;
 }
 
-/* ==================== Character Browser — flex 双列完整卡片（must stay last） ==================== */
+/* ==================== Character Browser — flex 三列完整卡片（must stay last） ==================== */
 .char-browser-overlay .char-browser-grid {
     display: flex !important;
     flex-wrap: wrap !important;
-    gap: 8px;
+    gap: 6px;
     align-content: flex-start;
 }
 
 .char-browser-overlay .char-browser-card {
     display: flex;
     flex-direction: column;
-    width: calc((100% - 8px) / 2) !important;
-    flex: 0 0 calc((100% - 8px) / 2) !important;
+    width: calc((100% - 12px) / 3) !important;
+    flex: 0 0 calc((100% - 12px) / 3) !important;
     min-width: 0;
-    min-height: 232px !important;
+    min-height: 168px !important;
     padding: 0;
     overflow: hidden;
     border-radius: 8px;
@@ -4726,8 +4780,8 @@ textarea {
 .char-browser-overlay .char-browser-thumb {
     position: relative;
     width: 100%;
-    height: 190px !important;
-    min-height: 190px !important;
+    height: 128px !important;
+    min-height: 128px !important;
     flex-shrink: 0;
     background: var(--bg-input);
     overflow: hidden;
@@ -4798,34 +4852,34 @@ textarea {
     width: 100%;
     background: var(--bg-input);
     border-top: 1px solid var(--border);
-    min-height: 40px;
+    min-height: 34px;
 }
 
 .char-browser-overlay .char-browser-name {
     display: block;
-    font-size: 0.8rem;
+    font-size: 0.68rem;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
-    padding: 5px 6px 1px;
+    padding: 4px 4px 1px;
     color: var(--text-primary);
-    line-height: 1.3;
+    line-height: 1.25;
 }
 
 .char-browser-overlay .char-browser-trigger {
     display: block;
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
-    padding: 0 6px 6px;
+    padding: 0 4px 5px;
     color: var(--text-secondary);
-    line-height: 1.3;
+    line-height: 1.25;
 }
 
 .char-browser-overlay .char-browser-skeleton .char-browser-thumb {
@@ -4845,12 +4899,12 @@ textarea {
 
 @media (min-width: 768px) {
     .char-browser-overlay .char-browser-card {
-        width: calc((100% - 16px) / 3) !important;
-        flex: 0 0 calc((100% - 16px) / 3) !important;
+        width: calc((100% - 24px) / 4) !important;
+        flex: 0 0 calc((100% - 24px) / 4) !important;
     }
 
     .char-browser-overlay .char-browser-thumb {
-        height: 210px !important;
-        min-height: 210px !important;
+        height: 150px !important;
+        min-height: 150px !important;
     }
 }

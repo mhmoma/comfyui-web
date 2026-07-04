@@ -2055,7 +2055,35 @@
     function _isArtistGroupIndex(groupIdx) {
         const g = tagData[groupIdx];
         if (!g) return false;
-        return groupIdx === _artistGroupIdx || g.name === '画师风格' || g._isArtistGroup === true;
+        return groupIdx === _artistGroupIdx || g._isArtistGroup === true;
+    }
+
+    function _isArtistGroupHiddenOnTags(groupIdx) {
+        const g = tagData[groupIdx];
+        if (!g) return false;
+        return _isArtistGroupIndex(groupIdx) || g.name === '画师风格';
+    }
+
+    function _prepareArtistTab(picker, subIdx = 0) {
+        if (!picker || _artistGroupIdx < 0) return false;
+        const maxSub = tagData[_artistGroupIdx]?.subgroups?.length || 0;
+        picker.groupIdx = _artistGroupIdx;
+        picker.subIdx = Math.max(0, Math.min(subIdx, maxSub - 1));
+        picker._virtualMode = null;
+        picker._searchMode = 'tag';
+        picker.searchEl.value = '';
+        if (picker.searchModeBtn) {
+            picker.searchModeBtn.textContent = '标签';
+            picker.searchModeBtn.classList.remove('mode-category');
+        }
+        picker.searchEl.placeholder = '搜索画师...';
+        _artistPage = 1;
+        const sub = tagData[_artistGroupIdx]?.subgroups[picker.subIdx];
+        if (sub?._artistSort) {
+            _artistCurrentSort = sub._artistSort;
+            _artistCurrentLetter = 'all';
+        }
+        return true;
     }
 
     async function _loadSeriesFromApi() {
@@ -2115,6 +2143,7 @@
         _charGroupIdx = tagData.findIndex(g => g.name === '人物');
         await _loadSeriesFromApi();
         try {
+            tagData = tagData.filter(g => !g._isArtistGroup);
             const artistGroup = {
                 name: '画师风格',
                 _isArtistGroup: true,
@@ -2350,7 +2379,6 @@
         }
 
         _getMobileTabContext() {
-            if (!this._isMobilePicker()) return null;
             const main = document.querySelector('.main');
             if (!main) return null;
             if (main.classList.contains('mobile-tab-tags')) return 'tags';
@@ -2358,10 +2386,14 @@
             return null;
         }
 
+        _isOnArtistTab() {
+            return this.id === 'tag-picker-pos' && document.querySelector('.main')?.classList.contains('mobile-tab-artists');
+        }
+
         _shouldHideGroup(groupIdx) {
             const ctx = this._getMobileTabContext();
             if (!ctx) return false;
-            if (ctx === 'tags' && _isArtistGroupIndex(groupIdx)) return true;
+            if (ctx === 'tags' && _isArtistGroupHiddenOnTags(groupIdx)) return true;
             if (ctx === 'artists' && !_isArtistGroupIndex(groupIdx)) return true;
             return false;
         }
@@ -2607,10 +2639,14 @@
             }
 
             const mobileCtx = this._getMobileTabContext();
-            const search = (mobileCtx === 'artists' || this._searchMode === 'category') ? '' : this.searchEl.value.toLowerCase();
+            const onArtistTab = this._isOnArtistTab();
+            if (onArtistTab && _artistGroupIdx >= 0) {
+                this.groupIdx = _artistGroupIdx;
+            }
+            const search = (mobileCtx === 'artists' || onArtistTab || this._searchMode === 'category') ? '' : this.searchEl.value.toLowerCase();
             let items;
             if (search) {
-                if (this.groupIdx === _artistGroupIdx) {
+                if (this.groupIdx === _artistGroupIdx || onArtistTab) {
                     this.gridEl.innerHTML = _buildSkeletonGrid(4);
                     _searchArtistsFromDb(search).then(dbItems => {
                         this._renderItems(dbItems);
@@ -2631,7 +2667,11 @@
                         }
                     });
                 }
-            } else if (this.groupIdx === _artistGroupIdx) {
+            } else if (this.groupIdx === _artistGroupIdx || onArtistTab) {
+                if (_artistGroupIdx < 0) {
+                    this.gridEl.innerHTML = '<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%">画师数据加载中…</div>';
+                    return;
+                }
                 const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
                 if (!sub || !sub._artistSort) return;
                 this.gridEl.innerHTML = _buildSkeletonGrid(6);
@@ -3628,16 +3668,7 @@
             btn.addEventListener('click', () => {
                 const mode = parseInt(btn.dataset.artistMode, 10);
                 if (!posTagPicker || _artistGroupIdx < 0 || Number.isNaN(mode)) return;
-                posTagPicker.groupIdx = _artistGroupIdx;
-                posTagPicker.subIdx = mode;
-                posTagPicker._virtualMode = null;
-                posTagPicker.searchEl.value = '';
-                _artistPage = 1;
-                const sub = tagData[_artistGroupIdx]?.subgroups[mode];
-                if (sub?._artistSort) {
-                    _artistCurrentSort = sub._artistSort;
-                    _artistCurrentLetter = 'all';
-                }
+                _prepareArtistTab(posTagPicker, mode);
                 syncMobileArtistNav(mode);
                 posTagPicker.render();
             });
@@ -3685,12 +3716,9 @@
             negCollapse?.classList.add('mobile-tags-hidden');
             document.getElementById('tag-picker-pos')?.classList.remove('hidden');
             if (posTagPicker) {
-                posTagPicker._searchMode = 'tag';
-                posTagPicker.searchEl.value = '';
-                _artistPage = 1;
+                _prepareArtistTab(posTagPicker, 0);
             }
-            posTagPicker?._ensureValidGroupForMobile();
-            syncMobileArtistNav(posTagPicker?.subIdx ?? 0);
+            syncMobileArtistNav(0);
             posTagPicker?.render();
         }
         if (tab !== 'tags' && tab !== 'artists') {
