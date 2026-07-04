@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.20</title>
+<title>ComfyUI Web v3.43</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" style="font-size:0.5em;opacity:0.6">v3.20</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.43</span></h1>
             <a href="https://discord.gg/da9PMeAGGK" target="_blank" rel="noopener noreferrer" class="btn-icon btn-discord" title="加入绘画Discord交流群">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
             </a>
@@ -28,7 +28,7 @@
             <button id="btn-settings" class="btn-icon" title="设置">⚙️</button>
         </header>
 
-        <main class="main">
+        <main class="main mobile-tab-create">
             <aside class="sidebar">
                 <!-- 模式切换 -->
                 <div class="mode-switcher">
@@ -72,6 +72,7 @@
                             <div class="compact-row">
                                 <label>步数 <input type="number" id="inp-steps" value="20" min="1" max="150"></label>
                                 <label>CFG <input type="number" id="inp-cfg" value="7" min="1" max="30" step="0.5"></label>
+                                <label>Clip Skip <input type="number" id="inp-clip-skip" value="2" min="1" max="12"></label>
                             </div>
                         </section>
 
@@ -198,6 +199,55 @@
                             <img id="cn-processed-img" alt="预处理结果">
                         </div>
                         <small class="cn-tip">💡 上传图片后点"预览底图"查看预处理效果</small>
+                    </div>
+                </section>
+
+                <!-- 可选模块：IP-Adapter 风格迁移 -->
+                <section class="panel optional-panel" id="section-ipadapter">
+                    <div class="panel-header">
+                        <h2>风格迁移 (IP-Adapter)</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="chk-ipadapter">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="panel-body" id="panel-ipadapter">
+                        <div id="ipa-status" class="ipa-status hidden"></div>
+                        <label>参考图片
+                            <input type="file" id="inp-ipa-image" accept="image/*">
+                        </label>
+                        <div id="ipa-preview-container" class="file-preview hidden">
+                            <img id="ipa-preview" alt="IPA参考图预览">
+                        </div>
+                        <label>IP-Adapter 模型
+                            <select id="sel-ipadapter-model">
+                                <option value="">扫描中...</option>
+                            </select>
+                        </label>
+                        <div id="ipa-download-area" class="ipa-download-area hidden">
+                            <p class="ipa-download-hint">未检测到 IP-Adapter 模型</p>
+                            <button id="btn-ipa-download" class="btn-secondary btn-ipa-download">📥 一键下载推荐模型</button>
+                            <div id="ipa-download-progress" class="ipa-download-progress hidden">
+                                <div class="ipa-progress-bar" id="ipa-progress-bar"></div>
+                                <span id="ipa-progress-text">下载中...</span>
+                            </div>
+                            <small class="ipa-manual-hint">或手动下载: <a href="https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors" target="_blank" rel="noopener">ip-adapter-plus_sdxl_vit-h</a> → 放入 <code>models/ipadapter/</code></small>
+                        </div>
+                        <div class="compact-row">
+                            <label>混合模式
+                                <select id="sel-ipa-weight-type">
+                                    <option value="standard" selected>标准 — 均衡混合</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="compact-row">
+                            <label>权重 <input type="number" id="inp-ipa-weight" value="0.8" min="0" max="1.5" step="0.05"></label>
+                        </div>
+                        <div class="compact-row">
+                            <label>开始 % <input type="number" id="inp-ipa-start" value="0" min="0" max="1" step="0.05"></label>
+                            <label>结束 % <input type="number" id="inp-ipa-end" value="1" min="0" max="1" step="0.05"></label>
+                        </div>
+                        <small>上传参考图后，生成的图片将保留参考图的风格和角色特征</small>
                     </div>
                 </section>
 
@@ -671,13 +721,16 @@
                 </div>
 
                 <section class="result-area">
-                    <div id="result-placeholder" class="placeholder">生成的图片将显示在这里</div>
-                    <img id="result-image" class="result-image hidden" alt="生成结果">
-                    <div id="result-actions" class="result-actions hidden">
-                        <button id="btn-download" class="btn-secondary">下载图片</button>
-                        <button id="btn-send-to-history" class="btn-secondary">保存到历史</button>
-                        <button id="btn-use-as-ref" class="btn-secondary">用作参考图</button>
-                        <button id="btn-compare" class="btn-secondary hidden">对比效果</button>
+                    <button type="button" id="btn-result-expand" class="result-expand-toggle hidden" aria-expanded="false">展开结果 ▼</button>
+                    <div id="result-wrapper" class="result-wrapper">
+                        <div id="result-placeholder" class="placeholder">生成的图片将显示在这里</div>
+                        <img id="result-image" class="result-image hidden" alt="生成结果">
+                        <div id="result-actions" class="result-actions hidden">
+                            <button id="btn-download" class="btn-secondary">下载图片</button>
+                            <button id="btn-send-to-history" class="btn-secondary">保存到历史</button>
+                            <button id="btn-use-as-ref" class="btn-secondary">用作参考图</button>
+                            <button id="btn-compare" class="btn-secondary hidden">对比效果</button>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -688,6 +741,21 @@
                 <button id="btn-clear-history" class="btn-danger">清空历史</button>
             </aside>
         </main>
+
+        <nav class="mobile-nav" id="mobile-nav" aria-label="手机主导航">
+            <button type="button" class="mobile-nav-btn active" data-mobile-tab="create" aria-label="创作">
+                <span class="mobile-nav-icon">✏️</span>
+                <span class="mobile-nav-label">创作</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="settings" aria-label="设置">
+                <span class="mobile-nav-icon">⚙️</span>
+                <span class="mobile-nav-label">设置</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="history" aria-label="历史">
+                <span class="mobile-nav-icon">🖼</span>
+                <span class="mobile-nav-label">历史</span>
+            </button>
+        </nav>
     </div>
 
     <!-- 设置弹窗 -->

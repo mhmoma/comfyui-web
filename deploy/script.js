@@ -1306,6 +1306,7 @@
         dom.resultPlaceholder.classList.add('hidden');
         dom.resultImage.classList.add('hidden');
         dom.resultActions.classList.add('hidden');
+        updateMobileResultUI(false);
         setProgress(0);
 
         try {
@@ -1430,6 +1431,7 @@
         dom.resultPlaceholder.classList.add('hidden');
         dom.resultActions.classList.remove('hidden');
         dom.btnCompare.classList.toggle('hidden', !hasCompare);
+        updateMobileResultUI(true);
     }
 
     // ==================== 图片对比滑块 ====================
@@ -2290,6 +2292,49 @@
             });
         }
 
+        _isMobilePicker() {
+            return window.matchMedia('(max-width: 640px)').matches;
+        }
+
+        _isCharSeriesActive() {
+            if (this._virtualMode || _charGroupIdx < 0 || this.groupIdx !== _charGroupIdx) return false;
+            const sub = tagData[this.groupIdx]?.subgroups[this.subIdx];
+            return !!(sub && sub._seriesId);
+        }
+
+        _updateMobileCharLayout() {
+            const picker = this.gridEl?.closest('.tag-picker');
+            if (!picker) return;
+
+            const charView = this._isMobilePicker() && this._isCharSeriesActive();
+            picker.classList.toggle('mobile-char-view', charView);
+
+            let bar = picker.querySelector('.char-series-bar');
+            if (charView) {
+                const sub = tagData[this.groupIdx].subgroups[this.subIdx];
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.className = 'char-series-bar';
+                    this.subTabsEl.insertAdjacentElement('afterend', bar);
+                }
+                bar.innerHTML = '';
+                const backBtn = document.createElement('button');
+                backBtn.type = 'button';
+                backBtn.className = 'char-series-back';
+                backBtn.textContent = '← 作品';
+                backBtn.addEventListener('click', () => {
+                    picker.classList.remove('mobile-char-view');
+                    this.subTabsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+                const title = document.createElement('span');
+                title.className = 'char-series-title';
+                title.textContent = sub.name;
+                bar.append(backBtn, title);
+            } else if (bar) {
+                bar.remove();
+            }
+        }
+
         render() {
             this.renderTabs();
             this.renderSubTabs();
@@ -2389,6 +2434,7 @@
             if (this.groupIdx === _artistGroupIdx) {
                 this._renderArtistLetterBar();
             }
+            this._updateMobileCharLayout();
         }
 
         _renderArtistLetterBar() {
@@ -2439,6 +2485,7 @@
                 if (items.length === 0) {
                     const msg = this._virtualMode === 'fav' ? '还没有收藏任何标签，在标签卡片上点击 ⭐ 来收藏' : '还没有使用记录，使用标签后会自动记录';
                     this.gridEl.innerHTML = `<div style="padding:30px;color:var(--text-secondary);text-align:center;width:100%;font-size:0.85rem">${msg}</div>`;
+                    this._updateMobileCharLayout();
                     return;
                 }
                 const useGrouped = (this._virtualMode === 'fav' && (this._virtualSub || 0) === 0) || this._virtualMode === 'recent' || this._virtualMode === 'frequent';
@@ -2448,6 +2495,7 @@
                 } else {
                     this._renderItems(items);
                 }
+                this._updateMobileCharLayout();
                 return;
             }
 
@@ -2504,6 +2552,7 @@
             }
 
             this._renderItems(items);
+            this._updateMobileCharLayout();
         }
 
         _renderPagination(total) {
@@ -2792,6 +2841,7 @@
             });
             this.gridEl.appendChild(frag);
             if (lazyImages.length) _observeLazyImages(lazyImages);
+            this._updateMobileCharLayout();
         }
 
         _renderGroupedFavItems(items, emptyMsg) {
@@ -2871,6 +2921,7 @@
                 container.appendChild(col);
             });
             this.gridEl.appendChild(container);
+            this._updateMobileCharLayout();
         }
 
         getSelectedTags() {
@@ -3168,6 +3219,58 @@
         renderHistory();
         setupTagPickers();
         updateArchAwarePanels();
+    }
+
+    // ==================== 手机端导航 & 结果区 ====================
+    function updateMobileResultUI(hasResult) {
+        const btn = document.getElementById('btn-result-expand');
+        const wrapper = document.getElementById('result-wrapper');
+        if (!btn || !wrapper) return;
+        if (!window.matchMedia('(max-width: 640px)').matches) {
+            btn.classList.add('hidden');
+            wrapper.classList.remove('expanded');
+            return;
+        }
+        if (hasResult) {
+            btn.classList.remove('hidden');
+            wrapper.classList.add('expanded');
+            btn.textContent = '收起结果 ▲';
+            btn.setAttribute('aria-expanded', 'true');
+        } else {
+            btn.classList.add('hidden');
+            wrapper.classList.remove('expanded');
+            btn.textContent = '展开结果 ▼';
+            btn.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    function setupMobileResultExpand() {
+        const btn = document.getElementById('btn-result-expand');
+        const wrapper = document.getElementById('result-wrapper');
+        if (!btn || !wrapper) return;
+
+        btn.addEventListener('click', () => {
+            const expanded = wrapper.classList.toggle('expanded');
+            btn.textContent = expanded ? '收起结果 ▲' : '展开结果 ▼';
+            btn.setAttribute('aria-expanded', String(expanded));
+        });
+    }
+
+    function setupMobileNav() {
+        const nav = document.getElementById('mobile-nav');
+        const main = document.querySelector('.main');
+        if (!nav || !main) return;
+
+        nav.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.mobileTab;
+                main.classList.remove('mobile-tab-create', 'mobile-tab-settings', 'mobile-tab-history');
+                main.classList.add('mobile-tab-' + tab);
+                nav.querySelectorAll('.mobile-nav-btn').forEach(b => {
+                    b.classList.toggle('active', b === btn);
+                });
+            });
+        });
     }
 
     // ==================== 折叠组 ====================
@@ -4014,6 +4117,7 @@
         dom.resultPlaceholder.classList.add('hidden');
         dom.resultImage.classList.add('hidden');
         dom.resultActions.classList.add('hidden');
+        updateMobileResultUI(false);
         setProgress(0);
 
         try {
@@ -5665,6 +5769,7 @@
                         }
                         placeholder.classList.add('hidden');
                         if (actions) actions.classList.remove('hidden');
+                        updateMobileResultUI(true);
                     }
                     break;
                 } else if (result.status === 'failed') {
@@ -5697,6 +5802,8 @@
     setupArchSwitch();
     setupIPAdapter();
     setupPanelGroups();
+    setupMobileNav();
+    setupMobileResultExpand();
     setupSidebarResize();
     setupWildcard();
     setupWorkflowMode();
