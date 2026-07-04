@@ -2383,16 +2383,21 @@ textarea {
         max-width: none !important;
         padding: 0;
         overflow: hidden;
+        background: var(--bg-input);
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-char .tag-thumb {
         height: 120px !important;
-        object-fit: contain !important;
+        width: 100%;
+        object-fit: cover !important;
         object-position: top center !important;
+        background: #2a2a42;
+        border-bottom: none;
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-char .thumb-skeleton {
         height: 120px !important;
+        width: 100%;
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-char .tag-desc {
@@ -4783,7 +4788,7 @@ textarea {
     height: 128px !important;
     min-height: 128px !important;
     flex-shrink: 0;
-    background: var(--bg-input);
+    background: #2a2a42;
     overflow: hidden;
 }
 
@@ -4797,9 +4802,9 @@ textarea {
 }
 
 .char-browser-overlay .char-browser-thumb .char-browser-img {
-    object-fit: contain;
+    object-fit: cover;
     object-position: top center;
-    background: var(--bg-input);
+    background: transparent;
     transition: opacity 0.3s ease;
 }
 
