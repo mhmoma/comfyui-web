@@ -2086,6 +2086,64 @@
         return true;
     }
 
+    // ==================== 大文件缓存 (IndexedDB，避免 localStorage 5MB 上限) ====================
+    const _BIG_CACHE_DB = 'comfyui-web-cache';
+    let _bigCacheDbPromise = null;
+
+    function _openBigCacheDb() {
+        if (!_bigCacheDbPromise) {
+            _bigCacheDbPromise = new Promise((resolve, reject) => {
+                const req = indexedDB.open(_BIG_CACHE_DB, 1);
+                req.onupgradeneeded = (e) => { e.target.result.createObjectStore('kv'); };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        return _bigCacheDbPromise;
+    }
+
+    async function _bigCacheGet(key) {
+        try {
+            const db = await _openBigCacheDb();
+            return await new Promise((resolve, reject) => {
+                const req = db.transaction('kv', 'readonly').objectStore('kv').get(key);
+                req.onsuccess = () => resolve(req.result ?? null);
+                req.onerror = () => reject(req.error);
+            });
+        } catch { return null; }
+    }
+
+    async function _bigCacheSet(key, val) {
+        try {
+            const db = await _openBigCacheDb();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction('kv', 'readwrite');
+                tx.objectStore('kv').put(val, key);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            return true;
+        } catch (e) {
+            console.warn('[Cache] IndexedDB save failed:', key, e.message);
+            return false;
+        }
+    }
+
+    async function _migrateLargeCacheToIdb() {
+        const keys = ['_tags_cache', '_tags_ver', '_series_cache', '_series_cache_ts'];
+        for (const key of keys) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) continue;
+                const val = (key === '_tags_cache' || key === '_series_cache')
+                    ? JSON.parse(raw)
+                    : (key === '_series_cache_ts' ? parseInt(raw, 10) || 0 : raw);
+                await _bigCacheSet(key, val);
+                localStorage.removeItem(key);
+            } catch { /* ignore */ }
+        }
+    }
+
     function _injectArtistGroup() {
         tagData = tagData.filter(g => !g._isArtistGroup);
         const artistGroup = {
@@ -2135,29 +2193,21 @@
         return true;
     }
 
-    function _loadSeriesFromLocalCache() {
-        try {
-            const raw = localStorage.getItem('_series_cache');
-            if (!raw) return false;
-            return _applySeriesListToTagData(JSON.parse(raw));
-        } catch {
-            return false;
-        }
+    async function _loadSeriesFromLocalCache() {
+        const seriesList = await _bigCacheGet('_series_cache');
+        if (!seriesList || !Array.isArray(seriesList) || !seriesList.length) return false;
+        return _applySeriesListToTagData(seriesList);
     }
 
-    function _saveSeriesLocalCache(seriesList) {
-        try {
-            const compact = seriesList.map(s => ({
-                id: s.id,
-                name: s.name,
-                count: s.count,
-                cover_url: s.cover_url || null,
-            }));
-            localStorage.setItem('_series_cache', JSON.stringify(compact));
-            localStorage.setItem('_series_cache_ts', String(Date.now()));
-        } catch (e) {
-            console.warn('[D1] series cache save failed:', e.message);
-        }
+    async function _saveSeriesLocalCache(seriesList) {
+        const compact = seriesList.map(s => ({
+            id: s.id,
+            name: s.name,
+            count: s.count,
+            cover_url: s.cover_url || null,
+        }));
+        await _bigCacheSet('_series_cache', compact);
+        await _bigCacheSet('_series_cache_ts', Date.now());
     }
 
     async function _loadSeriesFromApi(forceRefresh = false) {
@@ -2179,7 +2229,7 @@
             if (!res.ok) return false;
             const seriesList = await res.json();
             _applySeriesListToTagData(seriesList);
-            _saveSeriesLocalCache(seriesList);
+            await _saveSeriesLocalCache(seriesList);
             console.log(`[D1] Loaded ${seriesList.length} series from database`);
             return true;
         } catch (e) {
@@ -2196,23 +2246,21 @@
             const res = await fetch('tags.json');
             if (res.ok) {
                 const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
-                const cachedVer = localStorage.getItem('_tags_ver') || '';
+                const cachedVer = (await _bigCacheGet('_tags_ver')) || '';
                 if (currentVer && currentVer !== cachedVer) {
                     const newData = await res.json();
                     tagData = newData;
-                    try {
-                        localStorage.setItem('_tags_cache', JSON.stringify(tagData));
-                        localStorage.setItem('_tags_ver', currentVer);
-                    } catch { /* ignore */ }
+                    await _bigCacheSet('_tags_cache', tagData);
+                    await _bigCacheSet('_tags_ver', currentVer);
                     _charGroupIdx = tagData.findIndex(g => g.name === '人物');
-                    _loadSeriesFromLocalCache();
+                    await _loadSeriesFromLocalCache();
                     _injectArtistGroup();
                     tagsChanged = true;
                 }
             }
         } catch { /* offline — keep cache */ }
 
-        const cacheTs = parseInt(localStorage.getItem('_series_cache_ts') || '0', 10);
+        const cacheTs = (await _bigCacheGet('_series_cache_ts')) || 0;
         const seriesStale = !cacheTs || Date.now() - cacheTs > SERIES_CACHE_MAX_AGE;
         const seriesChanged = seriesStale ? await _loadSeriesFromApi(true) : false;
         if (tagsChanged || seriesChanged) {
@@ -2225,13 +2273,11 @@
     }
 
     async function loadTags() {
-        const cached = localStorage.getItem('_tags_cache');
-        if (cached) {
-            try {
-                tagData = JSON.parse(cached);
-            } catch {
-                tagData = [];
-            }
+        await _migrateLargeCacheToIdb();
+
+        const cached = await _bigCacheGet('_tags_cache');
+        if (cached && Array.isArray(cached) && cached.length) {
+            tagData = cached;
         }
 
         if (!tagData.length) {
@@ -2239,12 +2285,8 @@
                 const res = await fetch('tags.json');
                 tagData = await res.json();
                 const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
-                try {
-                    localStorage.setItem('_tags_cache', JSON.stringify(tagData));
-                    if (currentVer) localStorage.setItem('_tags_ver', currentVer);
-                } catch (storageErr) {
-                    console.warn('localStorage full, skipping cache');
-                }
+                await _bigCacheSet('_tags_cache', tagData);
+                if (currentVer) await _bigCacheSet('_tags_ver', currentVer);
             } catch (e) {
                 console.warn('标签数据加载失败:', e);
                 tagData = tagData || [];
@@ -2252,7 +2294,7 @@
         }
 
         _charGroupIdx = tagData.findIndex(g => g.name === '人物');
-        _loadSeriesFromLocalCache();
+        await _loadSeriesFromLocalCache();
         _injectArtistGroup();
 
         _refreshTagsAndSeriesInBackground();
@@ -3450,23 +3492,23 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        await Promise.all([
-            loadCheckpoints(),
-            loadSamplers(),
-            loadVAEs(),
-            loadLoRAs(),
-            loadControlNets(),
-            loadIPAdapterModels(),
-            loadTags(),
-            loadAnimaModels(),
-        ]);
+        await loadTags();
         renderHistory();
         setupTagPickers();
         setupMobileTagsMount();
         setupMobileArtistNav();
         setupMobileCharBrowser();
         renderMobileSeriesList('');
-        updateArchAwarePanels();
+
+        Promise.all([
+            loadCheckpoints(),
+            loadSamplers(),
+            loadVAEs(),
+            loadLoRAs(),
+            loadControlNets(),
+            loadIPAdapterModels(),
+            loadAnimaModels(),
+        ]).then(() => updateArchAwarePanels());
     }
 
     // ==================== 手机端角色全屏浏览 ====================
