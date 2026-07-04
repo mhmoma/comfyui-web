@@ -2533,7 +2533,7 @@ textarea {
     .char-series-grid {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
         align-content: flex-start;
     }
 
@@ -2546,12 +2546,12 @@ textarea {
     .char-series-card {
         display: flex;
         flex-direction: column;
-        width: calc((100% - 16px) / 3);
-        flex: 0 0 calc((100% - 16px) / 3);
+        width: calc((100% - 30px) / 6);
+        flex: 0 0 calc((100% - 30px) / 6);
         min-width: 0;
         padding: 0;
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 6px;
         background: var(--bg-input);
         overflow: hidden;
         cursor: pointer;
@@ -2561,8 +2561,9 @@ textarea {
     }
 
     .char-series-grid-recent .char-series-card {
-        width: 108px;
-        flex: 0 0 108px;
+        width: calc((100vw - 52px) / 6);
+        flex: 0 0 calc((100vw - 52px) / 6);
+        max-width: 64px;
     }
 
     .char-series-card:active {
@@ -2573,14 +2574,14 @@ textarea {
     .char-series-cover {
         position: relative;
         width: 100%;
-        height: 96px;
+        height: 52px;
         background: #2a2a42;
         overflow: hidden;
         flex-shrink: 0;
     }
 
     .char-series-grid-recent .char-series-cover {
-        height: 88px;
+        height: 48px;
     }
 
     .char-series-cover-img {
@@ -2629,22 +2630,54 @@ textarea {
 
     .char-series-name {
         display: block;
-        font-size: 0.68rem;
+        font-size: 0.52rem;
         font-weight: 600;
-        padding: 5px 4px 1px;
+        padding: 3px 2px 0;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         color: var(--text-primary);
-        line-height: 1.25;
+        line-height: 1.2;
     }
 
     .char-series-count {
         display: block;
-        font-size: 0.55rem;
+        font-size: 0.46rem;
         color: var(--text-secondary);
-        padding: 0 4px 6px;
-        line-height: 1.2;
+        padding: 0 2px 4px;
+        line-height: 1.15;
+    }
+
+    .char-series-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex-shrink: 0;
+        padding: 8px 10px 10px;
+        border-top: 1px solid var(--border);
+        background: var(--bg-panel);
+    }
+
+    .char-series-pagination button {
+        padding: 6px 10px;
+        font-size: 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--bg-input);
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+
+    .char-series-pagination button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .char-series-pagination .page-info {
+        font-size: 11px;
+        color: var(--text-secondary);
+        white-space: nowrap;
     }
 
     .char-panel-hint {

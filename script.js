@@ -2095,7 +2095,8 @@
         if (!group) return false;
 
         const hasDbSeries = group.subgroups.some(s => s && s._seriesId);
-        if (hasDbSeries && group.subgroups.some(s => s._seriesId && s._coverUrl !== undefined)) {
+        const seriesSubs = group.subgroups.filter(s => s && s._seriesId);
+        if (hasDbSeries && seriesSubs.length && seriesSubs.every(s => s._coverUrl !== undefined)) {
             return true;
         }
 
@@ -3395,6 +3396,9 @@
 
     // ==================== 手机端角色全屏浏览 ====================
     const _charBrowserState = { seriesId: null, seriesName: '', page: 1, query: '', allTags: [] };
+    const _seriesListState = { page: 1, filter: '' };
+    const _SERIES_PAGE_SIZE = 120;
+    const _SERIES_RECENT_MAX = 8;
 
     function _rememberRecentSeries(seriesId) {
         try {
@@ -3402,7 +3406,7 @@
             let list = JSON.parse(localStorage.getItem(key) || '[]');
             list = list.filter(id => id !== seriesId);
             list.unshift(seriesId);
-            if (list.length > 8) list.length = 8;
+            if (list.length > _SERIES_RECENT_MAX) list.length = _SERIES_RECENT_MAX;
             localStorage.setItem(key, JSON.stringify(list));
         } catch { /* ignore */ }
     }
@@ -3560,8 +3564,7 @@
 
     let _seriesCoverObserver = null;
     function _observeSeriesCoverImages(imgList) {
-        const root = document.getElementById('char-series-scroll');
-        if (!root || !imgList.length) return;
+        if (!imgList.length) return;
         if (!_seriesCoverObserver) {
             _seriesCoverObserver = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
@@ -3583,9 +3586,40 @@
                     };
                     img.src = src;
                 });
-            }, { root, rootMargin: '120px' });
+            }, { root: null, rootMargin: '200px' });
         }
         imgList.forEach(img => { if (img) _seriesCoverObserver.observe(img); });
+    }
+
+    function _renderSeriesPagination(total, totalPages) {
+        const nav = document.getElementById('char-series-pagination');
+        if (!nav) return;
+        nav.innerHTML = '';
+        if (totalPages <= 1) return;
+
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.textContent = '← 上一页';
+        prevBtn.disabled = _seriesListState.page <= 1;
+        prevBtn.addEventListener('click', () => {
+            _seriesListState.page--;
+            renderMobileSeriesList(_seriesListState.filter, { keepPage: true });
+        });
+
+        const info = document.createElement('span');
+        info.className = 'page-info';
+        info.textContent = `第 ${_seriesListState.page} / ${totalPages} 页（共 ${total} 个作品）`;
+
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.textContent = '下一页 →';
+        nextBtn.disabled = _seriesListState.page >= totalPages;
+        nextBtn.addEventListener('click', () => {
+            _seriesListState.page++;
+            renderMobileSeriesList(_seriesListState.filter, { keepPage: true });
+        });
+
+        nav.append(prevBtn, info, nextBtn);
     }
 
     function _createSeriesCard(series) {
@@ -3608,6 +3642,7 @@
         } else {
             const fb = document.createElement('div');
             fb.className = 'char-series-cover-fallback';
+            fb.style.display = 'flex';
             fb.textContent = '📁';
             coverEl.appendChild(fb);
         }
@@ -3637,7 +3672,7 @@
         container.appendChild(grid);
     }
 
-    function renderMobileSeriesList(filter) {
+    function renderMobileSeriesList(filter, options = {}) {
         const scroll = document.getElementById('char-series-scroll');
         if (!scroll) return;
 
@@ -3645,23 +3680,30 @@
             _charGroupIdx = tagData.findIndex(g => g.name === '人物');
         }
 
-        const q = (filter || '').toLowerCase().trim();
+        const q = (filter ?? _seriesListState.filter ?? '').toLowerCase().trim();
+        if (!options.keepPage && q !== _seriesListState.filter) {
+            _seriesListState.page = 1;
+        }
+        _seriesListState.filter = q;
+
         let subs = (_charGroupIdx >= 0 ? tagData[_charGroupIdx]?.subgroups : []) || [];
         subs = subs.filter(s => s && s._seriesId);
 
         if (!subs.length) {
             scroll.innerHTML = '<div class="char-browser-empty">正在加载作品列表…<br><small>共 800+ 个作品，请稍候</small></div>';
+            _renderSeriesPagination(0, 1);
             _loadSeriesFromApi().then(ok => {
-                if (ok) renderMobileSeriesList(filter);
+                if (ok) renderMobileSeriesList(q, options);
                 else scroll.innerHTML = '<div class="char-browser-empty">作品列表加载失败<br><small>请检查网络后刷新页面；线上版需访问已部署站点</small></div>';
             });
             return;
         }
 
-        if (!subs.some(s => s._coverUrl !== undefined)) {
+        if (!subs.every(s => s._coverUrl !== undefined)) {
             scroll.innerHTML = '<div class="char-browser-empty">正在加载作品封面…</div>';
+            _renderSeriesPagination(0, 1);
             _loadSeriesFromApi().then(ok => {
-                if (ok) renderMobileSeriesList(filter);
+                if (ok) renderMobileSeriesList(q, options);
             });
             return;
         }
@@ -3669,13 +3711,20 @@
         let list = subs;
         if (q) list = subs.filter(s => s.name.toLowerCase().includes(q));
 
+        const totalPages = Math.max(1, Math.ceil(list.length / _SERIES_PAGE_SIZE));
+        if (_seriesListState.page > totalPages) _seriesListState.page = totalPages;
+        if (_seriesListState.page < 1) _seriesListState.page = 1;
+        const pageStart = (_seriesListState.page - 1) * _SERIES_PAGE_SIZE;
+        const pageList = list.slice(pageStart, pageStart + _SERIES_PAGE_SIZE);
+
         let recentIds = [];
         try { recentIds = JSON.parse(localStorage.getItem('comfyui_recent_series') || '[]'); } catch { /* ignore */ }
+        recentIds = recentIds.slice(0, _SERIES_RECENT_MAX);
 
         scroll.innerHTML = '';
         const lazyImages = [];
 
-        if (!q && recentIds.length) {
+        if (!q && _seriesListState.page === 1 && recentIds.length) {
             const recentLabel = document.createElement('div');
             recentLabel.className = 'char-series-section-label';
             recentLabel.textContent = '最近浏览';
@@ -3703,20 +3752,26 @@
 
         const allLabel = document.createElement('div');
         allLabel.className = 'char-series-section-label';
-        allLabel.textContent = q ? `搜索结果（${list.length}）` : `全部作品（${list.length}）`;
+        allLabel.textContent = q
+            ? `搜索结果（${list.length}）`
+            : `全部作品（${list.length}）· 第 ${_seriesListState.page}/${totalPages} 页`;
         scroll.appendChild(allLabel);
 
-        if (!list.length) {
+        if (!pageList.length) {
             const empty = document.createElement('div');
             empty.className = 'char-browser-empty';
             empty.textContent = '未找到匹配作品';
             scroll.appendChild(empty);
+            _renderSeriesPagination(list.length, totalPages);
             if (lazyImages.length) _observeSeriesCoverImages(lazyImages);
             return;
         }
 
-        _appendSeriesGrid(scroll, list, lazyImages);
+        _appendSeriesGrid(scroll, pageList, lazyImages);
         if (lazyImages.length) _observeSeriesCoverImages(lazyImages);
+        _renderSeriesPagination(list.length, totalPages);
+
+        if (options.keepPage) scroll.scrollTop = 0;
     }
 
     function setupMobileCharBrowser() {
@@ -3743,7 +3798,7 @@
             let debounce;
             seriesSearch.addEventListener('input', () => {
                 clearTimeout(debounce);
-                debounce = setTimeout(() => renderMobileSeriesList(seriesSearch.value), 200);
+                debounce = setTimeout(() => renderMobileSeriesList(seriesSearch.value, { keepPage: false }), 200);
             });
         }
     }
