@@ -4705,7 +4705,7 @@ textarea {
     display: none !important;
 }
 
-/* ==================== Character Browser — final layout (must stay last) ==================== */
+/* ==================== Character Browser — isolated layout (must stay last) ==================== */
 .char-browser-overlay .char-browser-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -4713,63 +4713,91 @@ textarea {
     align-content: start;
 }
 
-.char-browser-overlay .char-browser-grid .tag-item.tag-char,
-.char-browser-overlay .char-browser-grid .char-browser-card {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: stretch !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    flex-basis: auto !important;
-    flex-grow: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
+.char-browser-overlay .char-browser-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
     border-radius: 8px;
     background: var(--bg-input);
     border: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.char-browser-overlay .char-browser-card.selected {
+    background: rgba(233, 69, 96, 0.15);
+    border-color: var(--accent);
 }
 
 .char-browser-overlay .char-browser-thumb {
     position: relative;
     width: 100%;
-    aspect-ratio: 3 / 4;
-    min-height: 160px;
+    height: 0;
+    padding-bottom: 133.333%;
     flex-shrink: 0;
     background: var(--bg-input);
     overflow: hidden;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
 }
 
-.char-browser-overlay .char-browser-thumb .tag-thumb {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100% !important;
-    max-height: 100% !important;
-    object-fit: contain !important;
-    object-position: top center !important;
-    border: none !important;
-    flex-shrink: 0 !important;
-    background: transparent !important;
+.char-browser-overlay .char-browser-thumb .char-browser-img,
+.char-browser-overlay .char-browser-thumb .thumb-skeleton {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }
 
-.char-browser-overlay .char-browser-thumb .thumb-skeleton,
-.char-browser-overlay .tag-item.tag-char .char-browser-thumb .thumb-skeleton {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
+.char-browser-overlay .char-browser-thumb .char-browser-img {
+    object-fit: contain;
+    object-position: top center;
+    background: var(--bg-input);
+    transition: opacity 0.3s ease;
+}
+
+.char-browser-overlay .char-browser-thumb .char-browser-img.img-loading {
+    opacity: 0;
+}
+
+.char-browser-overlay .char-browser-thumb .char-browser-img.img-loaded {
+    opacity: 1;
+}
+
+.char-browser-overlay .char-browser-thumb .thumb-skeleton {
+    background: linear-gradient(90deg, var(--bg-input) 25%, var(--border-subtle) 50%, var(--bg-input) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
     border-radius: 8px 8px 0 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
 
-.char-browser-overlay .char-browser-thumb .tag-fav-star {
+.char-browser-overlay .char-browser-thumb .thumb-skeleton.hide {
+    opacity: 0;
+}
+
+.char-browser-overlay .char-browser-fav {
     position: absolute;
     top: 6px;
     left: 6px;
     z-index: 2;
+    font-size: 18px;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.char-browser-overlay .char-browser-fav.fav-active {
+    color: #fbbf24;
+    background: rgba(0, 0, 0, 0.6);
 }
 
 .char-browser-overlay .char-browser-info {
@@ -4779,9 +4807,8 @@ textarea {
     border-top: 1px solid var(--border);
 }
 
-.char-browser-overlay .char-browser-grid .tag-desc,
-.char-browser-overlay .char-browser-info .tag-desc {
-    display: block !important;
+.char-browser-overlay .char-browser-name {
+    display: block;
     font-size: 0.82rem;
     font-weight: 600;
     white-space: nowrap;
@@ -4794,9 +4821,8 @@ textarea {
     line-height: 1.25;
 }
 
-.char-browser-overlay .char-browser-grid .tag-text,
-.char-browser-overlay .char-browser-info .tag-text {
-    display: block !important;
+.char-browser-overlay .char-browser-trigger {
+    display: block;
     font-size: 0.62rem;
     white-space: nowrap;
     overflow: hidden;
@@ -4814,8 +4840,8 @@ textarea {
     animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
-.char-browser-overlay .char-browser-skeleton .tag-desc,
-.char-browser-overlay .char-browser-skeleton .tag-text {
+.char-browser-overlay .char-browser-skeleton .char-browser-name,
+.char-browser-overlay .char-browser-skeleton .char-browser-trigger {
     color: transparent;
     background: var(--bg-panel);
     border-radius: 4px;

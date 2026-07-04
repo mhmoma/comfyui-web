@@ -3389,11 +3389,51 @@
         nav.append(prevBtn, info, nextBtn);
     }
 
+    function _createCharBrowserCard(tag, isSelected, isFav) {
+        const div = document.createElement('div');
+        div.className = 'char-browser-card' + (isSelected ? ' selected' : '');
+        div.dataset.tag = tag.t;
+
+        const thumb = document.createElement('div');
+        thumb.className = 'char-browser-thumb';
+
+        const skel = document.createElement('div');
+        skel.className = 'thumb-skeleton';
+        thumb.appendChild(skel);
+
+        const img = document.createElement('img');
+        img.className = 'char-browser-img img-loading';
+        if (tag.th) img.dataset.src = tag.th;
+        img.alt = tag.d || tag.t.split(',')[0];
+        thumb.appendChild(img);
+
+        const star = document.createElement('span');
+        star.className = 'char-browser-fav' + (isFav ? ' fav-active' : '');
+        star.title = '收藏';
+        star.textContent = '★';
+        thumb.appendChild(star);
+
+        const info = document.createElement('div');
+        info.className = 'char-browser-info';
+
+        const desc = document.createElement('span');
+        desc.className = 'char-browser-name';
+        desc.textContent = tag.d || tag.t.split(',')[0];
+
+        const text = document.createElement('span');
+        text.className = 'char-browser-trigger';
+        text.textContent = tag.t.split(',')[0];
+
+        info.append(desc, text);
+        div.append(thumb, info);
+        return div;
+    }
+
     async function _renderCharBrowserGrid(showLoading) {
         const grid = document.getElementById('char-browser-grid');
         if (!grid) return;
         if (showLoading) {
-            grid.innerHTML = Array(6).fill('<div class="tag-item tag-char char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div><div class="char-browser-info"><span class="tag-desc">&nbsp;</span><span class="tag-text">&nbsp;</span></div></div>').join('');
+            grid.innerHTML = Array(6).fill('<div class="char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div><div class="char-browser-info"><span class="char-browser-name">&nbsp;</span><span class="char-browser-trigger">&nbsp;</span></div></div>').join('');
         }
 
         const tags = await _fetchSeriesChars(_charBrowserState.seriesId);
@@ -3410,15 +3450,13 @@
         const selected = posTagPicker ? posTagPicker.getSelectedTags() : new Set();
         const lazyImages = [];
         items.forEach(tag => {
-            const div = document.createElement('div');
             const isSelected = selected.has(tag.t);
             const isFav = FavManager.has(tag.t);
-            div.className = 'tag-item tag-char char-browser-card' + (isSelected ? ' selected' : '');
-            div.dataset.tag = tag.t;
-            div.innerHTML = `<div class="char-browser-thumb"><div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span></div><div class="char-browser-info"><span class="tag-desc">${tag.d || tag.t.split(',')[0]}</span><span class="tag-text">${tag.t.split(',')[0]}</span></div>`;
-            lazyImages.push(div.querySelector('img.tag-thumb'));
+            const div = _createCharBrowserCard(tag, isSelected, isFav);
+            const img = div.querySelector('img.char-browser-img');
+            if (img) lazyImages.push(img);
             div.addEventListener('click', (e) => {
-                if (e.target.classList.contains('tag-fav-star')) {
+                if (e.target.classList.contains('char-browser-fav')) {
                     e.stopPropagation();
                     FavManager.toggle(tag);
                     _renderCharBrowserGrid(false);
