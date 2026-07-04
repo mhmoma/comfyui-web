@@ -2615,19 +2615,12 @@ textarea {
         min-height: 0;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-auto-rows: auto;
-        align-items: start;
-        gap: 10px;
         padding: 10px;
-        align-content: start;
+        align-content: flex-start;
     }
 
     .char-browser-grid .char-browser-card {
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: none !important;
+        box-sizing: border-box;
     }
 
     .char-browser-pagination {
@@ -2671,15 +2664,8 @@ textarea {
         color: var(--text-secondary);
         font-size: 14px;
         width: 100%;
-        grid-column: 1 / -1;
     }
 
-    @media (min-width: 768px) {
-        .char-browser-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-        }
-    }
     .main.mobile-tab-create .sidebar,
     .main.mobile-tab-create .history-panel {
         display: none !important;
@@ -4708,28 +4694,28 @@ textarea {
     display: none !important;
 }
 
-/* ==================== Character Browser — isolated layout (must stay last) ==================== */
+/* ==================== Character Browser — flex 双列完整卡片（must stay last） ==================== */
 .char-browser-overlay .char-browser-grid {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    grid-auto-rows: auto;
-    gap: 10px;
-    align-content: start;
-    align-items: start;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px;
+    align-content: flex-start;
 }
 
 .char-browser-overlay .char-browser-card {
     display: flex;
     flex-direction: column;
-    width: 100%;
+    width: calc((100% - 8px) / 2) !important;
+    flex: 0 0 calc((100% - 8px) / 2) !important;
     min-width: 0;
-    min-height: 0;
+    min-height: 232px !important;
     padding: 0;
     overflow: hidden;
     border-radius: 8px;
     background: var(--bg-input);
     border: 1px solid var(--border);
     cursor: pointer;
+    box-sizing: border-box;
 }
 
 .char-browser-overlay .char-browser-card.selected {
@@ -4737,12 +4723,11 @@ textarea {
     border-color: var(--accent);
 }
 
-/* aspect-ratio 固定竖向缩略区；勿用 height:0+padding-bottom（border-box 下高度会塌成 0） */
 .char-browser-overlay .char-browser-thumb {
     position: relative;
     width: 100%;
-    aspect-ratio: 3 / 4;
-    min-height: 148px;
+    height: 190px !important;
+    min-height: 190px !important;
     flex-shrink: 0;
     background: var(--bg-input);
     overflow: hidden;
@@ -4813,7 +4798,7 @@ textarea {
     width: 100%;
     background: var(--bg-input);
     border-top: 1px solid var(--border);
-    min-height: 38px;
+    min-height: 40px;
 }
 
 .char-browser-overlay .char-browser-name {
@@ -4859,11 +4844,13 @@ textarea {
 }
 
 @media (min-width: 768px) {
-    .char-browser-overlay .char-browser-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    .char-browser-overlay .char-browser-card {
+        width: calc((100% - 16px) / 3) !important;
+        flex: 0 0 calc((100% - 16px) / 3) !important;
     }
 
     .char-browser-overlay .char-browser-thumb {
-        min-height: 180px;
+        height: 210px !important;
+        min-height: 210px !important;
     }
 }

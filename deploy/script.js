@@ -2234,6 +2234,34 @@
         return _imgObserver;
     }
 
+    let _charGridImgObserver = null;
+    function _observeCharBrowserImages(imgList) {
+        const root = document.getElementById('char-browser-grid');
+        if (!root || !imgList.length) return;
+        if (!_charGridImgObserver) {
+            _charGridImgObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    const img = entry.target;
+                    const src = img.dataset.src;
+                    if (!src) return;
+                    _charGridImgObserver.unobserve(img);
+                    img.onload = () => {
+                        img.classList.remove('img-loading');
+                        img.classList.add('img-loaded');
+                        img.parentElement?.querySelector('.thumb-skeleton')?.classList.add('hide');
+                    };
+                    img.onerror = () => {
+                        img.style.display = 'none';
+                        img.parentElement?.querySelector('.thumb-skeleton')?.classList.add('hide');
+                    };
+                    img.src = src;
+                });
+            }, { root, rootMargin: '160px' });
+        }
+        imgList.forEach(img => { if (img) _charGridImgObserver.observe(img); });
+    }
+
     function _observeLazyImages(imgList) {
         const obs = _getImgObserver();
         imgList.forEach(img => { if (img) obs.observe(img); });
@@ -3466,7 +3494,7 @@
             });
             grid.appendChild(div);
         });
-        if (lazyImages.length) _observeLazyImages(lazyImages);
+        if (lazyImages.length) _observeCharBrowserImages(lazyImages);
         _renderCharBrowserPagination(total, totalPages);
     }
 
