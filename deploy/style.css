@@ -2627,29 +2627,6 @@ textarea {
         max-width: none !important;
     }
 
-    .char-browser-grid .tag-thumb {
-        height: 120px !important;
-        object-fit: contain !important;
-        object-position: center top !important;
-        background: var(--bg-input);
-    }
-
-    .char-browser-grid .tag-item.tag-char .tag-desc {
-        font-size: 0.72rem;
-        padding: 4px 3px 2px;
-        line-height: 1.2;
-    }
-
-    .char-browser-grid .tag-item.tag-char .tag-text {
-        font-size: 0.58rem;
-        padding: 0 3px 5px;
-        line-height: 1.2;
-    }
-
-    .char-browser-grid .tag-item.tag-char .thumb-skeleton {
-        height: 120px !important;
-    }
-
     .char-browser-pagination {
         display: flex;
         flex-wrap: wrap;
@@ -2698,10 +2675,6 @@ textarea {
         .char-browser-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
-        }
-
-        .char-browser-grid .tag-thumb {
-            height: 140px !important;
         }
     }
     .main.mobile-tab-create .sidebar,
@@ -4732,11 +4705,12 @@ textarea {
     display: none !important;
 }
 
-/* ==================== Character Browser — thumb area (must stay last) ==================== */
+/* ==================== Character Browser — final layout (must stay last) ==================== */
 .char-browser-overlay .char-browser-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px;
+    align-content: start;
 }
 
 .char-browser-overlay .char-browser-grid .tag-item.tag-char,
@@ -4750,17 +4724,23 @@ textarea {
     flex-basis: auto !important;
     flex-grow: 0 !important;
     padding: 0 !important;
-    overflow: hidden;
+    overflow: visible !important;
     border-radius: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
 }
 
 .char-browser-overlay .char-browser-thumb {
     position: relative;
     width: 100%;
     aspect-ratio: 3 / 4;
+    min-height: 160px;
     flex-shrink: 0;
     background: var(--bg-input);
     overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
 }
 
 .char-browser-overlay .char-browser-thumb .tag-thumb {
@@ -4770,15 +4750,16 @@ textarea {
     max-width: 100% !important;
     max-height: 100% !important;
     object-fit: contain !important;
-    object-position: center top !important;
+    object-position: top center !important;
     border: none !important;
     flex-shrink: 0 !important;
-    background: var(--bg-input);
+    background: transparent !important;
 }
 
-.char-browser-overlay .char-browser-thumb .thumb-skeleton {
-    position: absolute;
-    inset: 0;
+.char-browser-overlay .char-browser-thumb .thumb-skeleton,
+.char-browser-overlay .tag-item.tag-char .char-browser-thumb .thumb-skeleton {
+    position: absolute !important;
+    inset: 0 !important;
     width: 100% !important;
     height: 100% !important;
     border-radius: 8px 8px 0 0;
@@ -4791,7 +4772,15 @@ textarea {
     z-index: 2;
 }
 
-.char-browser-overlay .char-browser-grid .tag-desc {
+.char-browser-overlay .char-browser-info {
+    flex-shrink: 0;
+    width: 100%;
+    background: var(--bg-input);
+    border-top: 1px solid var(--border);
+}
+
+.char-browser-overlay .char-browser-grid .tag-desc,
+.char-browser-overlay .char-browser-info .tag-desc {
     display: block !important;
     font-size: 0.82rem;
     font-weight: 600;
@@ -4802,11 +4791,11 @@ textarea {
     text-align: center;
     padding: 6px 6px 2px;
     color: var(--text-primary);
-    flex-shrink: 0;
     line-height: 1.25;
 }
 
-.char-browser-overlay .char-browser-grid .tag-text {
+.char-browser-overlay .char-browser-grid .tag-text,
+.char-browser-overlay .char-browser-info .tag-text {
     display: block !important;
     font-size: 0.62rem;
     white-space: nowrap;
@@ -4814,9 +4803,8 @@ textarea {
     text-overflow: ellipsis;
     width: 100%;
     text-align: center;
-    padding: 0 6px 6px;
+    padding: 0 6px 8px;
     color: var(--text-secondary);
-    flex-shrink: 0;
     line-height: 1.25;
 }
 
@@ -4829,7 +4817,7 @@ textarea {
 .char-browser-overlay .char-browser-skeleton .tag-desc,
 .char-browser-overlay .char-browser-skeleton .tag-text {
     color: transparent;
-    background: var(--bg-input);
+    background: var(--bg-panel);
     border-radius: 4px;
     margin: 4px 8px;
     min-height: 10px;

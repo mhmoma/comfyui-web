@@ -2372,6 +2372,14 @@
                 const maxSub = tagData[_artistGroupIdx]?.subgroups?.length || 0;
                 if (this.subIdx < 0 || this.subIdx >= maxSub) this.subIdx = 0;
                 this._virtualMode = null;
+                this._searchMode = 'tag';
+                this.searchEl.value = '';
+                if (this.searchModeBtn) {
+                    this.searchModeBtn.textContent = '标签';
+                    this.searchModeBtn.classList.remove('mode-category');
+                }
+                this.searchEl.placeholder = '搜索标签...';
+                _artistPage = 1;
             }
         }
 
@@ -2570,7 +2578,8 @@
                 return;
             }
 
-            const search = this._searchMode === 'category' ? '' : this.searchEl.value.toLowerCase();
+            const mobileCtx = this._getMobileTabContext();
+            const search = (mobileCtx === 'artists' || this._searchMode === 'category') ? '' : this.searchEl.value.toLowerCase();
             let items;
             if (search) {
                 if (this.groupIdx === _artistGroupIdx) {
@@ -3384,7 +3393,7 @@
         const grid = document.getElementById('char-browser-grid');
         if (!grid) return;
         if (showLoading) {
-            grid.innerHTML = Array(6).fill('<div class="tag-item tag-char char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div><span class="tag-desc">&nbsp;</span><span class="tag-text">&nbsp;</span></div>').join('');
+            grid.innerHTML = Array(6).fill('<div class="tag-item tag-char char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div><div class="char-browser-info"><span class="tag-desc">&nbsp;</span><span class="tag-text">&nbsp;</span></div></div>').join('');
         }
 
         const tags = await _fetchSeriesChars(_charBrowserState.seriesId);
@@ -3406,7 +3415,7 @@
             const isFav = FavManager.has(tag.t);
             div.className = 'tag-item tag-char char-browser-card' + (isSelected ? ' selected' : '');
             div.dataset.tag = tag.t;
-            div.innerHTML = `<div class="char-browser-thumb"><div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span></div><span class="tag-desc">${tag.d || tag.t.split(',')[0]}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
+            div.innerHTML = `<div class="char-browser-thumb"><div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span></div><div class="char-browser-info"><span class="tag-desc">${tag.d || tag.t.split(',')[0]}</span><span class="tag-text">${tag.t.split(',')[0]}</span></div>`;
             lazyImages.push(div.querySelector('img.tag-thumb'));
             div.addEventListener('click', (e) => {
                 if (e.target.classList.contains('tag-fav-star')) {
@@ -3609,6 +3618,11 @@
             posCollapse?.classList.remove('mobile-tags-hidden');
             negCollapse?.classList.add('mobile-tags-hidden');
             document.getElementById('tag-picker-pos')?.classList.remove('hidden');
+            if (posTagPicker) {
+                posTagPicker._searchMode = 'tag';
+                posTagPicker.searchEl.value = '';
+                _artistPage = 1;
+            }
             posTagPicker?._ensureValidGroupForMobile();
             syncMobileArtistNav(posTagPicker?.subIdx ?? 0);
             posTagPicker?.render();
