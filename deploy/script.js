@@ -3384,7 +3384,7 @@
         const grid = document.getElementById('char-browser-grid');
         if (!grid) return;
         if (showLoading) {
-            grid.innerHTML = Array(6).fill('<div class="tag-item tag-char char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div></div>').join('');
+            grid.innerHTML = Array(6).fill('<div class="tag-item tag-char char-browser-card char-browser-skeleton"><div class="char-browser-thumb"></div><span class="tag-desc">&nbsp;</span><span class="tag-text">&nbsp;</span></div>').join('');
         }
 
         const tags = await _fetchSeriesChars(_charBrowserState.seriesId);
@@ -3406,7 +3406,7 @@
             const isFav = FavManager.has(tag.t);
             div.className = 'tag-item tag-char char-browser-card' + (isSelected ? ' selected' : '');
             div.dataset.tag = tag.t;
-            div.innerHTML = `<div class="char-browser-thumb"><div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"></div><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
+            div.innerHTML = `<div class="char-browser-thumb"><div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="收藏">★</span></div><span class="tag-desc">${tag.d || tag.t.split(',')[0]}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
             lazyImages.push(div.querySelector('img.tag-thumb'));
             div.addEventListener('click', (e) => {
                 if (e.target.classList.contains('tag-fav-star')) {
