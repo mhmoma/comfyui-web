@@ -2032,6 +2032,7 @@
     const _charCache = {};
     const _CACHE_MAX = 50;
     let _charGroupIdx = -1;
+    let _seriesCharCounts = null;
     const CHAR_BASE_SUBS = 1;
     let _charPage = 1;
     const CHARS_PER_PAGE = 100;
@@ -2160,6 +2161,45 @@
         _artistGroupIdx = tagData.length - 1;
     }
 
+    function _resolveSeriesCharCount(seriesId) {
+        if (_seriesCharCounts && Object.prototype.hasOwnProperty.call(_seriesCharCounts, seriesId)) {
+            return _seriesCharCounts[seriesId];
+        }
+        return 0;
+    }
+
+    function _patchSeriesCountsOnTagData() {
+        if (_charGroupIdx < 0 || !_seriesCharCounts) return;
+        const group = tagData[_charGroupIdx];
+        if (!group?.subgroups) return;
+        group.subgroups.forEach(sub => {
+            if (sub?._seriesId) sub._seriesCount = _resolveSeriesCharCount(sub._seriesId);
+        });
+    }
+
+    async function _loadSeriesCharCounts() {
+        const cached = await _bigCacheGet('_series_char_counts');
+        if (cached && typeof cached === 'object') {
+            _seriesCharCounts = cached;
+            _patchSeriesCountsOnTagData();
+        }
+        try {
+            const res = await fetch('series_char_counts.json');
+            if (!res.ok) return false;
+            const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
+            const cachedVer = (await _bigCacheGet('_series_char_counts_ver')) || '';
+            if (currentVer && currentVer === cachedVer && _seriesCharCounts) return false;
+            const data = await res.json();
+            _seriesCharCounts = data;
+            await _bigCacheSet('_series_char_counts', data);
+            if (currentVer) await _bigCacheSet('_series_char_counts_ver', currentVer);
+            _patchSeriesCountsOnTagData();
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     function _applySeriesListToTagData(seriesList) {
         if (_charGroupIdx < 0) {
             _charGroupIdx = tagData.findIndex(g => g.name === '人物');
@@ -2176,7 +2216,7 @@
                 const row = seriesMap[sub._seriesId];
                 if (row) {
                     sub._coverUrl = row.cover_url || '';
-                    sub._seriesCount = row.count || 0;
+                    sub._seriesCount = _resolveSeriesCharCount(sub._seriesId);
                 }
             });
         } else {
@@ -2184,7 +2224,7 @@
             const dbSubs = seriesList.map(s => ({
                 name: _SERIES_CN[s.name] || s.name,
                 _seriesId: s.id,
-                _seriesCount: s.count || 0,
+                _seriesCount: _resolveSeriesCharCount(s.id),
                 _coverUrl: s.cover_url || '',
                 tags: [],
             }));
@@ -2263,7 +2303,8 @@
         const cacheTs = (await _bigCacheGet('_series_cache_ts')) || 0;
         const seriesStale = !cacheTs || Date.now() - cacheTs > SERIES_CACHE_MAX_AGE;
         const seriesChanged = seriesStale ? await _loadSeriesFromApi(true) : false;
-        if (tagsChanged || seriesChanged) {
+        const charCountsChanged = await _loadSeriesCharCounts();
+        if (tagsChanged || seriesChanged || charCountsChanged) {
             posTagPicker?.render();
             negTagPicker?.render();
             if (document.querySelector('.main')?.classList.contains('mobile-tab-characters')) {
@@ -2294,6 +2335,7 @@
         }
 
         _charGroupIdx = tagData.findIndex(g => g.name === '人物');
+        await _loadSeriesCharCounts();
         await _loadSeriesFromLocalCache();
         _injectArtistGroup();
 

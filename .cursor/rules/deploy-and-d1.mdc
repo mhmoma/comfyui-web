@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.25
+> **部署版本**: 1.26
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。如果UI有变化，还需更新 `index.html` 中的**前端版本号**。
 
@@ -192,6 +192,7 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | `strip_chars_from_tags.js` | 从 tags.json 移除角色数据 |
 | `fetch_animadex.js` | 从 AnimaDex API 拉取角色数据 |
 | `characters.json` | 完整角色数据（862 系列 / 30,609 角色，~10MB） |
+| `series_char_counts.json` | 各作品真实角色条数（862 条，~18KB，前端展示用） |
 | `tags.json` | 标签数据（不含角色，416KB） |
 
 ---
@@ -225,3 +226,4 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.23 | 2026-07-04 | 作品分页 + 封面修复 | 6 列小图、每页 120 个、最近 8 个；修复封面懒加载与补全逻辑。 |
 | 1.24 | 2026-07-04 | 标签栏本地缓存 | tags.json + 作品系列 stale-while-revalidate，启动不再阻塞 API。 |
 | 1.25 | 2026-07-04 | IndexedDB 大缓存 | 标签/作品缓存迁 IndexedDB；标签栏不再等 ComfyUI。 |
+| 1.26 | 2026-07-04 | 作品角色数修复 | 新增 series_char_counts.json，作品卡片显示真实角色条数而非 Danbooru 热度总和。 |

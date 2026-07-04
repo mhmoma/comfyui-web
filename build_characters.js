@@ -155,6 +155,10 @@ function main() {
   const sizeKB = (fs.statSync(OUTPUT_FILE).size / 1024).toFixed(1);
   console.log(`\nSaved characters.json: ${output.length} series, ${totalChars} characters, ${sizeKB} KB`);
 
+  const charCounts = Object.fromEntries(output.map(s => [s.id, s.characters.length]));
+  fs.writeFileSync('series_char_counts.json', JSON.stringify(charCounts), 'utf8');
+  console.log(`Saved series_char_counts.json: ${Object.keys(charCounts).length} series`);
+
   console.log('\nNow updating tags.json...');
   const tags = JSON.parse(fs.readFileSync(TAGS_FILE, 'utf8'));
 
