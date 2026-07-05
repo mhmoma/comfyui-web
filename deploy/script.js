@@ -392,17 +392,66 @@
         height: 1216,
         steps: 30,
         cfg: 4,
+        sampler: 'euler',
+        scheduler: 'simple',
+        clipSkip: '1',
     };
 
     const SDXL_DEFAULTS = {
+        positive: '',
+        negative: '',
         width: 1024,
         height: 1536,
         steps: 30,
         cfg: 6,
+        sampler: 'euler',
+        scheduler: 'normal',
+        clipSkip: '2',
     };
+
+    const _archState = { sdxl: null, anima: null };
 
     function isAnimaMode() {
         return dom.selArch.value === 'anima';
+    }
+
+    function captureArchState() {
+        return {
+            positive: dom.txtPositive.value,
+            negative: dom.txtNegative.value,
+            sampler: dom.selSampler.value,
+            scheduler: dom.selScheduler.value,
+            steps: dom.inpSteps.value,
+            cfg: dom.inpCfg.value,
+            width: dom.inpWidth.value,
+            height: dom.inpHeight.value,
+            clipSkip: document.getElementById('inp-clip-skip')?.value ?? '2',
+        };
+    }
+
+    function setSelectIfExists(sel, value) {
+        if (!value || !sel) return;
+        if ([...sel.options].some(o => o.value === value)) sel.value = value;
+    }
+
+    function applyArchState(state) {
+        if (!state) return;
+        if (state.positive !== undefined) {
+            dom.txtPositive.value = state.positive;
+            dom.txtPositive.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (state.negative !== undefined) {
+            dom.txtNegative.value = state.negative;
+            dom.txtNegative.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (state.steps !== undefined) dom.inpSteps.value = state.steps;
+        if (state.cfg !== undefined) dom.inpCfg.value = state.cfg;
+        if (state.width !== undefined) dom.inpWidth.value = state.width;
+        if (state.height !== undefined) dom.inpHeight.value = state.height;
+        const clipSkip = document.getElementById('inp-clip-skip');
+        if (clipSkip && state.clipSkip !== undefined) clipSkip.value = state.clipSkip;
+        setSelectIfExists(dom.selSampler, state.sampler);
+        setSelectIfExists(dom.selScheduler, state.scheduler);
     }
 
     function formatAnimaArtistTag(tag) {
@@ -417,26 +466,17 @@
 
     function setupArchSwitch() {
         dom.selArch.addEventListener('change', () => {
-            const isAnima = isAnimaMode();
+            const newArch = dom.selArch.value;
+            const prevArch = newArch === 'anima' ? 'sdxl' : 'anima';
+            _archState[prevArch] = captureArchState();
+
+            const isAnima = newArch === 'anima';
             dom.panelSdxlModel.classList.toggle('hidden', isAnima);
             dom.panelAnimaModel.classList.toggle('hidden', !isAnima);
-            if (isAnima) {
-                dom.inpWidth.value = ANIMA_DEFAULTS.width;
-                dom.inpHeight.value = ANIMA_DEFAULTS.height;
-                dom.inpSteps.value = ANIMA_DEFAULTS.steps;
-                dom.inpCfg.value = ANIMA_DEFAULTS.cfg;
-                if (!dom.txtPositive.value.trim()) {
-                    dom.txtPositive.value = ANIMA_DEFAULTS.positive;
-                }
-                if (!dom.txtNegative.value.trim()) {
-                    dom.txtNegative.value = ANIMA_DEFAULTS.negative;
-                }
-            } else {
-                dom.inpWidth.value = SDXL_DEFAULTS.width;
-                dom.inpHeight.value = SDXL_DEFAULTS.height;
-                dom.inpSteps.value = SDXL_DEFAULTS.steps;
-                dom.inpCfg.value = SDXL_DEFAULTS.cfg;
-            }
+
+            const defaults = isAnima ? ANIMA_DEFAULTS : SDXL_DEFAULTS;
+            applyArchState(_archState[newArch] || defaults);
+
             updateArchAwarePanels();
         });
     }
