@@ -154,6 +154,23 @@
         btnPostContinue: $('#btn-post-continue'),
         btnPostRegenerate: $('#btn-post-regenerate'),
         btnPostCancel: $('#btn-post-cancel'),
+        // Inpaint
+        btnInpaint: $('#btn-inpaint'),
+        modalInpaint: $('#modal-inpaint'),
+        inpaintCanvasWrap: $('#inpaint-canvas-wrap'),
+        inpaintCanvas: $('#inpaint-canvas'),
+        inpaintImage: $('#inpaint-image'),
+        selInpaintPreset: $('#sel-inpaint-preset'),
+        inpaintHint: $('#inpaint-hint'),
+        txtInpaintPos: $('#txt-inpaint-pos'),
+        txtInpaintNeg: $('#txt-inpaint-neg'),
+        inpInpaintDenoise: $('#inp-inpaint-denoise'),
+        inpaintBrush: $('#inpaint-brush'),
+        btnInpaintBrush: $('#btn-inpaint-brush'),
+        btnInpaintEraser: $('#btn-inpaint-eraser'),
+        btnInpaintClear: $('#btn-inpaint-clear'),
+        btnInpaintRun: $('#btn-inpaint-run'),
+        btnInpaintCancel: $('#btn-inpaint-cancel'),
         // Config profiles
         selProfileQuick: $('#sel-profile-quick'),
         selProfile: $('#sel-profile'),
@@ -2276,6 +2293,376 @@
         };
 
         return { prompt: nodes, actualSeed };
+    }
+
+    const INPAINT_PRESETS = {
+        clothes: {
+            hint: '只涂抹衣物区域，尽量不要盖住脸、头发和四肢轮廓。提示词只写服装，不要写「一个人」。',
+            positive: 'detailed clothing, formal suit, white dress shirt, necktie, fabric texture, natural folds, same body',
+            negative: 'face, head, new person, duplicate person, extra limbs, full body portrait, deformed, blurry, bad anatomy',
+            denoise: 0.45,
+        },
+        background: {
+            hint: '涂抹人物以外的背景区域。可写场景/光影，避免在提示词里描述人物。',
+            positive: 'detailed background, scenic environment, depth of field, atmospheric lighting, high quality',
+            negative: 'person, character, face, body, duplicate subject, foreground character, low quality',
+            denoise: 0.68,
+        },
+        erase: {
+            hint: '涂抹要去掉或替换的区域，用简短词描述希望出现的纹理/内容（如墙面、草地、皮肤）。',
+            positive: 'seamless texture, natural continuation, clean surface, photorealistic detail',
+            negative: 'person, object, text, watermark, logo, artifact, blurry patch, duplicate',
+            denoise: 0.52,
+        },
+        detail: {
+            hint: '小范围涂抹模糊、崩坏处（眼睛、手指等）。强度宜低，提示词偏画质词。',
+            positive: 'detailed, sharp focus, high quality, fine texture, anatomically correct',
+            negative: 'blurry, jpeg artifacts, deformed, low quality, extra fingers, bad hands',
+            denoise: 0.32,
+        },
+        hair: {
+            hint: '尽量只涂头发区域，避开脸部。提示词只写发型/发色。',
+            positive: 'detailed hair, natural hair strands, hair texture, shiny hair',
+            negative: 'face change, different face, helmet hair, bald, duplicate head, deformed',
+            denoise: 0.48,
+        },
+        custom: {
+            hint: '自行填写。只描述蒙版内要出现的内容，强度建议 0.3–0.6。',
+            positive: '',
+            negative: '',
+            denoise: 0.45,
+        },
+    };
+
+    function buildInpaintWorkflow(inpaintOpts) {
+        const { baseImageName, maskImageName, positive, negative, denoise } = inpaintOpts;
+        const seed = parseInt(dom.inpSeed.value);
+        let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
+        if (inpaintOpts.seedOverride !== undefined && inpaintOpts.seedOverride !== null) {
+            actualSeed = inpaintOpts.seedOverride;
+        }
+        const nodes = {};
+        let nextId = 10;
+        const id = () => String(nextId++);
+
+        const useVae = dom.chkVae.checked;
+        const useLora = dom.chkLora.checked;
+        let modelOut, clipOut, vaeOut;
+        const isAnima = dom.selArch.value === 'anima';
+
+        if (isAnima) {
+            const unetId = id();
+            nodes[unetId] = { class_type: "UNETLoader", inputs: { unet_name: dom.selUnet.value, weight_dtype: "default" } };
+            modelOut = [unetId, 0];
+            const clipId = id();
+            nodes[clipId] = { class_type: "CLIPLoader", inputs: { clip_name: dom.selClip.value, type: "qwen_image" } };
+            clipOut = [clipId, 0];
+            const vaeId = id();
+            nodes[vaeId] = { class_type: "VAELoader", inputs: { vae_name: dom.selAnimaVae.value } };
+            vaeOut = [vaeId, 0];
+        } else {
+            const ckptId = id();
+            nodes[ckptId] = { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: dom.selCheckpoint.value } };
+            modelOut = [ckptId, 0];
+            clipOut = [ckptId, 1];
+            vaeOut = [ckptId, 2];
+        }
+
+        if (useVae) {
+            const vaeId = id();
+            nodes[vaeId] = { class_type: "VAELoader", inputs: { vae_name: dom.selVae.value } };
+            vaeOut = [vaeId, 0];
+        }
+
+        if (useLora) {
+            for (const lora of getLoraSelections()) {
+                const loraId = id();
+                nodes[loraId] = {
+                    class_type: "LoraLoader",
+                    inputs: {
+                        lora_name: lora.name,
+                        strength_model: lora.strength,
+                        strength_clip: lora.strength,
+                        model: modelOut,
+                        clip: clipOut,
+                    },
+                };
+                modelOut = [loraId, 0];
+                clipOut = [loraId, 1];
+            }
+        }
+
+        const useFreeu = document.getElementById('chk-freeu')?.checked;
+        if (useFreeu) {
+            const freeuId = id();
+            nodes[freeuId] = {
+                class_type: "FreeU_V2",
+                inputs: {
+                    model: modelOut,
+                    b1: parseFloat(document.getElementById('inp-freeu-b1')?.value || 1.3),
+                    b2: parseFloat(document.getElementById('inp-freeu-b2')?.value || 1.4),
+                    s1: parseFloat(document.getElementById('inp-freeu-s1')?.value || 0.9),
+                    s2: parseFloat(document.getElementById('inp-freeu-s2')?.value || 0.2),
+                },
+            };
+            modelOut = [freeuId, 0];
+        }
+
+        const clipSkip = parseInt(document.getElementById('inp-clip-skip')?.value || '1');
+        if (clipSkip > 1) {
+            const csId = id();
+            nodes[csId] = { class_type: "CLIPSetLastLayer", inputs: { clip: clipOut, stop_at_clip_layer: -clipSkip } };
+            clipOut = [csId, 0];
+        }
+
+        const posId = id();
+        nodes[posId] = {
+            class_type: "CLIPTextEncode",
+            inputs: { text: resolveWildcards(positive || ''), clip: clipOut },
+        };
+        const negId = id();
+        nodes[negId] = {
+            class_type: "CLIPTextEncode",
+            inputs: { text: resolveWildcards(negative || ''), clip: clipOut },
+        };
+
+        const baseLoadId = id();
+        nodes[baseLoadId] = { class_type: "LoadImage", inputs: { image: baseImageName } };
+        const maskLoadId = id();
+        nodes[maskLoadId] = { class_type: "LoadImage", inputs: { image: maskImageName } };
+
+        const encodeId = id();
+        nodes[encodeId] = {
+            class_type: "VAEEncodeForInpaint",
+            inputs: {
+                pixels: [baseLoadId, 0],
+                vae: vaeOut,
+                mask: [maskLoadId, 0],
+            },
+        };
+
+        const samplerId = id();
+        nodes[samplerId] = {
+            class_type: "KSampler",
+            inputs: {
+                seed: actualSeed,
+                steps: parseInt(dom.inpSteps.value),
+                cfg: parseFloat(dom.inpCfg.value),
+                sampler_name: dom.selSampler.value,
+                scheduler: dom.selScheduler.value,
+                denoise: denoise,
+                model: modelOut,
+                positive: [posId, 0],
+                negative: [negId, 0],
+                latent_image: [encodeId, 0],
+            },
+        };
+
+        const decodeId = id();
+        nodes[decodeId] = { class_type: "VAEDecode", inputs: { samples: [samplerId, 0], vae: vaeOut } };
+        const saveId = id();
+        nodes[saveId] = {
+            class_type: "SaveImage",
+            inputs: { filename_prefix: "ComfyUI_Web", images: [decodeId, 0] },
+        };
+
+        return { prompt: nodes, actualSeed };
+    }
+
+    const _inpaint = {
+        sourceUrl: '',
+        naturalW: 0,
+        naturalH: 0,
+        drawing: false,
+        eraser: false,
+        _maskNative: null,
+        _maskCtx: null,
+    };
+
+    function applyInpaintPreset(key) {
+        const preset = INPAINT_PRESETS[key] || INPAINT_PRESETS.custom;
+        if (dom.inpaintHint) dom.inpaintHint.textContent = preset.hint;
+        if (dom.txtInpaintPos) dom.txtInpaintPos.value = preset.positive;
+        if (dom.txtInpaintNeg) dom.txtInpaintNeg.value = preset.negative;
+        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(preset.denoise);
+    }
+
+    function _inpaintInitMask() {
+        _inpaint._maskNative = document.createElement('canvas');
+        _inpaint._maskNative.width = _inpaint.naturalW;
+        _inpaint._maskNative.height = _inpaint.naturalH;
+        _inpaint._maskCtx = _inpaint._maskNative.getContext('2d');
+        _inpaint._maskCtx.fillStyle = '#000';
+        _inpaint._maskCtx.fillRect(0, 0, _inpaint.naturalW, _inpaint.naturalH);
+        _inpaintRedrawOverlay();
+    }
+
+    function _inpaintRedrawOverlay() {
+        if (!dom.inpaintCanvas || !_inpaint._maskNative) return;
+        const wrap = dom.inpaintCanvasWrap;
+        const rect = wrap.getBoundingClientRect();
+        const dw = rect.width;
+        const dh = rect.height;
+        dom.inpaintCanvas.width = dw;
+        dom.inpaintCanvas.height = dh;
+        const ctx = dom.inpaintCanvas.getContext('2d');
+        ctx.clearRect(0, 0, dw, dh);
+        ctx.drawImage(_inpaint._maskNative, 0, 0, dw, dh);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = 'rgba(233, 69, 96, 0.55)';
+        ctx.fillRect(0, 0, dw, dh);
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function _inpaintPointerToNative(clientX, clientY) {
+        const rect = dom.inpaintCanvasWrap.getBoundingClientRect();
+        const nx = ((clientX - rect.left) / rect.width) * _inpaint.naturalW;
+        const ny = ((clientY - rect.top) / rect.height) * _inpaint.naturalH;
+        const scale = _inpaint.naturalW / rect.width;
+        const brush = parseFloat(dom.inpaintBrush?.value || 36) * scale;
+        return { nx, ny, brush };
+    }
+
+    function _inpaintPaintAt(clientX, clientY) {
+        if (!_inpaint._maskCtx) return;
+        const { nx, ny, brush } = _inpaintPointerToNative(clientX, clientY);
+        _inpaint._maskCtx.fillStyle = _inpaint.eraser ? '#000' : '#fff';
+        _inpaint._maskCtx.beginPath();
+        _inpaint._maskCtx.arc(nx, ny, brush / 2, 0, Math.PI * 2);
+        _inpaint._maskCtx.fill();
+        _inpaintRedrawOverlay();
+    }
+
+    function _inpaintHasMask() {
+        if (!_inpaint._maskCtx) return false;
+        const data = _inpaint._maskCtx.getImageData(0, 0, _inpaint.naturalW, _inpaint.naturalH).data;
+        for (let i = 0; i < data.length; i += 16) {
+            if (data[i] > 20) return true;
+        }
+        return false;
+    }
+
+    function _inpaintExportMaskFile() {
+        return new Promise((resolve, reject) => {
+            _inpaint._maskNative.toBlob(blob => {
+                if (!blob) reject(new Error('蒙版导出失败'));
+                else resolve(new File([blob], `cw_mask_${Date.now()}.png`, { type: 'image/png' }));
+            }, 'image/png');
+        });
+    }
+
+    function openInpaintModal(imageUrl) {
+        if (!imageUrl || !dom.modalInpaint) return;
+        _inpaint.sourceUrl = imageUrl;
+        dom.inpaintImage.src = imageUrl;
+        const onReady = () => {
+            _inpaint.naturalW = dom.inpaintImage.naturalWidth;
+            _inpaint.naturalH = dom.inpaintImage.naturalHeight;
+            if (_inpaint.naturalW > 0) _inpaintInitMask();
+        };
+        dom.inpaintImage.onload = onReady;
+        if (dom.inpaintImage.complete) onReady();
+        applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
+        dom.modalInpaint.classList.remove('hidden');
+    }
+
+    function closeInpaintModal() {
+        dom.modalInpaint?.classList.add('hidden');
+        _inpaint.drawing = false;
+    }
+
+    async function runInpaintGeneration() {
+        if (!_inpaint.sourceUrl) return;
+        if (!_inpaintHasMask()) {
+            alert('请先用画笔涂抹要重绘的区域');
+            return;
+        }
+
+        const positive = dom.txtInpaintPos?.value.trim() || '';
+        const negative = dom.txtInpaintNeg?.value.trim() || '';
+        const denoise = parseFloat(dom.inpInpaintDenoise?.value || '0.45');
+        if (!positive) {
+            alert('请填写蒙版内正向提示词');
+            return;
+        }
+
+        closeInpaintModal();
+        beginGenerationUI();
+        dom.btnGenerate.textContent = '局部重绘中...';
+
+        try {
+            const baseUpload = await uploadImageFromUrl(_inpaint.sourceUrl, `cw_inpaint_base_${Date.now()}.png`);
+            const maskFile = await _inpaintExportMaskFile();
+            const maskUpload = await uploadImage(maskFile);
+
+            const workflow = buildInpaintWorkflow({
+                baseImageName: baseUpload.name,
+                maskImageName: maskUpload.name,
+                positive,
+                negative,
+                denoise,
+            });
+            await runPromptWorkflow(workflow);
+        } catch (e) {
+            alert('局部重绘失败: ' + e.message);
+            console.error(e);
+        } finally {
+            endGenerationUI();
+        }
+    }
+
+    function setupInpaint() {
+        if (!dom.btnInpaint || !dom.modalInpaint) return;
+
+        dom.btnInpaint.addEventListener('click', () => {
+            const url = dom.resultImage?.src;
+            if (!url) return;
+            openInpaintModal(url);
+        });
+
+        dom.selInpaintPreset?.addEventListener('change', (e) => applyInpaintPreset(e.target.value));
+        dom.btnInpaintBrush?.addEventListener('click', () => {
+            _inpaint.eraser = false;
+            dom.btnInpaintBrush?.classList.add('active');
+            dom.btnInpaintEraser?.classList.remove('active');
+        });
+        dom.btnInpaintEraser?.addEventListener('click', () => {
+            _inpaint.eraser = true;
+            dom.btnInpaintEraser?.classList.add('active');
+            dom.btnInpaintBrush?.classList.remove('active');
+        });
+        dom.btnInpaintClear?.addEventListener('click', () => _inpaintInitMask());
+        dom.btnInpaintCancel?.addEventListener('click', closeInpaintModal);
+        dom.modalInpaint.addEventListener('click', (e) => {
+            if (e.target === dom.modalInpaint) closeInpaintModal();
+        });
+        dom.btnInpaintRun?.addEventListener('click', runInpaintGeneration);
+
+        const onPointerDown = (e) => {
+            if (!dom.modalInpaint || dom.modalInpaint.classList.contains('hidden')) return;
+            _inpaint.drawing = true;
+            const pt = e.touches ? e.touches[0] : e;
+            _inpaintPaintAt(pt.clientX, pt.clientY);
+            e.preventDefault();
+        };
+        const onPointerMove = (e) => {
+            if (!_inpaint.drawing) return;
+            const pt = e.touches ? e.touches[0] : e;
+            _inpaintPaintAt(pt.clientX, pt.clientY);
+            e.preventDefault();
+        };
+        const onPointerUp = () => { _inpaint.drawing = false; };
+
+        dom.inpaintCanvasWrap?.addEventListener('mousedown', onPointerDown);
+        dom.inpaintCanvasWrap?.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
+        dom.inpaintCanvasWrap?.addEventListener('touchstart', onPointerDown, { passive: false });
+        dom.inpaintCanvasWrap?.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
+
+        window.addEventListener('resize', () => {
+            if (!dom.modalInpaint?.classList.contains('hidden')) _inpaintRedrawOverlay();
+        });
     }
 
     // ==================== 生图流程 ====================
@@ -7838,6 +8225,7 @@
     setupDzmm();
     setupNai();
     setupConnectionStatus();
+    setupInpaint();
     ProfileManager.setup();
     init();
 })();
