@@ -1681,6 +1681,141 @@ body.inpaint-open {
     line-height: 1.4;
 }
 
+.inpaint-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.inpaint-sidebar {
+    --inpaint-sidebar-width: 300px;
+    --inpaint-sidebar-rail: 16px;
+    position: relative;
+    flex-shrink: 0;
+    width: var(--inpaint-sidebar-width);
+    height: 100%;
+    transition: width 0.28s ease;
+    z-index: 4;
+}
+
+.inpaint-sidebar.collapsed {
+    width: var(--inpaint-sidebar-rail);
+}
+
+.inpaint-sidebar-panel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--inpaint-sidebar-width);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 10px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    transform: translateX(0);
+    transition: transform 0.28s ease;
+}
+
+.inpaint-sidebar.collapsed .inpaint-sidebar-panel {
+    transform: translateX(calc(-1 * var(--inpaint-sidebar-width)));
+}
+
+.inpaint-sidebar-panel .panel {
+    margin: 0;
+}
+
+.inpaint-sidebar-panel .inpaint-preset-select {
+    width: 100%;
+    max-width: none;
+}
+
+.inpaint-sidebar-panel textarea {
+    width: 100%;
+    min-height: 64px;
+    resize: vertical;
+}
+
+.inpaint-vae-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inpaint-vae-row select:disabled {
+    opacity: 0.5;
+}
+
+.inpaint-run-btn {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.inpaint-sidebar-rail {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--inpaint-sidebar-rail);
+    padding: 0;
+    border: none;
+    border-right: 1px solid var(--border);
+    background: linear-gradient(90deg, var(--bg-panel) 0%, var(--bg-secondary) 100%);
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.22);
+}
+
+.inpaint-sidebar.collapsed .inpaint-sidebar-rail {
+    background: linear-gradient(90deg, rgba(233, 69, 96, 0.22) 0%, var(--bg-secondary) 85%);
+    border-right-color: rgba(233, 69, 96, 0.45);
+    box-shadow: 2px 0 14px rgba(233, 69, 96, 0.15);
+}
+
+.inpaint-sidebar-rail:hover {
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+
+.inpaint-sidebar-rail-icon {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.inpaint-sidebar-rail-label {
+    writing-mode: vertical-rl;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    opacity: 0.9;
+}
+
+.inpaint-workspace {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.inpaint-model-note {
+    margin: 8px 0 0;
+    font-size: 0.75rem;
+    color: var(--accent);
+    line-height: 1.45;
+}
+
 .inpaint-viewport {
     flex: 1;
     position: relative;
@@ -1787,8 +1922,7 @@ body.inpaint-open {
     gap: 8px;
 }
 
-.inpaint-tools-row,
-.inpaint-prompts-row {
+.inpaint-tools-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1824,30 +1958,6 @@ body.inpaint-open {
     text-align: right;
 }
 
-.inpaint-denoise-label input {
-    width: 64px;
-}
-
-.inpaint-prompt-field {
-    flex: 1 1 180px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.82rem;
-    margin: 0 !important;
-}
-
-.inpaint-prompt-field textarea {
-    flex: 1;
-    min-height: 32px;
-    resize: vertical;
-}
-
-.inpaint-prompts-row .btn-primary {
-    margin-left: auto;
-    white-space: nowrap;
-}
-
 @media (max-width: 768px) {
     .inpaint-topbar {
         padding: 8px 10px;
@@ -1857,9 +1967,8 @@ body.inpaint-open {
         display: none;
     }
 
-    .inpaint-preset-select {
-        flex: 1;
-        min-width: 0;
+    .inpaint-sidebar {
+        --inpaint-sidebar-width: min(88vw, 300px);
     }
 
     .inpaint-tools-row {
@@ -1868,20 +1977,6 @@ body.inpaint-open {
 
     .inpaint-brush-label input[type="range"] {
         width: 70px;
-    }
-
-    .inpaint-prompts-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .inpaint-prompt-field {
-        width: 100%;
-    }
-
-    .inpaint-prompts-row .btn-primary {
-        width: 100%;
-        margin-left: 0;
     }
 }
 

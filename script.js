@@ -187,6 +187,16 @@
         btnInpaintClear: $('#btn-inpaint-clear'),
         btnInpaintRun: $('#btn-inpaint-run'),
         btnInpaintCancel: $('#btn-inpaint-cancel'),
+        inpaintSidebar: $('#inpaint-sidebar'),
+        btnInpaintSidebarToggle: $('#btn-inpaint-sidebar-toggle'),
+        selInpaintCheckpoint: $('#sel-inpaint-checkpoint'),
+        chkInpaintVae: $('#chk-inpaint-vae'),
+        selInpaintVae: $('#sel-inpaint-vae'),
+        inpInpaintSteps: $('#inp-inpaint-steps'),
+        inpInpaintCfg: $('#inp-inpaint-cfg'),
+        selInpaintSampler: $('#sel-inpaint-sampler'),
+        selInpaintScheduler: $('#sel-inpaint-scheduler'),
+        inpaintModelNote: $('#inpaint-model-note'),
         // Config profiles
         selProfileQuick: $('#sel-profile-quick'),
         selProfile: $('#sel-profile'),
@@ -813,6 +823,7 @@
             applyArchModules(_archModules[newArch]);
 
             updateArchAwarePanels();
+            if (!dom.modalInpaint?.classList.contains('hidden')) updateInpaintModelNote();
             ProfileManager.scheduleAutosave();
         });
     }
@@ -1444,6 +1455,7 @@
                 opt.textContent = m;
                 dom.selCheckpoint.appendChild(opt);
             });
+            syncInpaintModelOptions();
         } catch (e) {
             dom.selCheckpoint.innerHTML = '<option>加载失败 - 检查连接</option>';
             console.error('加载模型列表失败:', e);
@@ -1472,6 +1484,7 @@
                 opt.textContent = s;
                 dom.selScheduler.appendChild(opt);
             });
+            syncInpaintModelOptions();
         } catch (e) {
             console.error('加载采样器列表失败:', e);
         }
@@ -1488,6 +1501,7 @@
                 opt.textContent = v;
                 dom.selVae.appendChild(opt);
             });
+            syncInpaintModelOptions();
         } catch (e) {
             dom.selVae.innerHTML = '<option>无可用 VAE</option>';
         }
@@ -2390,47 +2404,225 @@
         return { prompt: nodes, actualSeed };
     }
 
+    const INPAINT_MODEL_DEFAULTS = {
+        steps: 30,
+        cfg: 5.5,
+        sampler: 'dpmpp_2m',
+        scheduler: 'karras',
+        clipSkip: 2,
+        useVae: false,
+    };
+    const INPAINT_SETTINGS_KEY = 'comfyui_inpaint_settings';
+    const INPAINT_SIDEBAR_KEY = 'comfyui_inpaint_sidebar_collapsed';
+
+    function _inpaintSetSidebarCollapsed(collapsed) {
+        if (!dom.inpaintSidebar) return;
+        dom.inpaintSidebar.classList.toggle('collapsed', collapsed);
+        const btn = dom.btnInpaintSidebarToggle;
+        const icon = btn?.querySelector('.inpaint-sidebar-rail-icon');
+        if (btn) {
+            btn.title = collapsed ? '展开设置' : '收起设置';
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+        if (icon) icon.textContent = collapsed ? '▶' : '◀';
+        try {
+            localStorage.setItem(INPAINT_SIDEBAR_KEY, collapsed ? '1' : '0');
+        } catch { /* ignore */ }
+    }
+
+    function _inpaintToggleSidebar() {
+        _inpaintSetSidebarCollapsed(!dom.inpaintSidebar?.classList.contains('collapsed'));
+    }
+
+    function _inpaintRestoreSidebar() {
+        try {
+            _inpaintSetSidebarCollapsed(localStorage.getItem(INPAINT_SIDEBAR_KEY) === '1');
+        } catch {
+            _inpaintSetSidebarCollapsed(false);
+        }
+    }
+
+    function _cloneSelectOptions(src, dest) {
+        if (!src || !dest) return;
+        dest.innerHTML = '';
+        [...src.options].forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt.value;
+            o.textContent = opt.textContent;
+            dest.appendChild(o);
+        });
+    }
+
+    function syncInpaintModelOptions() {
+        _cloneSelectOptions(dom.selCheckpoint, dom.selInpaintCheckpoint);
+        _cloneSelectOptions(dom.selVae, dom.selInpaintVae);
+        _cloneSelectOptions(dom.selSampler, dom.selInpaintSampler);
+        _cloneSelectOptions(dom.selScheduler, dom.selInpaintScheduler);
+    }
+
+    function captureInpaintSettings() {
+        return {
+            checkpoint: dom.selInpaintCheckpoint?.value || '',
+            useVae: !!dom.chkInpaintVae?.checked,
+            vae: dom.selInpaintVae?.value || '',
+            steps: parseInt(dom.inpInpaintSteps?.value || INPAINT_MODEL_DEFAULTS.steps, 10),
+            cfg: parseFloat(dom.inpInpaintCfg?.value || INPAINT_MODEL_DEFAULTS.cfg),
+            sampler: dom.selInpaintSampler?.value || INPAINT_MODEL_DEFAULTS.sampler,
+            scheduler: dom.selInpaintScheduler?.value || INPAINT_MODEL_DEFAULTS.scheduler,
+            denoise: parseFloat(dom.inpInpaintDenoise?.value || '0.45'),
+        };
+    }
+
+    function applyInpaintSettings(data) {
+        if (!data) return;
+        syncInpaintModelOptions();
+        if (data.checkpoint && dom.selInpaintCheckpoint) {
+            dom.selInpaintCheckpoint.value = data.checkpoint;
+            if (dom.selInpaintCheckpoint.value !== data.checkpoint && dom.selInpaintCheckpoint.options.length) {
+                dom.selInpaintCheckpoint.selectedIndex = 0;
+            }
+        }
+        if (dom.chkInpaintVae) dom.chkInpaintVae.checked = !!data.useVae;
+        if (data.vae && dom.selInpaintVae) dom.selInpaintVae.value = data.vae;
+        if (dom.selInpaintVae) dom.selInpaintVae.disabled = !dom.chkInpaintVae?.checked;
+        if (dom.inpInpaintSteps && data.steps) dom.inpInpaintSteps.value = String(data.steps);
+        if (dom.inpInpaintCfg && data.cfg) dom.inpInpaintCfg.value = String(data.cfg);
+        if (data.sampler && dom.selInpaintSampler) dom.selInpaintSampler.value = data.sampler;
+        if (data.scheduler && dom.selInpaintScheduler) dom.selInpaintScheduler.value = data.scheduler;
+        if (data.denoise && dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(data.denoise);
+    }
+
+    function saveInpaintSettings() {
+        try {
+            localStorage.setItem(INPAINT_SETTINGS_KEY, JSON.stringify(captureInpaintSettings()));
+        } catch { /* ignore */ }
+    }
+
+    function loadInpaintSettings() {
+        try {
+            const raw = localStorage.getItem(INPAINT_SETTINGS_KEY);
+            if (raw) {
+                applyInpaintSettings(JSON.parse(raw));
+                return;
+            }
+        } catch { /* ignore */ }
+        syncInpaintModelOptions();
+        if (dom.selCheckpoint?.value && dom.selInpaintCheckpoint) {
+            dom.selInpaintCheckpoint.value = dom.selCheckpoint.value;
+        }
+        if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(INPAINT_MODEL_DEFAULTS.steps);
+        if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(INPAINT_MODEL_DEFAULTS.cfg);
+        if (dom.selInpaintSampler) dom.selInpaintSampler.value = INPAINT_MODEL_DEFAULTS.sampler;
+        if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_MODEL_DEFAULTS.scheduler;
+    }
+
+    function updateInpaintModelNote() {
+        if (!dom.inpaintModelNote) return;
+        if (isAnimaMode()) {
+            dom.inpaintModelNote.textContent = '当前主界面为 Anima 架构；局部重绘固定使用下方 SDXL 模型，不继承 Anima / LoRA / 加速设置。';
+            dom.inpaintModelNote.classList.remove('hidden');
+        } else {
+            dom.inpaintModelNote.textContent = '局部重绘使用独立 SDXL 模型与采样参数，不继承主界面的 LoRA / FreeU 等模块。';
+            dom.inpaintModelNote.classList.remove('hidden');
+        }
+    }
+
     const INPAINT_PRESETS = {
         clothes: {
-            hint: '只涂抹衣物区域，尽量不要盖住脸、头发和四肢轮廓。提示词只写服装，不要写「一个人」。',
-            positive: 'detailed clothing, formal suit, white dress shirt, necktie, fabric texture, natural folds, same body',
-            negative: 'face, head, new person, duplicate person, extra limbs, full body portrait, deformed, blurry, bad anatomy',
-            denoise: 0.45,
+            hint: '只涂衣物区域，勿盖住脸和四肢。正向须写明想换成的服装，例如：red dress / school uniform / black hoodie。',
+            positive: 'detailed clothing, fabric texture, natural folds, fitted outfit, clean stitching',
+            negative: 'face, head, new person, duplicate person, extra limbs, deformed, blurry, bad anatomy, nude, exposed skin',
+            denoise: 0.55,
         },
         background: {
-            hint: '涂抹人物以外的背景区域。可写场景/光影，避免在提示词里描述人物。',
+            hint: '涂抹人物以外的背景。正向写场景即可，如：sunset beach / city street at night / classroom interior。',
             positive: 'detailed background, scenic environment, depth of field, atmospheric lighting, high quality',
             negative: 'person, character, face, body, duplicate subject, foreground character, low quality',
-            denoise: 0.68,
+            denoise: 0.72,
         },
         erase: {
-            hint: '涂抹要去掉或替换的区域，用简短词描述希望出现的纹理/内容（如墙面、草地、皮肤）。',
-            positive: 'seamless texture, natural continuation, clean surface, photorealistic detail',
+            hint: '涂抹要去掉的区域。正向写希望出现的纹理/内容，如：wooden wall / green grass / smooth skin。',
+            positive: 'seamless texture, natural continuation, clean surface, high detail',
             negative: 'person, object, text, watermark, logo, artifact, blurry patch, duplicate',
-            denoise: 0.52,
+            denoise: 0.58,
         },
         detail: {
             hint: '小范围涂抹模糊、崩坏处（眼睛、手指等）。强度宜低，提示词偏画质词。',
             positive: 'detailed, sharp focus, high quality, fine texture, anatomically correct',
             negative: 'blurry, jpeg artifacts, deformed, low quality, extra fingers, bad hands',
-            denoise: 0.32,
+            denoise: 0.35,
         },
         hair: {
-            hint: '尽量只涂头发区域，避开脸部。提示词只写发型/发色。',
+            hint: '只涂头发，避开脸部。正向写明发型/发色，如：long silver hair / short bob cut / twin tails。',
             positive: 'detailed hair, natural hair strands, hair texture, shiny hair',
             negative: 'face change, different face, helmet hair, bald, duplicate head, deformed',
+            denoise: 0.50,
+        },
+        nude: {
+            hint: '涂抹衣物区域（比基尼、内衣、裙子等）。只涂要露出的皮肤范围，避开脸和背景。',
+            positive: 'nude, naked, bare skin, detailed skin, smooth skin, natural body, anatomically correct, high detail',
+            negative: 'clothes, clothing, underwear, bra, panties, bikini, swimsuit, fabric, strap, deformed, bad anatomy, blurry, censored',
+            denoise: 0.65,
+        },
+        pubic_hairless: {
+            hint: '只涂耻骨/下体毛发区域。用于去阴毛、修整体毛，范围尽量贴毛发边缘。',
+            positive: 'hairless, shaved, smooth skin, clean skin, detailed skin texture, natural skin tone, anatomically correct',
+            negative: 'pubic hair, body hair, stubble, hair strands, deformed, bad anatomy, blurry, censored',
             denoise: 0.48,
         },
+        nipples: {
+            hint: '只涂乳头/乳晕区域。适合修正画崩、补画或改大小，勿涂整胸除非需要。',
+            positive: 'nipples, areola, detailed nipples, pink areola, erect nipples, anatomically correct, high detail',
+            negative: 'deformed, bad anatomy, blurry, extra nipples, asymmetric, censored, mosaic, clothing',
+            denoise: 0.42,
+        },
+        breasts: {
+            hint: '涂抹整个乳房区域（可含乳晕）。用于整体重画胸型、大小或质感。',
+            positive: 'breasts, detailed breasts, nipples, areola, soft breasts, natural breast shape, cleavage, smooth skin, anatomically correct, high detail',
+            negative: 'deformed, bad anatomy, asymmetric breasts, extra breasts, blurry, censored, mosaic, clothing, bra',
+            denoise: 0.55,
+        },
+        pussy: {
+            hint: '只涂阴部区域。用于重画阴唇/私处细节，范围贴轮廓，勿涂到大腿或腹部。',
+            positive: 'pussy, vulva, labia, detailed pussy, pink pussy, spread pussy, anatomically correct, high detail, moist',
+            negative: 'deformed, bad anatomy, blurry, extra genitals, censored, mosaic, bar censor, clothing, panties',
+            denoise: 0.52,
+        },
+        anus: {
+            hint: '只涂肛门区域。小范围涂抹，用于补画或修正细节。',
+            positive: 'anus, detailed anus, pink anus, anatomically correct, high detail',
+            negative: 'deformed, bad anatomy, blurry, censored, mosaic, extra holes, clothing',
+            denoise: 0.45,
+        },
+        panties: {
+            hint: '涂抹内裤/底裤区域。可整片涂内裤范围，用于换款式或补画。',
+            positive: 'panties, underwear, white panties, lace panties, detailed fabric, fabric folds, fitted, high detail',
+            negative: 'nude, pussy, nipples, exposed genitals, deformed, bad anatomy, blurry, torn clothes',
+            denoise: 0.55,
+        },
+        bra: {
+            hint: '涂抹胸罩/内衣上衣区域。用于换款式、补画肩带与罩杯。',
+            positive: 'bra, lace bra, underwear, detailed fabric, cleavage, fabric folds, fitted bra, high detail',
+            negative: 'nude, bare breasts, nipples, exposed chest, deformed, bad anatomy, blurry, torn clothes',
+            denoise: 0.55,
+        },
+        bikini: {
+            hint: '涂抹比基尼/泳装区域。可只涂上装或下装，用于换泳装款式。',
+            positive: 'bikini, swimsuit, detailed fabric, fabric texture, fitted, string bikini, high detail',
+            negative: 'nude, nipples, pussy, deformed, bad anatomy, blurry, torn swimsuit',
+            denoise: 0.55,
+        },
         custom: {
-            hint: '自行填写。只描述蒙版内要出现的内容，强度建议 0.3–0.6。',
+            hint: '自行填写。只描述蒙版内要出现的内容，强度建议 0.35–0.65。',
             positive: '',
             negative: '',
-            denoise: 0.45,
+            denoise: 0.55,
         },
     };
 
     function buildInpaintWorkflow(inpaintOpts) {
         const { baseImageName, maskImageName, positive, negative, denoise } = inpaintOpts;
+        const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
         const seed = parseInt(dom.inpSeed.value);
         let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
         if (inpaintOpts.seedOverride !== undefined && inpaintOpts.seedOverride !== null) {
@@ -2440,70 +2632,22 @@
         let nextId = 10;
         const id = () => String(nextId++);
 
-        const useVae = dom.chkVae.checked;
-        const useLora = dom.chkLora.checked;
-        let modelOut, clipOut, vaeOut;
-        const isAnima = dom.selArch.value === 'anima';
+        const ckptName = modelCfg.checkpoint || dom.selInpaintCheckpoint?.value || dom.selCheckpoint?.value;
+        if (!ckptName) throw new Error('请先选择局部重绘用的 SDXL 模型');
 
-        if (isAnima) {
-            const unetId = id();
-            nodes[unetId] = { class_type: "UNETLoader", inputs: { unet_name: dom.selUnet.value, weight_dtype: "default" } };
-            modelOut = [unetId, 0];
-            const clipId = id();
-            nodes[clipId] = { class_type: "CLIPLoader", inputs: { clip_name: dom.selClip.value, type: "qwen_image" } };
-            clipOut = [clipId, 0];
-            const vaeId = id();
-            nodes[vaeId] = { class_type: "VAELoader", inputs: { vae_name: dom.selAnimaVae.value } };
-            vaeOut = [vaeId, 0];
-        } else {
-            const ckptId = id();
-            nodes[ckptId] = { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: dom.selCheckpoint.value } };
-            modelOut = [ckptId, 0];
-            clipOut = [ckptId, 1];
-            vaeOut = [ckptId, 2];
-        }
+        const ckptId = id();
+        nodes[ckptId] = { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckptName } };
+        let modelOut = [ckptId, 0];
+        let clipOut = [ckptId, 1];
+        let vaeOut = [ckptId, 2];
 
-        if (useVae) {
+        if (modelCfg.useVae && modelCfg.vae) {
             const vaeId = id();
-            nodes[vaeId] = { class_type: "VAELoader", inputs: { vae_name: dom.selVae.value } };
+            nodes[vaeId] = { class_type: "VAELoader", inputs: { vae_name: modelCfg.vae } };
             vaeOut = [vaeId, 0];
         }
 
-        if (useLora) {
-            for (const lora of getLoraSelections()) {
-                const loraId = id();
-                nodes[loraId] = {
-                    class_type: "LoraLoader",
-                    inputs: {
-                        lora_name: lora.name,
-                        strength_model: lora.strength,
-                        strength_clip: lora.strength,
-                        model: modelOut,
-                        clip: clipOut,
-                    },
-                };
-                modelOut = [loraId, 0];
-                clipOut = [loraId, 1];
-            }
-        }
-
-        const useFreeu = document.getElementById('chk-freeu')?.checked;
-        if (useFreeu) {
-            const freeuId = id();
-            nodes[freeuId] = {
-                class_type: "FreeU_V2",
-                inputs: {
-                    model: modelOut,
-                    b1: parseFloat(document.getElementById('inp-freeu-b1')?.value || 1.3),
-                    b2: parseFloat(document.getElementById('inp-freeu-b2')?.value || 1.4),
-                    s1: parseFloat(document.getElementById('inp-freeu-s1')?.value || 0.9),
-                    s2: parseFloat(document.getElementById('inp-freeu-s2')?.value || 0.2),
-                },
-            };
-            modelOut = [freeuId, 0];
-        }
-
-        const clipSkip = parseInt(document.getElementById('inp-clip-skip')?.value || '1');
+        const clipSkip = INPAINT_MODEL_DEFAULTS.clipSkip;
         if (clipSkip > 1) {
             const csId = id();
             nodes[csId] = { class_type: "CLIPSetLastLayer", inputs: { clip: clipOut, stop_at_clip_layer: -clipSkip } };
@@ -2531,15 +2675,20 @@
             inputs: { image: [maskLoadId, 0], channel: "red" },
         };
 
-        const encodeId = id();
-        nodes[encodeId] = {
-            class_type: "VAEEncodeForInpaint",
-            inputs: {
-                pixels: [baseLoadId, 0],
-                vae: vaeOut,
-                mask: [maskConvertId, 0],
-                grow_mask_by: 6,
-            },
+        const vaeEncId = id();
+        nodes[vaeEncId] = {
+            class_type: "VAEEncode",
+            inputs: { pixels: [baseLoadId, 0], vae: vaeOut },
+        };
+        const maskGrowId = id();
+        nodes[maskGrowId] = {
+            class_type: "GrowMask",
+            inputs: { mask: [maskConvertId, 0], expand: 6, tapered_corners: true },
+        };
+        const latentMaskId = id();
+        nodes[latentMaskId] = {
+            class_type: "SetLatentNoiseMask",
+            inputs: { samples: [vaeEncId, 0], mask: [maskGrowId, 0] },
         };
 
         const samplerId = id();
@@ -2547,15 +2696,15 @@
             class_type: "KSampler",
             inputs: {
                 seed: actualSeed,
-                steps: parseInt(dom.inpSteps.value),
-                cfg: parseFloat(dom.inpCfg.value),
-                sampler_name: dom.selSampler.value,
-                scheduler: dom.selScheduler.value,
+                steps: modelCfg.steps || INPAINT_MODEL_DEFAULTS.steps,
+                cfg: modelCfg.cfg || INPAINT_MODEL_DEFAULTS.cfg,
+                sampler_name: modelCfg.sampler || INPAINT_MODEL_DEFAULTS.sampler,
+                scheduler: modelCfg.scheduler || INPAINT_MODEL_DEFAULTS.scheduler,
                 denoise: denoise,
                 model: modelOut,
                 positive: [posId, 0],
                 negative: [negId, 0],
-                latent_image: [encodeId, 0],
+                latent_image: [latentMaskId, 0],
             },
         };
 
@@ -2947,6 +3096,9 @@
         _inpaint.lastClientY = 0;
         _inpaintSetTool('brush');
         applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
+        loadInpaintSettings();
+        updateInpaintModelNote();
+        _inpaintRestoreSidebar();
         dom.modalInpaint.classList.remove('hidden');
         document.body.classList.add('inpaint-open');
         _inpaintHideBrushRing();
@@ -3007,6 +3159,13 @@
             alert('请填写蒙版内正向提示词');
             return;
         }
+        if (!dom.selInpaintCheckpoint?.value) {
+            alert('请先选择局部重绘用的 SDXL 模型');
+            return;
+        }
+
+        saveInpaintSettings();
+        const modelCfg = captureInpaintSettings();
 
         closeInpaintModal();
         beginGenerationUI();
@@ -3023,6 +3182,7 @@
                 positive,
                 negative,
                 denoise,
+                modelCfg,
             });
             await runPromptWorkflow(workflow);
         } catch (e) {
@@ -3056,6 +3216,16 @@
         wireInpaint(dom.btnIpaInpaint, () => dom.ipaPreview?.src);
 
         dom.selInpaintPreset?.addEventListener('change', (e) => applyInpaintPreset(e.target.value));
+        dom.btnInpaintSidebarToggle?.addEventListener('click', _inpaintToggleSidebar);
+        dom.chkInpaintVae?.addEventListener('change', () => {
+            if (dom.selInpaintVae) dom.selInpaintVae.disabled = !dom.chkInpaintVae.checked;
+            saveInpaintSettings();
+        });
+        ['sel-inpaint-checkpoint', 'sel-inpaint-vae', 'inp-inpaint-steps', 'inp-inpaint-cfg',
+            'sel-inpaint-sampler', 'sel-inpaint-scheduler', 'inp-inpaint-denoise'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', saveInpaintSettings);
+            document.getElementById(id)?.addEventListener('input', saveInpaintSettings);
+        });
         dom.btnInpaintBrush?.addEventListener('click', () => _inpaintSetTool('brush'));
         dom.btnInpaintEraser?.addEventListener('click', () => _inpaintSetTool('eraser'));
         dom.btnInpaintWand?.addEventListener('click', () => _inpaintSetTool('wand'));
@@ -5613,7 +5783,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.78');
+        console.log('[ComfyUI Web] v3.83');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -5631,6 +5801,7 @@
             loadIPAdapterModels(),
             loadAnimaModels(),
         ]).then(async () => {
+            loadInpaintSettings();
             updateArchAwarePanels();
             await ProfileManager.restoreActiveProfile();
         });
