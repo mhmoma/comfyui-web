@@ -2525,6 +2525,11 @@
         nodes[baseLoadId] = { class_type: "LoadImage", inputs: { image: baseImageName } };
         const maskLoadId = id();
         nodes[maskLoadId] = { class_type: "LoadImage", inputs: { image: maskImageName } };
+        const maskConvertId = id();
+        nodes[maskConvertId] = {
+            class_type: "ImageToMask",
+            inputs: { image: [maskLoadId, 0], channel: "red" },
+        };
 
         const encodeId = id();
         nodes[encodeId] = {
@@ -2532,7 +2537,8 @@
             inputs: {
                 pixels: [baseLoadId, 0],
                 vae: vaeOut,
-                mask: [maskLoadId, 0],
+                mask: [maskConvertId, 0],
+                grow_mask_by: 6,
             },
         };
 
@@ -2965,8 +2971,12 @@
             }
         };
 
-        dom.inpaintImage.crossOrigin = 'anonymous';
         dom.inpaintImage.onload = onReady;
+        dom.inpaintImage.onerror = () => {
+            if (gen !== _inpaint.readyGen) return;
+            alert('底图加载失败。上传图请重新选择；历史/结果图请确认 ComfyUI 可访问且已加 --enable-cors-header');
+        };
+        _inpaintSetImageCrossOrigin(imageUrl);
         if (dom.inpaintImage.src !== imageUrl) {
             dom.inpaintImage.src = imageUrl;
         } else {
@@ -3030,7 +3040,10 @@
             btn?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const url = typeof getUrl === 'function' ? getUrl() : getUrl;
-                if (!url) return;
+                if (!url) {
+                    alert('请先选择或生成一张图片');
+                    return;
+                }
                 if (closePreview) dom.modalPreview?.classList.add('hidden');
                 openInpaintModal(url);
             });
@@ -5600,7 +5613,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.77');
+        console.log('[ComfyUI Web] v3.78');
         await loadTags();
         renderHistory();
         setupTagPickers();
