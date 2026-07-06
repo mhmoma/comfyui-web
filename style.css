@@ -1624,32 +1624,40 @@ textarea {
 }
 
 .inpaint-canvas-wrap {
-    position: relative;
     margin: 10px 0;
-    max-height: min(52vh, 640px);
-    overflow: hidden;
+    text-align: center;
+}
+
+.inpaint-stage {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: #0a0a12;
     cursor: crosshair;
     touch-action: none;
+    overflow: hidden;
 }
 
 .inpaint-image {
     display: block;
-    width: 100%;
-    height: auto;
+    max-width: min(92vw, 880px);
     max-height: min(52vh, 640px);
-    object-fit: contain;
+    width: auto;
+    height: auto;
     user-select: none;
     pointer-events: none;
 }
 
 .inpaint-canvas {
     position: absolute;
-    inset: 0;
+    left: 0;
+    top: 0;
     width: 100%;
     height: 100%;
+    pointer-events: auto;
     touch-action: none;
 }
 

@@ -158,6 +158,7 @@
         btnInpaint: $('#btn-inpaint'),
         modalInpaint: $('#modal-inpaint'),
         inpaintCanvasWrap: $('#inpaint-canvas-wrap'),
+        inpaintStage: $('#inpaint-stage'),
         inpaintCanvas: $('#inpaint-canvas'),
         inpaintImage: $('#inpaint-image'),
         selInpaintPreset: $('#sel-inpaint-preset'),
@@ -2498,11 +2499,14 @@
     }
 
     function _inpaintRedrawOverlay() {
-        if (!dom.inpaintCanvas || !_inpaint._maskNative) return;
-        const wrap = dom.inpaintCanvasWrap;
-        const rect = wrap.getBoundingClientRect();
-        const dw = rect.width;
-        const dh = rect.height;
+        if (!dom.inpaintCanvas || !_inpaint._maskNative || !dom.inpaintImage) return;
+        const img = dom.inpaintImage;
+        const dw = img.clientWidth;
+        const dh = img.clientHeight;
+        if (dw < 2 || dh < 2) {
+            requestAnimationFrame(_inpaintRedrawOverlay);
+            return;
+        }
         dom.inpaintCanvas.width = dw;
         dom.inpaintCanvas.height = dh;
         const ctx = dom.inpaintCanvas.getContext('2d');
@@ -2515,20 +2519,21 @@
     }
 
     function _inpaintPointerToNative(clientX, clientY) {
-        const rect = dom.inpaintCanvasWrap.getBoundingClientRect();
-        const nx = ((clientX - rect.left) / rect.width) * _inpaint.naturalW;
-        const ny = ((clientY - rect.top) / rect.height) * _inpaint.naturalH;
+        const rect = dom.inpaintImage.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return { nx: 0, ny: 0, brush: 1 };
+        const nx = Math.max(0, Math.min(_inpaint.naturalW, ((clientX - rect.left) / rect.width) * _inpaint.naturalW));
+        const ny = Math.max(0, Math.min(_inpaint.naturalH, ((clientY - rect.top) / rect.height) * _inpaint.naturalH));
         const scale = _inpaint.naturalW / rect.width;
         const brush = parseFloat(dom.inpaintBrush?.value || 36) * scale;
         return { nx, ny, brush };
     }
 
     function _inpaintPaintAt(clientX, clientY) {
-        if (!_inpaint._maskCtx) return;
+        if (!_inpaint._maskCtx || _inpaint.naturalW < 1) return;
         const { nx, ny, brush } = _inpaintPointerToNative(clientX, clientY);
         _inpaint._maskCtx.fillStyle = _inpaint.eraser ? '#000' : '#fff';
         _inpaint._maskCtx.beginPath();
-        _inpaint._maskCtx.arc(nx, ny, brush / 2, 0, Math.PI * 2);
+        _inpaint._maskCtx.arc(nx, ny, Math.max(brush / 2, 1), 0, Math.PI * 2);
         _inpaint._maskCtx.fill();
         _inpaintRedrawOverlay();
     }
@@ -2554,16 +2559,23 @@
     function openInpaintModal(imageUrl) {
         if (!imageUrl || !dom.modalInpaint) return;
         _inpaint.sourceUrl = imageUrl;
-        dom.inpaintImage.src = imageUrl;
+        _inpaint.drawing = false;
+        applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
+        dom.modalInpaint.classList.remove('hidden');
+
         const onReady = () => {
             _inpaint.naturalW = dom.inpaintImage.naturalWidth;
             _inpaint.naturalH = dom.inpaintImage.naturalHeight;
-            if (_inpaint.naturalW > 0) _inpaintInitMask();
+            if (_inpaint.naturalW > 0) {
+                requestAnimationFrame(() => _inpaintInitMask());
+            }
         };
+
         dom.inpaintImage.onload = onReady;
-        if (dom.inpaintImage.complete) onReady();
-        applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
-        dom.modalInpaint.classList.remove('hidden');
+        dom.inpaintImage.src = imageUrl;
+        if (dom.inpaintImage.complete && dom.inpaintImage.naturalWidth > 0) {
+            requestAnimationFrame(onReady);
+        }
     }
 
     function closeInpaintModal() {
@@ -2653,11 +2665,12 @@
         };
         const onPointerUp = () => { _inpaint.drawing = false; };
 
-        dom.inpaintCanvasWrap?.addEventListener('mousedown', onPointerDown);
-        dom.inpaintCanvasWrap?.addEventListener('mousemove', onPointerMove);
+        const paintTarget = dom.inpaintCanvas || dom.inpaintStage;
+        paintTarget?.addEventListener('mousedown', onPointerDown);
+        paintTarget?.addEventListener('mousemove', onPointerMove);
         window.addEventListener('mouseup', onPointerUp);
-        dom.inpaintCanvasWrap?.addEventListener('touchstart', onPointerDown, { passive: false });
-        dom.inpaintCanvasWrap?.addEventListener('touchmove', onPointerMove, { passive: false });
+        paintTarget?.addEventListener('touchstart', onPointerDown, { passive: false });
+        paintTarget?.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp);
 
         window.addEventListener('resize', () => {
