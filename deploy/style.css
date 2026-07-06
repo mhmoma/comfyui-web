@@ -1693,6 +1693,10 @@ body.inpaint-open {
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0;
     touch-action: none;
+    cursor: default;
+}
+
+.inpaint-viewport.inpaint-on-stage.draw-tool {
     cursor: none;
 }
 
@@ -1718,7 +1722,6 @@ body.inpaint-open {
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
     background: #0a0a12;
-    cursor: none;
     touch-action: none;
 }
 

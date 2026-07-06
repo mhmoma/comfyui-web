@@ -2576,6 +2576,9 @@
         panOriginY: 0,
         pinchDist: 0,
         pinchScale: 1,
+        readyGen: 0,
+        lastClientX: 0,
+        lastClientY: 0,
         _maskNative: null,
         _maskCtx: null,
         _imgData: null,
@@ -2605,6 +2608,9 @@
         if (!dom.inpaintTransform) return;
         dom.inpaintTransform.style.transform = `translate(${_inpaint.panX}px, ${_inpaint.panY}px) scale(${_inpaint.scale})`;
         _inpaintUpdateZoomLabel();
+        if (_inpaint.lastClientX || _inpaint.lastClientY) {
+            _inpaintUpdateBrushRing(_inpaint.lastClientX, _inpaint.lastClientY);
+        }
     }
 
     function _inpaintUpdateZoomLabel() {
@@ -2653,12 +2659,51 @@
 
     function _inpaintCacheImageData() {
         if (!_inpaint.naturalW || !dom.inpaintImage) return;
-        const c = document.createElement('canvas');
-        c.width = _inpaint.naturalW;
-        c.height = _inpaint.naturalH;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(dom.inpaintImage, 0, 0);
-        _inpaint._imgData = ctx.getImageData(0, 0, c.width, c.height);
+        try {
+            const c = document.createElement('canvas');
+            c.width = _inpaint.naturalW;
+            c.height = _inpaint.naturalH;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(dom.inpaintImage, 0, 0);
+            _inpaint._imgData = ctx.getImageData(0, 0, c.width, c.height);
+        } catch (e) {
+            console.warn('[Inpaint] 无法缓存底图像素（魔棒不可用）', e);
+            _inpaint._imgData = null;
+        }
+    }
+
+    function _inpaintEnsureMask() {
+        if (_inpaint._maskCtx && _inpaint._maskNative) return;
+        if (_inpaint.naturalW > 0 && _inpaint.naturalH > 0) _inpaintInitMask();
+    }
+
+    function _inpaintIsOverStage(clientX, clientY) {
+        const rect = dom.inpaintStage?.getBoundingClientRect();
+        if (!rect || rect.width < 1 || rect.height < 1) return false;
+        return clientX >= rect.left && clientX <= rect.right
+            && clientY >= rect.top && clientY <= rect.bottom;
+    }
+
+    function _inpaintClientToNative(clientX, clientY) {
+        const vp = dom.inpaintViewport?.getBoundingClientRect();
+        if (!vp || _inpaint.naturalW < 1 || _inpaint.scale < 0.001) {
+            return { nx: 0, ny: 0, brush: 1 };
+        }
+        const px = clientX - vp.left;
+        const py = clientY - vp.top;
+        const nx = (px - _inpaint.panX) / _inpaint.scale;
+        const ny = (py - _inpaint.panY) / _inpaint.scale;
+        const screenBrush = dom.chkInpaintPixel?.checked
+            ? 1
+            : parseFloat(dom.inpaintBrush?.value || 28);
+        const brush = dom.chkInpaintPixel?.checked
+            ? 1
+            : screenBrush / _inpaint.scale;
+        return {
+            nx: Math.max(0, Math.min(_inpaint.naturalW, nx)),
+            ny: Math.max(0, Math.min(_inpaint.naturalH, ny)),
+            brush: Math.max(brush, 0.5),
+        };
     }
 
     function _inpaintInitMask() {
@@ -2693,31 +2738,39 @@
 
     function _inpaintHideBrushRing() {
         dom.inpaintCursor?.classList.add('hidden');
+        dom.inpaintViewport?.classList.remove('inpaint-on-stage', 'draw-tool');
     }
 
     function _inpaintUpdateBrushRing(clientX, clientY) {
         const ring = dom.inpaintCursor;
-        const stage = dom.inpaintStage;
-        if (!ring || !stage || _inpaint.tool === 'pan' || _inpaint.spacePan) {
-            ring?.classList.add('hidden');
+        const vp = dom.inpaintViewport;
+        if (!ring || !vp) return;
+
+        _inpaint.lastClientX = clientX;
+        _inpaint.lastClientY = clientY;
+
+        if (_inpaint.tool === 'pan' || _inpaint.spacePan) {
+            ring.classList.add('hidden');
+            vp.classList.remove('inpaint-on-stage', 'draw-tool');
             return;
         }
-        const rect = stage.getBoundingClientRect();
-        if (rect.width < 1 || rect.height < 1) {
+
+        const overStage = _inpaintIsOverStage(clientX, clientY);
+        vp.classList.toggle('inpaint-on-stage', overStage);
+        vp.classList.toggle('draw-tool', overStage && ['brush', 'eraser', 'wand'].includes(_inpaint.tool));
+
+        if (!overStage) {
             ring.classList.add('hidden');
             return;
         }
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-        if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
-            ring.classList.add('hidden');
-            return;
-        }
+
+        const vpRect = vp.getBoundingClientRect();
         const screenBrush = dom.chkInpaintPixel?.checked
-            ? Math.max(1, rect.width / _inpaint.naturalW)
+            ? Math.max(1, _inpaint.scale)
             : parseFloat(dom.inpaintBrush?.value || 28);
-        ring.style.left = `${x}px`;
-        ring.style.top = `${y}px`;
+
+        ring.style.left = `${clientX - vpRect.left}px`;
+        ring.style.top = `${clientY - vpRect.top}px`;
         ring.style.width = `${screenBrush}px`;
         ring.style.height = `${screenBrush}px`;
         ring.classList.toggle('eraser', _inpaint.tool === 'eraser');
@@ -2741,27 +2794,22 @@
         dom.inpaintStage?.classList.toggle('wand-mode', tool === 'wand');
         dom.inpaintStage?.classList.toggle('pan-mode', tool === 'pan' || _inpaint.spacePan);
         dom.inpaintViewport?.classList.toggle('pan-mode', tool === 'pan' || _inpaint.spacePan);
-        if (tool === 'pan' || _inpaint.spacePan) _inpaintHideBrushRing();
+        dom.inpaintViewport?.classList.toggle('draw-tool', ['brush', 'eraser', 'wand'].includes(tool));
+        if (tool === 'pan' || _inpaint.spacePan) {
+            _inpaintHideBrushRing();
+        } else if (_inpaint.lastClientX || _inpaint.lastClientY) {
+            _inpaintUpdateBrushRing(_inpaint.lastClientX, _inpaint.lastClientY);
+        }
     }
 
     function _inpaintPointerToNative(clientX, clientY) {
-        const rect = dom.inpaintStage?.getBoundingClientRect();
-        if (!rect || rect.width < 1 || rect.height < 1) return { nx: 0, ny: 0, brush: 1 };
-        const nx = Math.max(0, Math.min(_inpaint.naturalW, ((clientX - rect.left) / rect.width) * _inpaint.naturalW));
-        const ny = Math.max(0, Math.min(_inpaint.naturalH, ((clientY - rect.top) / rect.height) * _inpaint.naturalH));
-        const screenScale = rect.width / _inpaint.naturalW;
-        let brush;
-        if (dom.chkInpaintPixel?.checked) {
-            brush = 1;
-        } else {
-            const screenBrush = parseFloat(dom.inpaintBrush?.value || 28);
-            brush = screenBrush / screenScale;
-        }
-        return { nx, ny, brush };
+        return _inpaintClientToNative(clientX, clientY);
     }
 
     function _inpaintPaintAt(clientX, clientY) {
+        _inpaintEnsureMask();
         if (!_inpaint._maskCtx || _inpaint.naturalW < 1) return;
+        if (!_inpaintIsOverStage(clientX, clientY)) return;
         const { nx, ny, brush } = _inpaintPointerToNative(clientX, clientY);
         _inpaint._maskCtx.fillStyle = _inpaint.tool === 'eraser' ? '#000' : '#fff';
         _inpaint._maskCtx.beginPath();
@@ -2771,7 +2819,16 @@
     }
 
     function _inpaintMagicWand(clientX, clientY) {
-        if (!_inpaint._maskCtx || !_inpaint._imgData || _inpaint.naturalW < 1) return;
+        _inpaintEnsureMask();
+        if (!_inpaint._maskCtx || _inpaint.naturalW < 1) return;
+        if (!_inpaintIsOverStage(clientX, clientY)) return;
+        if (!_inpaint._imgData) {
+            _inpaintCacheImageData();
+            if (!_inpaint._imgData) {
+                alert('魔棒需要读取底图颜色，请确认 ComfyUI 已加 --enable-cors-header');
+                return;
+            }
+        }
         const { nx, ny } = _inpaintPointerToNative(clientX, clientY);
         const w = _inpaint.naturalW;
         const h = _inpaint.naturalH;
@@ -2787,7 +2844,7 @@
         const visited = new Uint8Array(w * h);
         const stack = [sx + sy * w];
         const selected = [];
-        const fillWhite = _inpaint.tool !== 'eraser';
+        const fillWhite = _inpaint.tool === 'wand' || _inpaint.tool === 'brush';
 
         while (stack.length) {
             const pi = stack.pop();
@@ -2859,6 +2916,7 @@
 
     function openInpaintModal(imageUrl) {
         if (!imageUrl || !dom.modalInpaint) return;
+        const gen = ++_inpaint.readyGen;
         _inpaint.sourceUrl = imageUrl;
         _inpaint.drawing = false;
         _inpaint.panning = false;
@@ -2866,29 +2924,40 @@
         _inpaint._maskNative = null;
         _inpaint._maskCtx = null;
         _inpaint._imgData = null;
+        _inpaint.lastClientX = 0;
+        _inpaint.lastClientY = 0;
         _inpaintSetTool('brush');
         applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
         dom.modalInpaint.classList.remove('hidden');
         document.body.classList.add('inpaint-open');
         _inpaintHideBrushRing();
+        dom.inpaintViewport?.classList.remove('inpaint-on-stage', 'draw-tool');
 
         const onReady = () => {
+            if (gen !== _inpaint.readyGen) return;
             _inpaint.naturalW = dom.inpaintImage.naturalWidth;
             _inpaint.naturalH = dom.inpaintImage.naturalHeight;
             if (_inpaint.naturalW > 0) {
                 requestAnimationFrame(() => {
+                    if (gen !== _inpaint.readyGen) return;
                     _inpaintLayoutStage();
-                    _inpaintCacheImageData();
                     _inpaintInitMask();
+                    _inpaintCacheImageData();
                     _inpaintFitToView();
+                    requestAnimationFrame(() => {
+                        if (gen !== _inpaint.readyGen) return;
+                        _inpaintRedrawOverlay();
+                    });
                 });
             }
         };
 
+        dom.inpaintImage.crossOrigin = 'anonymous';
         dom.inpaintImage.onload = onReady;
-        dom.inpaintImage.src = imageUrl;
-        if (dom.inpaintImage.complete && dom.inpaintImage.naturalWidth > 0) {
-            requestAnimationFrame(onReady);
+        if (dom.inpaintImage.src !== imageUrl) {
+            dom.inpaintImage.src = imageUrl;
+        } else {
+            onReady();
         }
     }
 
@@ -2898,6 +2967,7 @@
         _inpaint.drawing = false;
         _inpaint.panning = false;
         _inpaintHideBrushRing();
+        dom.inpaintViewport?.classList.remove('inpaint-on-stage', 'draw-tool', 'pan-mode');
     }
 
     async function runInpaintGeneration() {
@@ -2972,13 +3042,8 @@
         dom.btnInpaintRun?.addEventListener('click', runInpaintGeneration);
 
         dom.inpaintBrush?.addEventListener('input', () => {
-            if (dom.inpaintCursor && !dom.inpaintCursor.classList.contains('hidden')) {
-                const rect = dom.inpaintStage?.getBoundingClientRect();
-                if (rect) {
-                    const left = parseFloat(dom.inpaintCursor.style.left || '0');
-                    const top = parseFloat(dom.inpaintCursor.style.top || '0');
-                    _inpaintUpdateBrushRing(rect.left + left, rect.top + top);
-                }
+            if (_inpaint.lastClientX || _inpaint.lastClientY) {
+                _inpaintUpdateBrushRing(_inpaint.lastClientX, _inpaint.lastClientY);
             }
         });
 
@@ -3023,6 +3088,7 @@
                 e.preventDefault();
                 return;
             }
+            if (!_inpaintIsOverStage(pt.clientX, pt.clientY)) return;
             _inpaint.drawing = true;
             if (_inpaint.tool === 'wand') {
                 _inpaintMagicWand(pt.clientX, pt.clientY);
@@ -3076,14 +3142,10 @@
             _inpaint.panning = false;
             _inpaint.pinchDist = 0;
         };
-        const onPointerLeave = () => {
-            if (!_inpaint.panning) _inpaintHideBrushRing();
-        };
 
         const paintTarget = dom.inpaintViewport;
         paintTarget?.addEventListener('mousedown', onPointerDown);
         paintTarget?.addEventListener('mousemove', onPointerMove);
-        paintTarget?.addEventListener('mouseleave', onPointerLeave);
         window.addEventListener('mouseup', onPointerUp);
         paintTarget?.addEventListener('touchstart', onPointerDown, { passive: false });
         paintTarget?.addEventListener('touchmove', onPointerMove, { passive: false });
