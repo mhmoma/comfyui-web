@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.28
+> **部署版本**: 1.30
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。如果UI有变化，还需更新 `index.html` 中的**前端版本号**。
 
@@ -62,15 +62,15 @@ alwaysApply: true
 
 | 远程名 | 地址 | 用途 |
 |--------|------|------|
-| `origin` | https://github.com/mhmoma/comfyui-Web.git | 主仓库，连接到 Cloudflare Pages 自动部署 |
-| `deploy` | https://github.com/mhmoma/arcane-survivors-kcn2id.git | 备用代码仓库 |
+| `origin` | https://github.com/mhmoma/comfyui-Web.git | **唯一推送目标**，连接 Cloudflare Pages 自动部署 |
 
-### 2.x.2 推送命令（备用）
+> **注意**：本地可能仍保留名为 `deploy` 的 git 远程（`arcane-survivors-kcn2id`），该仓库已用于其他项目，**禁止再向该远程推送** comfyui-web 代码。`deploy/` **目录**仍是 Cloudflare 构建输出目录，与上述 git 远程无关。
 
-如果上述部署命令因各种原因失败，可以使用以下命令组合来尝试推送。
+### 2.x.2 推送失败时的备用命令
+
+若默认代理推送失败，可尝试绕过代理后**仅推 origin**：
 
 ```powershell
-# 备用推送命令
 $env:ALL_PROXY=''; $env:HTTP_PROXY=''; $env:HTTPS_PROXY=''
 git push origin main
 ```
@@ -229,3 +229,5 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.26 | 2026-07-04 | 作品角色数修复 | 新增 series_char_counts.json，作品卡片显示真实角色条数而非 Danbooru 热度总和。 |
 | 1.27 | 2026-07-05 | 架构切换状态隔离 | SDXL/Anima 切换时分别保存恢复提示词、采样器、调度器等参数，防止跨架构泄漏。 |
 | 1.28 | 2026-07-06 | 教程资源下载 | 教程弹窗新增各模型介绍与 HuggingFace 一键下载链接。 |
+| 1.29 | 2026-07-06 | 停用备用 git 远程 | 不再向 `deploy` 远程（arcane-survivors）推送；仅推 `origin`。 |
+| 1.30 | 2026-07-06 | 常用标签角标防混淆 | 标签使用角标从 `×N` 改为 `N次`，且仅在「最近/常用」页显示，避免被误认成提示词权重。 |

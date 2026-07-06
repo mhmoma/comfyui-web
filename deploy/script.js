@@ -3167,6 +3167,7 @@
 
         _renderItemsInto(container, items, forceArtist) {
             const selected = this.getSelectedTags();
+            const showUsageBadge = this._virtualMode === 'recent' || this._virtualMode === 'frequent';
             const lazyImages = [];
             items.forEach(tag => {
                 const div = document.createElement('div');
@@ -3179,7 +3180,7 @@
                 div.className = 'tag-item' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtistItem ? ' tag-artist' : '');
                 div.dataset.tag = tag.t;
                 const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
-                const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
+                const useBadge = showUsageBadge && useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">${useCount}次</span>` : '';
                 if (hasThumb) {
                     div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
                     lazyImages.push(div.querySelector('img.tag-thumb'));
@@ -3215,6 +3216,7 @@
             const frag = document.createDocumentFragment();
             const selected = this.getSelectedTags();
             const isArtistGroup = !this._virtualMode && tagData[this.groupIdx]?.name?.includes('画师');
+            const showUsageBadge = this._virtualMode === 'recent' || this._virtualMode === 'frequent';
             const lazyImages = [];
 
             items.forEach(tag => {
@@ -3228,7 +3230,7 @@
                 div.dataset.tag = tag.t;
 
                 const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
-                const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
+                const useBadge = showUsageBadge && useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">${useCount}次</span>` : '';
 
                 if (hasThumb) {
                     div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
@@ -3275,6 +3277,7 @@
         _renderGroupedFavItems(items, emptyMsg) {
             this.gridEl.innerHTML = '';
             const groups = { artist: [], character: [], tag: [] };
+            const showUsageBadge = this._virtualMode === 'recent' || this._virtualMode === 'frequent';
             items.forEach(item => {
                 const type = item.type || (item.th ? (item.img ? 'artist' : 'character') : 'tag');
                 if (groups[type]) groups[type].push(item);
@@ -3317,7 +3320,7 @@
                         div.className = 'tag-item fav-mini' + (isSelected ? ' selected' : '') + (hasThumb ? ' tag-char' : '') + (!hasThumb && isArtist ? ' tag-artist' : '');
                         div.dataset.tag = tag.t;
                         const favStar = `<span class="tag-fav-star ${isFav ? 'fav-active' : ''}" title="${isFav ? '取消收藏' : '收藏'}">★</span>`;
-                        const useBadge = useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">×${useCount}</span>` : '';
+                        const useBadge = showUsageBadge && useCount > 0 ? `<span class="tag-use-count" title="使用${useCount}次">${useCount}次</span>` : '';
                         if (hasThumb) {
                             div.innerHTML = `<img class="tag-thumb" src="${tag.th}" alt="${tag.d}" loading="lazy" onerror="this.style.display='none'">${favStar}<span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>${useBadge}<span class="tag-weight">${weight.toFixed(1)}</span>`;
                             div.addEventListener('click', (e) => {
