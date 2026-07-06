@@ -1547,6 +1547,31 @@ textarea {
     border-radius: var(--radius);
 }
 
+/* Post-process base preview modal: avoid actions being cut off on small screens */
+#modal-post-preview .preview-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    max-height: 88vh;
+}
+
+#modal-post-preview .preview-image {
+    width: 100%;
+    height: auto;
+    max-height: calc(88vh - 220px);
+    object-fit: contain;
+}
+
+#modal-post-preview .modal-actions {
+    position: sticky;
+    bottom: 0;
+    padding-top: 10px;
+    background: var(--bg-secondary);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .close-btn {
     position: absolute;
     top: -8px;
