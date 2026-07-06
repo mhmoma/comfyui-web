@@ -1623,54 +1623,112 @@ textarea {
     justify-content: flex-end;
 }
 
-/* Inpaint modal */
-.inpaint-content {
-    max-width: min(920px, 96vw);
-    max-height: 92vh;
-    overflow-y: auto;
+/* Inpaint fullscreen editor */
+body.inpaint-open {
+    overflow: hidden;
 }
 
-.inpaint-hint {
+.inpaint-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    background: #08080f;
+}
+
+.inpaint-fullscreen.hidden {
+    display: none;
+}
+
+.inpaint-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+}
+
+.inpaint-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.inpaint-title {
+    margin: 0;
+    font-size: 1.05rem;
+    white-space: nowrap;
+}
+
+.inpaint-preset-select {
+    min-width: 160px;
+    max-width: 220px;
+}
+
+.inpaint-hint-top {
+    flex: 1 1 200px;
+    margin: 0;
     color: var(--text-secondary);
-    font-size: 0.82rem;
-    line-height: 1.5;
-    margin: -4px 0 10px;
+    font-size: 0.78rem;
+    line-height: 1.4;
 }
 
-.inpaint-canvas-wrap {
-    margin: 10px 0;
-    text-align: center;
+.inpaint-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(45deg, #12121c 25%, transparent 25%),
+        linear-gradient(-45deg, #12121c 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #12121c 75%),
+        linear-gradient(-45deg, transparent 75%, #12121c 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    touch-action: none;
+    cursor: none;
+}
+
+.inpaint-transform {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    will-change: transform;
 }
 
 .inpaint-stage {
     position: relative;
-    display: inline-block;
-    max-width: 100%;
     line-height: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
     background: #0a0a12;
     cursor: none;
     touch-action: none;
-    overflow: hidden;
 }
 
-.inpaint-stage.brush-mode {
-    cursor: none;
+.inpaint-stage.pan-mode {
+    cursor: grab;
 }
 
-.inpaint-stage.eraser-mode {
-    cursor: none;
+.inpaint-stage.pan-mode:active {
+    cursor: grabbing;
 }
 
 .inpaint-image {
     display: block;
-    max-width: min(92vw, 880px);
-    max-height: min(52vh, 640px);
-    width: auto;
-    height: auto;
+    width: 100%;
+    height: 100%;
     user-select: none;
     pointer-events: none;
+    -webkit-user-drag: none;
 }
 
 .inpaint-canvas {
@@ -1681,7 +1739,6 @@ textarea {
     height: 100%;
     z-index: 2;
     pointer-events: none;
-    touch-action: none;
 }
 
 .inpaint-cursor {
@@ -1695,7 +1752,6 @@ textarea {
     transform: translate(-50%, -50%);
     box-sizing: border-box;
     background: rgba(233, 69, 96, 0.12);
-    transition: width 0.05s, height 0.05s;
 }
 
 .inpaint-cursor.eraser {
@@ -1704,12 +1760,28 @@ textarea {
     border-style: dashed;
 }
 
-.inpaint-tools {
+.inpaint-cursor.wand {
+    border-color: rgba(69, 170, 233, 0.95);
+    background: rgba(69, 170, 233, 0.15);
+    border-radius: 4px;
+}
+
+.inpaint-bottombar {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    padding: 10px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inpaint-tools-row,
+.inpaint-prompts-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 8px;
 }
 
 .inpaint-tool.active {
@@ -1720,14 +1792,86 @@ textarea {
 .inpaint-brush-label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.85rem;
+    gap: 6px;
+    font-size: 0.82rem;
+    margin: 0 !important;
+    white-space: nowrap;
+}
+
+.inpaint-brush-label input[type="range"] {
+    width: 90px;
+}
+
+.inpaint-pixel-label input {
+    margin: 0;
+}
+
+.inpaint-zoom-label {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    min-width: 48px;
+    text-align: right;
+}
+
+.inpaint-denoise-label input {
+    width: 64px;
+}
+
+.inpaint-prompt-field {
+    flex: 1 1 180px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
     margin: 0 !important;
 }
 
-.inpaint-content textarea {
-    width: 100%;
+.inpaint-prompt-field textarea {
+    flex: 1;
+    min-height: 32px;
     resize: vertical;
+}
+
+.inpaint-prompts-row .btn-primary {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .inpaint-topbar {
+        padding: 8px 10px;
+    }
+
+    .inpaint-hint-top {
+        display: none;
+    }
+
+    .inpaint-preset-select {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .inpaint-tools-row {
+        gap: 6px;
+    }
+
+    .inpaint-brush-label input[type="range"] {
+        width: 70px;
+    }
+
+    .inpaint-prompts-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .inpaint-prompt-field {
+        width: 100%;
+    }
+
+    .inpaint-prompts-row .btn-primary {
+        width: 100%;
+        margin-left: 0;
+    }
 }
 
 .close-btn {

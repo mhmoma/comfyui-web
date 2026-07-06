@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.73</title>
-    <link rel="stylesheet" href="style.css?v=373">
+<title>ComfyUI Web v3.74</title>
+    <link rel="stylesheet" href="style.css?v=374">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.73</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.74</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -928,50 +928,64 @@
         </div>
     </div>
 
-    <!-- 局部重绘 -->
-    <div id="modal-inpaint" class="modal hidden">
-        <div class="modal-content inpaint-content">
-            <h2>局部重绘</h2>
-            <p id="inpaint-hint" class="inpaint-hint">在图上涂抹要重绘的区域（红色半透明区域）。提示词只描述蒙版内要出现的内容，不要写整个人。</p>
-            <label>场景预设
-                <select id="sel-inpaint-preset">
-                    <option value="clothes">换衣服 — 只涂衣物，低强度</option>
-                    <option value="background">换背景 — 涂人物以外区域</option>
-                    <option value="erase">擦除重填 — 去掉物体后自然填补</option>
-                    <option value="detail">修复细节 — 小范围修脸手模糊</option>
-                    <option value="hair">换发型 — 只涂头发区域</option>
-                    <option value="custom">自定义</option>
-                </select>
-            </label>
-            <div id="inpaint-canvas-wrap" class="inpaint-canvas-wrap">
-                <div id="inpaint-stage" class="inpaint-stage">
-                    <img id="inpaint-image" class="inpaint-image" alt="重绘底图">
+    <!-- 局部重绘（全屏工作台） -->
+    <div id="modal-inpaint" class="inpaint-fullscreen hidden" aria-label="局部重绘">
+        <header class="inpaint-topbar">
+            <button type="button" id="btn-inpaint-cancel" class="btn-icon inpaint-close" title="退出">✕</button>
+            <h2 class="inpaint-title">局部重绘</h2>
+            <select id="sel-inpaint-preset" class="inpaint-preset-select" title="场景预设">
+                <option value="clothes">换衣服 — 只涂衣物</option>
+                <option value="background">换背景 — 涂人物外区域</option>
+                <option value="erase">擦除重填</option>
+                <option value="detail">修复细节</option>
+                <option value="hair">换发型 — 只涂头发</option>
+                <option value="custom">自定义</option>
+            </select>
+            <button type="button" id="btn-inpaint-invert" class="btn-secondary btn-sm">反选蒙版</button>
+            <button type="button" id="btn-inpaint-clear" class="btn-secondary btn-sm">清空</button>
+            <button type="button" id="btn-inpaint-fit" class="btn-secondary btn-sm">适应窗口</button>
+            <button type="button" id="btn-inpaint-100" class="btn-secondary btn-sm">1:1</button>
+            <p id="inpaint-hint" class="inpaint-hint-top">涂抹要重绘的区域（红色半透明）。空格+拖动平移，滚轮缩放。</p>
+        </header>
+        <div id="inpaint-viewport" class="inpaint-viewport">
+            <div id="inpaint-transform" class="inpaint-transform">
+                <div id="inpaint-stage" class="inpaint-stage brush-mode">
+                    <img id="inpaint-image" class="inpaint-image" alt="重绘底图" draggable="false">
                     <canvas id="inpaint-canvas" class="inpaint-canvas"></canvas>
                     <div id="inpaint-cursor" class="inpaint-cursor hidden" aria-hidden="true"></div>
                 </div>
             </div>
-            <div class="inpaint-tools">
+        </div>
+        <footer class="inpaint-bottombar">
+            <div class="inpaint-tools-row">
                 <button type="button" id="btn-inpaint-brush" class="btn-secondary inpaint-tool active">画笔</button>
                 <button type="button" id="btn-inpaint-eraser" class="btn-secondary inpaint-tool">橡皮</button>
-                <button type="button" id="btn-inpaint-clear" class="btn-secondary">清空蒙版</button>
+                <button type="button" id="btn-inpaint-wand" class="btn-secondary inpaint-tool">魔棒</button>
+                <button type="button" id="btn-inpaint-pan" class="btn-secondary inpaint-tool" title="拖动画布">平移</button>
                 <label class="inpaint-brush-label">笔刷
-                    <input type="range" id="inpaint-brush" min="6" max="140" value="36">
+                    <input type="range" id="inpaint-brush" min="4" max="120" value="28">
                 </label>
+                <label class="inpaint-brush-label inpaint-wand-tol hidden" id="inpaint-wand-wrap">容差
+                    <input type="range" id="inpaint-wand-tol" min="4" max="96" value="32">
+                </label>
+                <label class="inpaint-brush-label inpaint-pixel-label">
+                    <input type="checkbox" id="chk-inpaint-pixel"> 1px像素笔
+                </label>
+                <span id="inpaint-zoom-label" class="inpaint-zoom-label">100%</span>
             </div>
-            <label>重绘强度（越低越保留原图，换衣服建议 0.35–0.55）
-                <input type="number" id="inp-inpaint-denoise" value="0.45" min="0.1" max="0.95" step="0.01">
-            </label>
-            <label>蒙版内正向提示词
-                <textarea id="txt-inpaint-pos" rows="2" placeholder="只写蒙版区域要出现的内容…"></textarea>
-            </label>
-            <label>蒙版内反向提示词
-                <textarea id="txt-inpaint-neg" rows="2" placeholder="避免出现的元素…"></textarea>
-            </label>
-            <div class="modal-actions">
+            <div class="inpaint-prompts-row">
+                <label class="inpaint-denoise-label">强度
+                    <input type="number" id="inp-inpaint-denoise" value="0.45" min="0.1" max="0.95" step="0.01">
+                </label>
+                <label class="inpaint-prompt-field">正向
+                    <textarea id="txt-inpaint-pos" rows="1" placeholder="蒙版内要出现的内容…"></textarea>
+                </label>
+                <label class="inpaint-prompt-field">反向
+                    <textarea id="txt-inpaint-neg" rows="1" placeholder="避免出现的元素…"></textarea>
+                </label>
                 <button type="button" id="btn-inpaint-run" class="btn-primary">开始重绘</button>
-                <button type="button" id="btn-inpaint-cancel" class="btn-secondary">取消</button>
             </div>
-        </div>
+        </footer>
     </div>
 
     <!-- 教程弹窗 -->
@@ -1182,6 +1196,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=373"></script>
+    <script src="script.js?v=374"></script>
 </body>
 </html>
