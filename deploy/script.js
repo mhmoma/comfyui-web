@@ -186,6 +186,7 @@
         startAt: 0,
         runningAt: 0, // first time observed in queue_running
         lastPct: 0,
+        hasRealtimeProgress: false,
         ws: null,
         wsClientId: null,
         lastPreviewUrl: null,
@@ -259,7 +260,7 @@
         return server.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
     }
 
-    function _connectPreviewWS(promptId) {
+    function _connectPreviewWS() {
         // ComfyUI standard: ws(s)://host/ws?clientId=xxx
         const base = _getWsBase();
         const clientId = _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`);
@@ -271,25 +272,52 @@
         } catch {
             return;
         }
-        ws.binaryType = 'blob';
+        ws.binaryType = 'arraybuffer';
         ws.onmessage = (ev) => {
-            if (!_gen.active || _gen.promptId !== promptId) return;
+            if (!_gen.active) return;
             if (typeof ev.data === 'string') {
                 try {
                     const msg = JSON.parse(ev.data);
+                    const dataPromptId = msg?.data?.prompt_id;
+                    if (_gen.promptId && dataPromptId && dataPromptId !== _gen.promptId) return;
                     if (msg?.type === 'progress') {
                         const d = msg.data || {};
                         const pct = (typeof d.value === 'number' && typeof d.max === 'number' && d.max > 0)
                             ? (d.value / d.max) * 100
                             : (typeof d.progress === 'number' ? d.progress * 100 : null);
-                        if (pct != null) setProgress(Math.max(0, Math.min(99, pct)));
+                        if (pct != null) {
+                            _gen.hasRealtimeProgress = true;
+                            setProgress(Math.max(_gen.lastPct, Math.min(99, pct)));
+                        }
                     }
                 } catch { /* ignore */ }
                 return;
             }
-            // blob preview frames
-            if (ev.data instanceof Blob) {
-                _setLivePreview(ev.data);
+            if (ev.data instanceof ArrayBuffer) {
+                const bytes = new Uint8Array(ev.data);
+                if (bytes.length < 8) return;
+                const view = new DataView(ev.data);
+                const eventType = view.getUint32(0, false);
+                let mime = 'image/jpeg';
+                let imageBytes = null;
+                if (eventType === 1) {
+                    const imageType = view.getUint32(4, false);
+                    mime = imageType === 2 ? 'image/png' : 'image/jpeg';
+                    imageBytes = bytes.slice(8);
+                } else if (eventType === 4) {
+                    const metaLen = view.getUint32(4, false);
+                    const imageStart = 8 + metaLen;
+                    if (bytes.length <= imageStart) return;
+                    try {
+                        const metaJson = new TextDecoder().decode(bytes.slice(8, imageStart));
+                        const meta = JSON.parse(metaJson);
+                        mime = meta?.image_type || mime;
+                    } catch { /* ignore */ }
+                    imageBytes = bytes.slice(imageStart);
+                }
+                if (imageBytes && imageBytes.length > 0) {
+                    _setLivePreview(new Blob([imageBytes], { type: mime }));
+                }
             }
         };
         ws.onclose = () => { if (_gen.ws === ws) _gen.ws = null; };
@@ -1555,6 +1583,7 @@
         _gen.startAt = Date.now();
         _gen.runningAt = 0;
         _gen.lastPct = 0;
+        _gen.hasRealtimeProgress = false;
         _hideLivePreview();
         _syncFab(0);
         dom.btnGenerate.disabled = true;
@@ -1590,9 +1619,11 @@
             }
 
             const workflow = buildWorkflow(uploadedImages);
+            workflow.client_id = _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`);
+            _gen.wsClientId = workflow.client_id;
+            _connectPreviewWS();
             const result = await apiPost('/prompt', workflow);
             _gen.promptId = result.prompt_id;
-            _connectPreviewWS(result.prompt_id);
             await pollProgress(result.prompt_id);
         } catch (e) {
             alert('生图失败: ' + e.message);
@@ -1600,6 +1631,7 @@
         } finally {
             _gen.active = false;
             _gen.promptId = null;
+            _gen.hasRealtimeProgress = false;
             _closePreviewWS();
             _hideLivePreview();
             _syncFab(0);
@@ -1633,7 +1665,11 @@
                     const current = running.find(item => item[1] === promptId);
                     if (current) {
                         if (!_gen.runningAt) _gen.runningAt = Date.now();
-                        setProgress(50);
+                        if (!_gen.hasRealtimeProgress) {
+                            const elapsed = Date.now() - (_gen.runningAt || _gen.startAt || Date.now());
+                            const fallbackPct = Math.min(92, 8 + Math.floor(elapsed / 1500) * 3);
+                            setProgress(Math.max(_gen.lastPct, fallbackPct));
+                        }
                     }
                 }
             } catch (e) {
@@ -1732,8 +1768,9 @@
 
     function setProgress(pct) {
         const v = Math.max(0, Math.min(100, Math.round(pct || 0)));
-        if (_gen.active) _gen.lastPct = v;
-        dom.progressBar.style.width = v + '%';
+        const next = _gen.active ? Math.max(_gen.lastPct || 0, v) : v;
+        if (_gen.active) _gen.lastPct = next;
+        dom.progressBar.style.width = next + '%';
 
         let suffix = '';
         if (_gen.active && _gen.startAt) {
@@ -1747,11 +1784,11 @@
                 suffix = ` · 已用${_fmtMs(total)}`;
             }
         }
-        dom.progressText.textContent = `${v}%${suffix}`;
+        dom.progressText.textContent = `${next}%${suffix}`;
 
         if (_gen.active) {
-            _syncFab(v);
-            _setTitleProgress(v, _gen.runningAt ? '生成中' : '排队中');
+            _syncFab(next);
+            _setTitleProgress(next, _gen.runningAt ? '生成中' : '排队中');
         }
     }
 
@@ -5249,6 +5286,13 @@
             return;
         }
 
+        _gen.active = true;
+        _gen.startAt = Date.now();
+        _gen.runningAt = 0;
+        _gen.lastPct = 0;
+        _gen.hasRealtimeProgress = false;
+        _hideLivePreview();
+        _syncFab(0);
         dom.btnGenerate.disabled = true;
         dom.btnGenerate.textContent = '生成中...';
         dom.progressContainer.classList.remove('hidden');
@@ -5270,12 +5314,23 @@
                 }
             }
 
-            const result = await apiPost('/prompt', { prompt: workflow });
+            const clientId = _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`);
+            _gen.wsClientId = clientId;
+            _connectPreviewWS();
+            const result = await apiPost('/prompt', { prompt: workflow, client_id: clientId });
+            _gen.promptId = result.prompt_id;
             await pollProgress(result.prompt_id);
         } catch (e) {
             alert('生图失败: ' + e.message);
             console.error(e);
         } finally {
+            _gen.active = false;
+            _gen.promptId = null;
+            _gen.hasRealtimeProgress = false;
+            _closePreviewWS();
+            _hideLivePreview();
+            _syncFab(0);
+            _setTitleProgress(0, '');
             dom.btnGenerate.disabled = false;
             dom.btnGenerate.textContent = '生成图片';
             dom.progressContainer.classList.add('hidden');
