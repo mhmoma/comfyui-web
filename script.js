@@ -607,17 +607,91 @@
         return res.json();
     }
 
-    async function uploadImageFromUrl(imageUrl, filename) {
-        const response = await fetch(imageUrl);
-        const blob = await response.blob();
-        const file = new File([blob], filename || `ref_${Date.now()}.png`, { type: blob.type || 'image/png' });
-        return uploadImage(file);
+    function comfyImageViewUrl(imgMeta) {
+        const filename = imgMeta?.filename || '';
+        const subfolder = imgMeta?.subfolder || '';
+        const type = imgMeta?.type || 'output';
+        return `${getServer()}/view?filename=${encodeURIComponent(filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${type}`;
+    }
+
+    async function fetchComfyImageBlob(viewUrl, retries = 6) {
+        let lastErr;
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(viewUrl);
+                if (res.ok) {
+                    const blob = await res.blob();
+                    if (blob.size > 64) return blob;
+                    lastErr = new Error(`底图为空 (${blob.size} bytes)`);
+                } else {
+                    lastErr = new Error(`读取底图 HTTP ${res.status}`);
+                }
+            } catch (e) {
+                lastErr = e;
+            }
+            await new Promise(r => setTimeout(r, 350 * (i + 1)));
+        }
+        throw lastErr || new Error('无法读取底图');
+    }
+
+    async function blobFromImageElement(viewUrl) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    const c = document.createElement('canvas');
+                    c.width = img.naturalWidth;
+                    c.height = img.naturalHeight;
+                    c.getContext('2d').drawImage(img, 0, 0);
+                    c.toBlob(blob => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('canvas 导出失败'));
+                    }, 'image/png');
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            img.onerror = () => reject(new Error('底图图片元素加载失败'));
+            img.src = viewUrl;
+        });
     }
 
     /** ComfyUI LoadImage 只认 input 目录；底图预览保存在 output，后处理前需重新上传 */
     async function uploadBaseImageForPost(baseResult) {
-        const uploaded = await uploadImageFromUrl(baseResult.url, `cw_base_${Date.now()}.png`);
-        return uploaded.name;
+        const meta = baseResult?.meta || {};
+        const viewUrl = baseResult?.url || comfyImageViewUrl(meta);
+        const uploadName = `cw_base_${Date.now()}.png`;
+
+        let blob;
+        try {
+            blob = await fetchComfyImageBlob(viewUrl);
+        } catch (e1) {
+            console.warn('[Post] fetch 底图失败，尝试 canvas 回退', e1);
+            try {
+                blob = await blobFromImageElement(viewUrl);
+            } catch (e2) {
+                const httpsPageHttpComfy = window.location.protocol === 'https:' && /^http:/i.test(getServer());
+                const hint = httpsPageHttpComfy
+                    ? '请 Ctrl+F5 强刷到最新版；若仍失败，请用本地打开页面或给 ComfyUI 配 HTTPS。'
+                    : '请确认 ComfyUI 启动时加了 --enable-cors-header。';
+                throw new Error(`底图上传到 input 失败。${hint}`);
+            }
+        }
+
+        const uploaded = await uploadImage(new File([blob], uploadName, { type: 'image/png' }));
+        const name = uploaded?.name || uploadName;
+        if (/^CW_Base_\d+_/i.test(name)) {
+            throw new Error('底图上传异常（仍为 output 文件名），请强刷页面后重试');
+        }
+        console.log('[Post] 底图已上传到 input:', name);
+        return name;
+    }
+
+    async function uploadImageFromUrl(imageUrl, filename) {
+        const blob = await fetchComfyImageBlob(imageUrl, 3);
+        const file = new File([blob], filename || `ref_${Date.now()}.png`, { type: blob.type || 'image/png' });
+        return uploadImage(file);
     }
 
     const ANIMA_DEFAULTS = {
@@ -3160,8 +3234,12 @@
             }
 
             if (decision === 'continue') {
-                resetStageProgress('后处理中...');
+                resetStageProgress('上传底图中...');
                 const inputImageName = await uploadBaseImageForPost(baseResult);
+                if (/^CW_Base_/i.test(inputImageName)) {
+                    throw new Error('底图未正确上传到 input，请强刷页面 (Ctrl+F5) 后重试');
+                }
+                resetStageProgress('后处理中...');
                 const postWorkflow = buildWorkflow(uploadedImages, {
                     stage: 'post',
                     baseImageName: inputImageName,
@@ -3186,7 +3264,11 @@
                 await runPromptWorkflow(workflow);
             }
         } catch (e) {
-            alert('生图失败: ' + e.message);
+            let msg = e.message || String(e);
+            if (/Invalid image file|CW_Base_/i.test(msg)) {
+                msg += '（底图需先上传到 input；请 Ctrl+F5 强刷到 v3.75+）';
+            }
+            alert('生图失败: ' + msg);
             console.error(e);
         } finally {
             resolvePostPreview('cancel');
