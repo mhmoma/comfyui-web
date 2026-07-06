@@ -686,7 +686,7 @@
 
         const uploaded = await uploadImage(new File([blob], uploadName, { type: 'image/png' }));
         const name = uploaded?.name || uploadName;
-        if (/^CW_Base_\d+_/i.test(name)) {
+        if (isComfyOutputBaseName(name)) {
             throw new Error('底图上传异常（仍为 output 文件名），请强刷页面后重试');
         }
         console.log('[Post] 底图已上传到 input:', name);
@@ -2918,6 +2918,15 @@
         return _inpaint.tool === 'pan' || _inpaint.spacePan || e.button === 1;
     }
 
+    function _inpaintSetImageCrossOrigin(imageUrl) {
+        if (!dom.inpaintImage) return;
+        if (/^https?:\/\//i.test(imageUrl)) {
+            dom.inpaintImage.crossOrigin = 'anonymous';
+        } else {
+            dom.inpaintImage.removeAttribute('crossorigin');
+        }
+    }
+
     function openInpaintModal(imageUrl) {
         if (!imageUrl || !dom.modalInpaint) return;
         const gen = ++_inpaint.readyGen;
@@ -3302,9 +3311,6 @@
             if (decision === 'continue') {
                 resetStageProgress('上传底图中...');
                 const inputImageName = await uploadBaseImageForPost(baseResult);
-                if (/^CW_Base_/i.test(inputImageName)) {
-                    throw new Error('底图未正确上传到 input，请强刷页面 (Ctrl+F5) 后重试');
-                }
                 resetStageProgress('后处理中...');
                 const postWorkflow = buildWorkflow(uploadedImages, {
                     stage: 'post',
@@ -5594,7 +5600,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.76');
+        console.log('[ComfyUI Web] v3.77');
         await loadTags();
         renderHistory();
         setupTagPickers();
