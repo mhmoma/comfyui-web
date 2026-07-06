@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.70</title>
-    <link rel="stylesheet" href="style.css?v=370">
+<title>ComfyUI Web v3.72</title>
+    <link rel="stylesheet" href="style.css?v=372">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.70</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.72</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -199,6 +199,9 @@
                         </label>
                         <div id="cn-upload-preview" class="file-preview hidden">
                             <img id="cn-upload-img" alt="上传图预览">
+                            <div class="file-preview-actions">
+                                <button type="button" id="btn-cn-inpaint" class="btn-secondary btn-sm">局部重绘</button>
+                            </div>
                         </div>
                         <button id="btn-cn-preview" class="btn-secondary" style="width:100%;margin-top:6px">🔍 预览底图</button>
                         <div id="cn-processed-preview" class="file-preview hidden">
@@ -225,6 +228,9 @@
                         </label>
                         <div id="ipa-preview-container" class="file-preview hidden">
                             <img id="ipa-preview" alt="IPA参考图预览">
+                            <div class="file-preview-actions">
+                                <button type="button" id="btn-ipa-inpaint" class="btn-secondary btn-sm">局部重绘</button>
+                            </div>
                         </div>
                         <label>IP-Adapter 模型
                             <select id="sel-ipadapter-model">
@@ -273,6 +279,9 @@
                         </label>
                         <div id="ref-preview-container" class="file-preview hidden">
                             <img id="ref-preview" alt="参考图预览">
+                            <div class="file-preview-actions">
+                                <button type="button" id="btn-ref-inpaint" class="btn-secondary btn-sm">局部重绘</button>
+                            </div>
                         </div>
                         <label>重绘强度
                             <input type="number" id="inp-denoise" value="0.7" min="0" max="1" step="0.05">
@@ -879,6 +888,7 @@
             <img id="preview-image" alt="预览">
             <div class="preview-actions">
                 <button id="btn-preview-ref" class="btn-secondary">用作参考图</button>
+                <button id="btn-preview-inpaint" class="btn-secondary">局部重绘</button>
                 <button id="btn-preview-download" class="btn-secondary">下载</button>
             </div>
             <button id="btn-close-preview" class="btn-icon close-btn">✕</button>
@@ -1171,6 +1181,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=370"></script>
+    <script src="script.js?v=372"></script>
 </body>
 </html>

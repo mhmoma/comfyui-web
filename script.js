@@ -93,6 +93,7 @@
         btnCnPreview: $('#btn-cn-preview'),
         cnUploadPreview: $('#cn-upload-preview'),
         cnUploadImg: $('#cn-upload-img'),
+        btnCnInpaint: $('#btn-cn-inpaint'),
         cnProcessedPreview: $('#cn-processed-preview'),
         cnProcessedImg: $('#cn-processed-img'),
         cnPreviewContainer: $('#cn-preview-container'),
@@ -102,6 +103,7 @@
         inpRefImage: $('#inp-ref-image'),
         refPreviewContainer: $('#ref-preview-container'),
         refPreview: $('#ref-preview'),
+        btnRefInpaint: $('#btn-ref-inpaint'),
         inpDenoise: $('#inp-denoise'),
         btnUseAsRef: $('#btn-use-as-ref'),
         btnCompare: $('#btn-compare'),
@@ -112,6 +114,7 @@
         compareSlider: $('#compare-slider'),
         btnCloseCompare: $('#btn-close-compare'),
         btnPreviewRef: $('#btn-preview-ref'),
+        btnPreviewInpaint: $('#btn-preview-inpaint'),
         btnPreviewDownload: $('#btn-preview-download'),
         // ADetailer
         chkAdetailer: $('#chk-adetailer'),
@@ -133,6 +136,7 @@
         inpIpaImage: $('#inp-ipa-image'),
         ipaPreviewContainer: $('#ipa-preview-container'),
         ipaPreview: $('#ipa-preview'),
+        btnIpaInpaint: $('#btn-ipa-inpaint'),
         inpIpaWeight: $('#inp-ipa-weight'),
         inpIpaStart: $('#inp-ipa-start'),
         inpIpaEnd: $('#inp-ipa-end'),
@@ -2624,13 +2628,23 @@
     }
 
     function setupInpaint() {
-        if (!dom.btnInpaint || !dom.modalInpaint) return;
+        if (!dom.modalInpaint) return;
 
-        dom.btnInpaint.addEventListener('click', () => {
-            const url = dom.resultImage?.src;
-            if (!url) return;
-            openInpaintModal(url);
-        });
+        const wireInpaint = (btn, getUrl, closePreview) => {
+            btn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = typeof getUrl === 'function' ? getUrl() : getUrl;
+                if (!url) return;
+                if (closePreview) dom.modalPreview?.classList.add('hidden');
+                openInpaintModal(url);
+            });
+        };
+
+        wireInpaint(dom.btnInpaint, () => dom.resultImage?.src);
+        wireInpaint(dom.btnPreviewInpaint, () => dom.previewImage?.src, true);
+        wireInpaint(dom.btnRefInpaint, () => dom.refPreview?.src);
+        wireInpaint(dom.btnCnInpaint, () => dom.cnUploadImg?.src);
+        wireInpaint(dom.btnIpaInpaint, () => dom.ipaPreview?.src);
 
         dom.selInpaintPreset?.addEventListener('change', (e) => applyInpaintPreset(e.target.value));
         dom.btnInpaintBrush?.addEventListener('click', () => {
@@ -3043,10 +3057,14 @@
             div.appendChild(img);
             const overlay = document.createElement('div');
             overlay.className = 'history-overlay';
-            overlay.innerHTML = '<button class="btn-history-ref" title="用作参考图">📌</button>';
+            overlay.innerHTML = '<button class="btn-history-ref" title="用作参考图">📌</button><button class="btn-history-inpaint" title="局部重绘">🖌</button>';
             overlay.querySelector('.btn-history-ref').addEventListener('click', (e) => {
                 e.stopPropagation();
                 useImageAsRef(item.url);
+            });
+            overlay.querySelector('.btn-history-inpaint').addEventListener('click', (e) => {
+                e.stopPropagation();
+                openInpaintModal(item.url);
             });
             div.appendChild(overlay);
             div.addEventListener('click', () => {
