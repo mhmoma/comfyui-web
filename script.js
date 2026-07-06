@@ -849,6 +849,64 @@
         }
     }
 
+    // ==================== 教程资源下载 ====================
+    function triggerBrowserDownload(url, filename) {
+        const a = document.createElement('a');
+        a.href = url.includes('?') ? url : `${url}?download=true`;
+        a.download = filename;
+        a.rel = 'noopener';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    async function tryInstallToComfyUI(url, filename, savePath) {
+        try {
+            const res = await fetch(`${getServer()}/api/install-model`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, filename, save_path: savePath }),
+            });
+            return res.ok;
+        } catch {
+            return false;
+        }
+    }
+
+    function setupTutorialDownloads() {
+        document.querySelectorAll('.btn-dl-resource').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const url = btn.dataset.url;
+                const filename = btn.dataset.filename;
+                const savePath = btn.dataset.savePath || '';
+                if (!url || !filename) return;
+
+                const orig = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '…';
+
+                try {
+                    const installed = await tryInstallToComfyUI(url, filename, savePath);
+                    if (installed) {
+                        showToast(`已通过 Manager 安装: ${filename}`);
+                    } else {
+                        triggerBrowserDownload(url, filename);
+                        showToast(savePath
+                            ? `正在下载 ${filename} → 放入 models/${savePath}/`
+                            : `正在下载 ${filename}`);
+                    }
+                } catch {
+                    triggerBrowserDownload(url, filename);
+                    showToast(`正在下载 ${filename}`);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = orig;
+                }
+            });
+        });
+    }
+
     // ==================== 架构感知面板管理 ====================
     function updateArchAwarePanels() {
         const isAnima = isAnimaMode();
@@ -1659,6 +1717,8 @@
         dom.modalTutorial.addEventListener('click', (e) => {
             if (e.target === dom.modalTutorial) dom.modalTutorial.classList.add('hidden');
         });
+
+        setupTutorialDownloads();
 
         // Settings modal
         dom.btnSettings.addEventListener('click', () => {

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.60</title>
-    <link rel="stylesheet" href="style.css?v=358">
+<title>ComfyUI Web v3.61</title>
+    <link rel="stylesheet" href="style.css?v=361">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.60</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.61</span></h1>
             <a href="https://discord.gg/da9PMeAGGK" target="_blank" rel="noopener noreferrer" class="btn-icon btn-discord" title="加入绘画Discord交流群">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
             </a>
@@ -897,11 +897,127 @@
                 <h3>3. 选择模型架构</h3>
                 <p>左侧面板顶部选择模型架构：</p>
                 <ul>
-                    <li><b>SDXL (Checkpoint)</b> — 传统 SDXL 大模型</li>
-                    <li><b>Anima (Diffusion Model)</b> — 新架构，需分别选扩散模型/文本编码器/VAE</li>
+                    <li><b>SDXL (Checkpoint)</b> — 传统 SDXL 单文件大模型</li>
+                    <li><b>Anima (Diffusion Model)</b> — 新架构，扩散模型 + 文本编码器 + VAE 分开加载</li>
                 </ul>
 
-                <h3>4. 生成图片</h3>
+                <h3>4. 模型资源下载</h3>
+                <p class="tutorial-dl-hint">点击 <b>📥 下载</b>：已连 ComfyUI 且装了 Manager 时自动装到对应文件夹；否则浏览器直接下载，再手动放入 <code>ComfyUI/models/</code> 下对应目录。</p>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>Anima Base v1.0</strong>
+                        <span class="tutorial-resource-tag">Anima</span>
+                    </div>
+                    <p class="tutorial-resource-desc">CircleStone Labs 开源二次元向扩散模型（2B），擅长动漫插画与概念图。网站选 <b>Anima</b> 架构后，在三个下拉框分别加载下列文件。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">anima-base-v1.0.safetensors</span>
+                            <span class="tutorial-resource-folder">diffusion_models/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-base-v1.0.safetensors" data-filename="anima-base-v1.0.safetensors" data-save-path="diffusion_models">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">qwen_3_06b_base.safetensors</span>
+                            <span class="tutorial-resource-folder">text_encoders/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors" data-filename="qwen_3_06b_base.safetensors" data-save-path="text_encoders">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">qwen_image_vae.safetensors</span>
+                            <span class="tutorial-resource-folder">vae/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors" data-filename="qwen_image_vae.safetensors" data-save-path="vae">📥 下载</button>
+                        </div>
+                    </div>
+                    <a class="tutorial-resource-link" href="https://huggingface.co/circlestone-labs/Anima" target="_blank" rel="noopener">Hugging Face 主页 →</a>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>Krea 2</strong>
+                        <span class="tutorial-resource-tag">Anima</span>
+                    </div>
+                    <p class="tutorial-resource-desc">Krea 第二代开源文生图模型，同样用 Anima 架构加载。<b>Turbo</b> 版出图快，<b>Raw</b> 版质量更高。下列为 Turbo FP8 推荐组合（省显存）；Krea 与 Anima 共用同一 VAE。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">krea2_turbo_fp8_scaled.safetensors</span>
+                            <span class="tutorial-resource-folder">diffusion_models/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors" data-filename="krea2_turbo_fp8_scaled.safetensors" data-save-path="diffusion_models">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">qwen3vl_4b_fp8_scaled.safetensors</span>
+                            <span class="tutorial-resource-folder">text_encoders/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors" data-filename="qwen3vl_4b_fp8_scaled.safetensors" data-save-path="text_encoders">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">krea2_retroanime.safetensors</span>
+                            <span class="tutorial-resource-folder">loras/ · 触发词 <code>purple retro anime style</code></span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_retroanime.safetensors" data-filename="krea2_retroanime.safetensors" data-save-path="loras">📥 下载</button>
+                        </div>
+                    </div>
+                    <a class="tutorial-resource-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener">Hugging Face 主页（含 9 款风格 LoRA）→</a>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>SDXL Base 1.0</strong>
+                        <span class="tutorial-resource-tag">SDXL</span>
+                    </div>
+                    <p class="tutorial-resource-desc">Stability AI 官方 SDXL 基础模型，选 <b>SDXL</b> 架构后在 Checkpoint 下拉框加载。适合写实、通用题材，可配合 ControlNet / IP-Adapter。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">sd_xl_base_1.0.safetensors</span>
+                            <span class="tutorial-resource-folder">checkpoints/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors" data-filename="sd_xl_base_1.0.safetensors" data-save-path="checkpoints">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">sdxl_vae.safetensors</span>
+                            <span class="tutorial-resource-folder">vae/ · 可选，改善发色</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors" data-filename="sdxl_vae.safetensors" data-save-path="vae">📥 下载</button>
+                        </div>
+                    </div>
+                    <a class="tutorial-resource-link" href="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0" target="_blank" rel="noopener">Hugging Face 主页 →</a>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>IP-Adapter Plus SDXL</strong>
+                        <span class="tutorial-resource-tag">SDXL 插件</span>
+                    </div>
+                    <p class="tutorial-resource-desc">参考图风格迁移，在左侧「风格迁移 IP-Adapter」中启用。需同时下载模型与 CLIP Vision 编码器。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">ip-adapter-plus_sdxl_vit-h.safetensors</span>
+                            <span class="tutorial-resource-folder">ipadapter/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors" data-filename="ip-adapter-plus_sdxl_vit-h.safetensors" data-save-path="ipadapter">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">model.safetensors</span>
+                            <span class="tutorial-resource-folder">clip_vision/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors" data-filename="model.safetensors" data-save-path="clip_vision">📥 下载</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>ControlNet SDXL</strong>
+                        <span class="tutorial-resource-tag">SDXL 插件</span>
+                    </div>
+                    <p class="tutorial-resource-desc">姿势 / 线稿 / 深度控制，在左侧 ControlNet 面板选用。按需求下载对应模型。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">OpenPose XL</span>
+                            <span class="tutorial-resource-folder">controlnet/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/yzd-v/DWPose/resolve/main/yzd-v/DWPose-SDXL-OpenPoseXL2.safetensors" data-filename="OpenPoseXL2.safetensors" data-save-path="controlnet">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">Canny XL</span>
+                            <span class="tutorial-resource-folder">controlnet/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/yzd-v/DWPose/resolve/main/yzd-v/DWPose-SDXL-CannyXL2.safetensors" data-filename="CannyXL2.safetensors" data-save-path="controlnet">📥 下载</button>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>5. 生成图片</h3>
                 <ol>
                     <li>输入正向提示词（可使用标签选择器）</li>
                     <li>可选填反向提示词排除不想要的元素</li>
@@ -909,7 +1025,7 @@
                     <li>点击"生成图片"开始</li>
                 </ol>
 
-                <h3>5. 可选功能</h3>
+                <h3>6. 可选功能</h3>
                 <ul>
                     <li><b>LoRA</b> — 加载风格微调模型</li>
                     <li><b>高清放大</b> — 生成后自动放大</li>
@@ -917,7 +1033,7 @@
                     <li><b>参考图 (img2img)</b> — 基于参考图重绘</li>
                 </ul>
 
-                <h3>6. 注意事项</h3>
+                <h3>7. 注意事项</h3>
                 <ul>
                     <li>HTTPS 页面无法访问 HTTP 的 ComfyUI，建议本地使用</li>
                     <li>Anima 架构暂不支持 ControlNet（官方开发中）</li>

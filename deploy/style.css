@@ -1358,8 +1358,8 @@ textarea {
 }
 
 .tutorial-content {
-    max-width: 600px;
-    max-height: 80vh;
+    max-width: 680px;
+    max-height: 85vh;
     overflow-y: auto;
 }
 
@@ -1404,6 +1404,98 @@ textarea {
     overflow-x: auto;
     margin: 8px 0;
     color: var(--text-primary);
+}
+
+.tutorial-dl-hint {
+    font-size: 0.82rem !important;
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent);
+}
+
+.tutorial-resource {
+    margin: 12px 0;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.tutorial-resource-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.tutorial-resource-head strong {
+    color: var(--text-primary);
+    font-size: 0.92rem;
+}
+
+.tutorial-resource-tag {
+    font-size: 0.68rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    opacity: 0.9;
+}
+
+.tutorial-resource-desc {
+    font-size: 0.82rem !important;
+    margin: 0 0 10px !important;
+    line-height: 1.55 !important;
+}
+
+.tutorial-resource-files {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tutorial-resource-file {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    font-size: 0.78rem;
+}
+
+.tutorial-resource-fname {
+    font-family: ui-monospace, monospace;
+    color: var(--accent);
+    flex: 1 1 auto;
+    min-width: 140px;
+}
+
+.tutorial-resource-folder {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    flex: 1 1 100%;
+}
+
+.tutorial-resource-file .btn-dl-resource {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+}
+
+.tutorial-resource-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.tutorial-resource-link:hover {
+    text-decoration: underline;
 }
 
 .preview-content {
