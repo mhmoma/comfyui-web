@@ -142,7 +142,160 @@
         ipaDownloadProgress: $('#ipa-download-progress'),
         ipaProgressBar: $('#ipa-progress-bar'),
         ipaProgressText: $('#ipa-progress-text'),
+        // Status / Preview
+        connStatus: $('#conn-status'),
+        connDot: $('#conn-dot'),
+        connText: $('#conn-text'),
+        livePreview: $('#result-live-preview'),
     };
+
+    // ==================== 连接状态灯 ====================
+    let _connTimer = null;
+    async function _checkConnectionOnce() {
+        if (!dom.connStatus || !dom.connText) return;
+        const t0 = performance.now();
+        try {
+            const res = await fetch(`${getServer()}/system_stats`, { cache: 'no-store' });
+            const ms = Math.round(performance.now() - t0);
+            if (!res.ok) throw new Error('bad_status');
+            const slow = ms >= 1200;
+            dom.connStatus.classList.toggle('conn-online', !slow);
+            dom.connStatus.classList.toggle('conn-slow', slow);
+            dom.connStatus.classList.remove('conn-offline');
+            dom.connText.textContent = slow ? `延迟 ${ms}ms` : `在线 ${ms}ms`;
+            dom.connStatus.title = `ComfyUI 在线（${ms}ms）`;
+        } catch {
+            dom.connStatus.classList.remove('conn-online', 'conn-slow');
+            dom.connStatus.classList.add('conn-offline');
+            dom.connText.textContent = '离线';
+            dom.connStatus.title = 'ComfyUI 离线（检查地址/代理/服务）';
+        }
+    }
+
+    function setupConnectionStatus() {
+        if (!dom.connStatus) return;
+        if (_connTimer) clearInterval(_connTimer);
+        _checkConnectionOnce();
+        _connTimer = setInterval(_checkConnectionOnce, 4000);
+    }
+
+    // ==================== 生成状态（耗时/进度同步/预览） ====================
+    const _gen = {
+        active: false,
+        promptId: null,
+        startAt: 0,
+        runningAt: 0, // first time observed in queue_running
+        lastPct: 0,
+        ws: null,
+        wsClientId: null,
+        lastPreviewUrl: null,
+    };
+
+    function _fmtMs(ms) {
+        const s = Math.max(0, Math.floor(ms / 1000));
+        const m = Math.floor(s / 60);
+        const ss = String(s % 60).padStart(2, '0');
+        return `${m}:${ss}`;
+    }
+
+    function _setTitleProgress(pct, text) {
+        const base = document.getElementById('app-version')?.textContent
+            ? `ComfyUI Web ${document.getElementById('app-version').textContent}`
+            : 'ComfyUI Web';
+        if (!_gen.active) { document.title = base; return; }
+        const pctText = (typeof pct === 'number') ? `${Math.round(pct)}%` : '';
+        document.title = `${pctText} ${text || '生成中...'} - ${base}`.trim();
+    }
+
+    function _syncFab(pct) {
+        const fab = document.getElementById('btn-generate-fab');
+        if (!fab) return;
+        if (!_gen.active) {
+            fab.disabled = false;
+            fab.textContent = '✨';
+            return;
+        }
+        fab.disabled = true;
+        const v = Math.round(pct || 0);
+        fab.textContent = v >= 100 ? '✓' : String(v);
+    }
+
+    function _resetLivePreview() {
+        if (!_gen.lastPreviewUrl) return;
+        URL.revokeObjectURL(_gen.lastPreviewUrl);
+        _gen.lastPreviewUrl = null;
+    }
+
+    function _setLivePreview(blob) {
+        if (!dom.livePreview) return;
+        _resetLivePreview();
+        const url = URL.createObjectURL(blob);
+        _gen.lastPreviewUrl = url;
+        dom.livePreview.src = url;
+        dom.livePreview.classList.remove('hidden');
+    }
+
+    function _hideLivePreview() {
+        if (!dom.livePreview) return;
+        dom.livePreview.classList.add('hidden');
+        dom.livePreview.removeAttribute('src');
+        _resetLivePreview();
+    }
+
+    function _closePreviewWS() {
+        if (_gen.ws) {
+            try { _gen.ws.close(); } catch { /* ignore */ }
+        }
+        _gen.ws = null;
+        _gen.wsClientId = null;
+    }
+
+    function _getWsBase() {
+        const server = getServer();
+        if (!server) {
+            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${proto}//${window.location.host}`;
+        }
+        return server.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+    }
+
+    function _connectPreviewWS(promptId) {
+        // ComfyUI standard: ws(s)://host/ws?clientId=xxx
+        const base = _getWsBase();
+        const clientId = _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`);
+        _gen.wsClientId = clientId;
+        const url = `${base}/ws?clientId=${encodeURIComponent(clientId)}`;
+        let ws;
+        try {
+            ws = new WebSocket(url);
+        } catch {
+            return;
+        }
+        ws.binaryType = 'blob';
+        ws.onmessage = (ev) => {
+            if (!_gen.active || _gen.promptId !== promptId) return;
+            if (typeof ev.data === 'string') {
+                try {
+                    const msg = JSON.parse(ev.data);
+                    if (msg?.type === 'progress') {
+                        const d = msg.data || {};
+                        const pct = (typeof d.value === 'number' && typeof d.max === 'number' && d.max > 0)
+                            ? (d.value / d.max) * 100
+                            : (typeof d.progress === 'number' ? d.progress * 100 : null);
+                        if (pct != null) setProgress(Math.max(0, Math.min(99, pct)));
+                    }
+                } catch { /* ignore */ }
+                return;
+            }
+            // blob preview frames
+            if (ev.data instanceof Blob) {
+                _setLivePreview(ev.data);
+            }
+        };
+        ws.onclose = () => { if (_gen.ws === ws) _gen.ws = null; };
+        ws.onerror = () => { /* ignore */ };
+        _gen.ws = ws;
+    }
 
     // ==================== 开关面板逻辑 ====================
     function setupToggles() {
@@ -1398,6 +1551,12 @@
 
     // ==================== 生图流程 ====================
     async function generate() {
+        _gen.active = true;
+        _gen.startAt = Date.now();
+        _gen.runningAt = 0;
+        _gen.lastPct = 0;
+        _hideLivePreview();
+        _syncFab(0);
         dom.btnGenerate.disabled = true;
         dom.btnGenerate.textContent = '生成中...';
         dom.progressContainer.classList.remove('hidden');
@@ -1432,11 +1591,19 @@
 
             const workflow = buildWorkflow(uploadedImages);
             const result = await apiPost('/prompt', workflow);
+            _gen.promptId = result.prompt_id;
+            _connectPreviewWS(result.prompt_id);
             await pollProgress(result.prompt_id);
         } catch (e) {
             alert('生图失败: ' + e.message);
             console.error(e);
         } finally {
+            _gen.active = false;
+            _gen.promptId = null;
+            _closePreviewWS();
+            _hideLivePreview();
+            _syncFab(0);
+            _setTitleProgress(0, '');
             dom.btnGenerate.disabled = false;
             dom.btnGenerate.textContent = '生成图片';
             dom.progressContainer.classList.add('hidden');
@@ -1465,6 +1632,7 @@
                     const running = queue.queue_running || [];
                     const current = running.find(item => item[1] === promptId);
                     if (current) {
+                        if (!_gen.runningAt) _gen.runningAt = Date.now();
                         setProgress(50);
                     }
                 }
@@ -1563,8 +1731,28 @@
     }
 
     function setProgress(pct) {
-        dom.progressBar.style.width = pct + '%';
-        dom.progressText.textContent = pct + '%';
+        const v = Math.max(0, Math.min(100, Math.round(pct || 0)));
+        if (_gen.active) _gen.lastPct = v;
+        dom.progressBar.style.width = v + '%';
+
+        let suffix = '';
+        if (_gen.active && _gen.startAt) {
+            const now = Date.now();
+            const total = now - _gen.startAt;
+            if (_gen.runningAt) {
+                const queueMs = Math.max(0, _gen.runningAt - _gen.startAt);
+                const genMs = Math.max(0, now - _gen.runningAt);
+                suffix = ` · 排队${_fmtMs(queueMs)} 生成${_fmtMs(genMs)}`;
+            } else {
+                suffix = ` · 已用${_fmtMs(total)}`;
+            }
+        }
+        dom.progressText.textContent = `${v}%${suffix}`;
+
+        if (_gen.active) {
+            _syncFab(v);
+            _setTitleProgress(v, _gen.runningAt ? '生成中' : '排队中');
+        }
     }
 
     // ==================== 历史管理 ====================
@@ -6764,5 +6952,6 @@
     setupMetaImport();
     setupDzmm();
     setupNai();
+    setupConnectionStatus();
     init();
 })();
