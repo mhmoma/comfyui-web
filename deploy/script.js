@@ -154,6 +154,13 @@
         btnPostContinue: $('#btn-post-continue'),
         btnPostRegenerate: $('#btn-post-regenerate'),
         btnPostCancel: $('#btn-post-cancel'),
+        // Config profiles
+        selProfileQuick: $('#sel-profile-quick'),
+        selProfile: $('#sel-profile'),
+        btnProfileSave: $('#btn-profile-save'),
+        btnProfileSaveAs: $('#btn-profile-saveas'),
+        btnProfileRename: $('#btn-profile-rename'),
+        btnProfileDelete: $('#btn-profile-delete'),
     };
 
     // ==================== 连接状态灯 ====================
@@ -669,6 +676,505 @@
             updateArchAwarePanels();
         });
     }
+
+    // ==================== 配置方案（本地持久化） ====================
+    const PROFILE_STORE_KEY = 'comfyui_profiles_v1';
+    const PROFILE_AUTOSAVE_MS = 600;
+    let _profileApplying = false;
+    let _profileAutosaveTimer = null;
+
+    const PROFILE_INPUT_IDS = [
+        'inp-steps', 'inp-cfg', 'inp-clip-skip', 'inp-width', 'inp-height', 'inp-seed',
+        'inp-hires-scale', 'inp-hires-steps', 'inp-hires-denoise',
+        'inp-cn-strength', 'inp-cn-start', 'inp-cn-end',
+        'inp-denoise', 'inp-ipa-weight', 'inp-ipa-start', 'inp-ipa-end',
+        'inp-adetailer-steps', 'inp-adetailer-denoise', 'inp-adetailer-threshold',
+        'inp-adetailer-dilation', 'inp-adetailer-feather', 'inp-adetailer-cycle',
+        'inp-freeu-b1', 'inp-freeu-b2', 'inp-freeu-s1', 'inp-freeu-s2',
+        'txt-positive', 'txt-negative',
+        'inp-nai-apikey', 'inp-nai-seed', 'inp-nai-strength', 'inp-nai-noise',
+        'inp-nai-videocode', 'inp-nai-video-seed',
+    ];
+    const PROFILE_SELECT_IDS = [
+        'sel-arch', 'sel-checkpoint', 'sel-unet', 'sel-clip', 'sel-anima-vae',
+        'sel-sampler', 'sel-scheduler', 'sel-vae', 'sel-upscale-method',
+        'sel-controlnet', 'sel-adetailer-model', 'sel-ipadapter-model', 'sel-ipa-weight-type',
+        'sel-workflow', 'sel-translate-provider',
+        'sel-nai-model', 'sel-nai-sampler', 'sel-nai-noise-schedule', 'sel-nai-fps', 'sel-nai-uc-preset',
+    ];
+    const PROFILE_CHECKBOX_IDS = [
+        'chk-speedup', 'chk-vae', 'chk-lora', 'chk-hires', 'chk-freeu',
+        'chk-controlnet', 'chk-img2img', 'chk-regional', 'chk-post-preview', 'chk-adetailer', 'chk-ipadapter',
+        'chk-nai-upscale', 'chk-nai-smea', 'chk-nai-dyn', 'chk-nai-variety', 'chk-nai-decrisp',
+        'chk-nai-use-coords', 'chk-nai-legacy', 'chk-nai-legacy-uc', 'chk-nai-legacy-v3',
+        'chk-nai-auto-smea', 'chk-nai-brownian', 'chk-nai-euler-bug',
+    ];
+    const PROFILE_RANGE_IDS = [
+        'rng-nai-steps', 'rng-nai-cfg', 'rng-nai-rescale',
+        'rng-nai-duration', 'rng-nai-video-steps', 'rng-nai-video-guidance',
+    ];
+
+    function _profileEl(id) {
+        return document.getElementById(id);
+    }
+
+    function _profileReadEl(el) {
+        if (!el) return undefined;
+        if (el.type === 'checkbox') return el.checked;
+        return el.value;
+    }
+
+    function _profileWriteEl(el, val) {
+        if (!el || val === undefined) return;
+        if (el.type === 'checkbox') el.checked = !!val;
+        else el.value = val;
+    }
+
+    function _profileReadMap(ids) {
+        const out = {};
+        ids.forEach(id => {
+            const el = _profileEl(id);
+            if (el) out[id] = _profileReadEl(el);
+        });
+        return out;
+    }
+
+    function _profileWriteMap(map) {
+        if (!map) return;
+        Object.entries(map).forEach(([id, val]) => _profileWriteEl(_profileEl(id), val));
+    }
+
+    function _profileCaptureNaiCharacters() {
+        return Array.from(document.querySelectorAll('#nai-character-list .nai-character-item')).map(item => ({
+            prompt: item.querySelector('.nai-char-prompt')?.value || '',
+            uc: item.querySelector('.nai-char-uc')?.value || '',
+            x: item.querySelector('.nai-char-x')?.value ?? '0.5',
+            y: item.querySelector('.nai-char-y')?.value ?? '0.5',
+        }));
+    }
+
+    function _profileApplyNaiCharacters(chars) {
+        const list = document.getElementById('nai-character-list');
+        if (!list) return;
+        list.innerHTML = '';
+        (chars || []).forEach((c, i) => {
+            const item = document.createElement('div');
+            item.className = 'nai-character-item';
+            item.innerHTML = `<h3>角色 ${i + 1} <button class="btn-icon btn-sm nai-remove-char" title="删除">🗑️</button></h3>
+                <textarea placeholder="角色正向提示词..." class="nai-char-prompt" rows="2"></textarea>
+                <textarea placeholder="角色反向提示词..." class="nai-char-uc" rows="1" style="margin-top:4px"></textarea>
+                <div class="compact-row" style="margin-top:4px">
+                    <label>X <input type="number" class="nai-char-x" value="0.5" min="0" max="1" step="0.1"></label>
+                    <label>Y <input type="number" class="nai-char-y" value="0.5" min="0" max="1" step="0.1"></label>
+                </div>`;
+            item.querySelector('.nai-char-prompt').value = c.prompt || '';
+            item.querySelector('.nai-char-uc').value = c.uc || '';
+            item.querySelector('.nai-char-x').value = c.x ?? '0.5';
+            item.querySelector('.nai-char-y').value = c.y ?? '0.5';
+            item.querySelector('.nai-remove-char').addEventListener('click', () => {
+                item.remove();
+                if (typeof updateNaiCharInfo === 'function') updateNaiCharInfo();
+            });
+            list.appendChild(item);
+        });
+        if (typeof updateNaiCharInfo === 'function') updateNaiCharInfo();
+    }
+
+    function _profileCaptureWfInputs() {
+        const out = {};
+        document.querySelectorAll('#wf-params .wf-input').forEach(el => {
+            const nodeId = el.dataset.node;
+            const key = el.dataset.key;
+            if (!nodeId || !key) return;
+            out[`${nodeId}:${key}`] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        return out;
+    }
+
+    function _profileApplyWfInputs(map) {
+        if (!map) return;
+        document.querySelectorAll('#wf-params .wf-input').forEach(el => {
+            const nodeId = el.dataset.node;
+            const key = el.dataset.key;
+            if (!nodeId || !key) return;
+            const val = map[`${nodeId}:${key}`];
+            if (val === undefined) return;
+            if (el.type === 'checkbox') el.checked = !!val;
+            else el.value = val;
+        });
+    }
+
+    function _profileGetActiveMode() {
+        const tab = document.querySelector('.mode-tab.active');
+        return tab?.dataset.mode || 'simple';
+    }
+
+    function _profileApplyActiveMode(mode) {
+        const m = mode || 'simple';
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+        const modeSimple = document.getElementById('mode-simple');
+        const modeWorkflow = document.getElementById('mode-workflow');
+        const modeNai = document.getElementById('mode-nai');
+        const btnGenerate = document.getElementById('btn-generate');
+        const btnNaiGenerate = document.getElementById('btn-nai-generate');
+        const btnDzmm = document.getElementById('btn-dzmm');
+        if (modeSimple) modeSimple.classList.toggle('hidden', m !== 'simple');
+        if (modeWorkflow) modeWorkflow.classList.toggle('hidden', m !== 'workflow');
+        if (modeNai) modeNai.classList.toggle('hidden', m !== 'nai');
+        if (btnGenerate) btnGenerate.classList.toggle('hidden', m === 'nai');
+        if (btnNaiGenerate) btnNaiGenerate.classList.toggle('hidden', m !== 'nai');
+        if (btnDzmm) btnDzmm.classList.toggle('hidden', m === 'nai');
+    }
+
+    function _profileRefreshTogglePanels() {
+        [
+            dom.chkVae, dom.chkLora, dom.chkHires, dom.chkControlnet, dom.chkImg2img,
+            dom.chkAdetailer, dom.chkRegional, $('#chk-freeu'), dom.chkIpadapter,
+        ].forEach(chk => chk?.dispatchEvent(new Event('change')));
+    }
+
+    function _profileCaptureLoras() {
+        return getLoraSelections();
+    }
+
+    function _profileApplyLoras(loras) {
+        dom.loraList.innerHTML = '';
+        loraCount = 0;
+        (loras || []).forEach(l => {
+            addLoraRow();
+            const row = dom.loraList.lastElementChild;
+            if (!row) return;
+            setSelectIfExists(row.querySelector('.lora-select'), l.name);
+            const strength = row.querySelector('.lora-strength');
+            if (strength && l.strength !== undefined) strength.value = l.strength;
+        });
+    }
+
+    function _profileCaptureRegions() {
+        return Array.from(dom.regionalList.querySelectorAll('.region-row')).map(row => ({
+            x: parseFloat(row.querySelector('.region-x')?.value || 0),
+            y: parseFloat(row.querySelector('.region-y')?.value || 0),
+            w: parseFloat(row.querySelector('.region-w')?.value || 50),
+            h: parseFloat(row.querySelector('.region-h')?.value || 50),
+            prompt: row.querySelector('.region-prompt')?.value || '',
+        }));
+    }
+
+    function _profileApplyRegions(regions) {
+        dom.regionalList.innerHTML = '';
+        regionCount = 0;
+        (regions || []).forEach(r => {
+            addRegionRow(r.x, r.y, r.w, r.h);
+            const row = dom.regionalList.lastElementChild;
+            const prompt = row?.querySelector('.region-prompt');
+            if (prompt) prompt.value = r.prompt || '';
+        });
+        drawRegionCanvas();
+    }
+
+    function captureProfileSnapshot() {
+        const arch = dom.selArch.value;
+        _archState[arch] = captureArchState();
+        const activeSize = document.querySelector('.nai-size-btn.active');
+        return {
+            v: 1,
+            activeMode: _profileGetActiveMode(),
+            server: getComfyUIAddress(),
+            theme: localStorage.getItem('comfyui_theme') || 'default',
+            tagShowChinese: TagTranslator?.showChinese !== false,
+            arch,
+            archState: {
+                sdxl: _archState.sdxl,
+                anima: _archState.anima,
+            },
+            inputs: _profileReadMap(PROFILE_INPUT_IDS),
+            selects: _profileReadMap(PROFILE_SELECT_IDS),
+            checkboxes: _profileReadMap(PROFILE_CHECKBOX_IDS),
+            ranges: _profileReadMap(PROFILE_RANGE_IDS),
+            loras: _profileCaptureLoras(),
+            regions: _profileCaptureRegions(),
+            naiSize: activeSize ? { w: activeSize.dataset.w, h: activeSize.dataset.h } : null,
+            naiCharacters: _profileCaptureNaiCharacters(),
+            wfInputs: _profileCaptureWfInputs(),
+        };
+    }
+
+    async function applyProfileSnapshot(data) {
+        if (!data) return;
+        _profileApplying = true;
+        try {
+            if (data.server) {
+                setComfyUIAddress(data.server);
+                if (dom.inpServer) dom.inpServer.value = data.server;
+            }
+            if (data.theme) {
+                applyTheme(data.theme);
+                localStorage.setItem('comfyui_theme', data.theme);
+            }
+            if (data.tagShowChinese !== undefined && TagTranslator) {
+                TagTranslator.showChinese = !!data.tagShowChinese;
+                localStorage.setItem('tag_show_chinese', TagTranslator.showChinese);
+                const toggleBtn = document.getElementById('btn-translate-toggle');
+                if (toggleBtn) toggleBtn.classList.toggle('active', TagTranslator.showChinese);
+            }
+            if (data.archState) {
+                _archState.sdxl = data.archState.sdxl || null;
+                _archState.anima = data.archState.anima || null;
+            }
+
+            _profileWriteMap(data.inputs);
+            _profileWriteMap(data.selects);
+            _profileWriteMap(data.checkboxes);
+            _profileWriteMap(data.ranges);
+
+            PROFILE_RANGE_IDS.forEach(id => {
+                const el = _profileEl(id);
+                if (el) el.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+
+            const arch = data.arch || data.selects?.['sel-arch'] || dom.selArch.value;
+            if (arch && arch !== dom.selArch.value) {
+                dom.selArch.value = arch;
+            }
+            const isAnima = arch === 'anima';
+            dom.panelSdxlModel.classList.toggle('hidden', isAnima);
+            dom.panelAnimaModel.classList.toggle('hidden', !isAnima);
+            applyArchState(_archState[arch] || (isAnima ? ANIMA_DEFAULTS : SDXL_DEFAULTS));
+            updateArchAwarePanels();
+
+            _profileApplyLoras(data.loras);
+            _profileApplyRegions(data.regions);
+            _profileApplyNaiCharacters(data.naiCharacters);
+
+            if (data.naiSize?.w && data.naiSize?.h) {
+                document.querySelectorAll('.nai-size-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.w === data.naiSize.w && btn.dataset.h === data.naiSize.h);
+                });
+            }
+
+            const naiKey = data.inputs?.['inp-nai-apikey'];
+            if (naiKey !== undefined) {
+                localStorage.setItem(NAI_STORAGE_KEY, String(naiKey || '').trim());
+            }
+
+            if (data.selects?.['sel-translate-provider']) {
+                TagTranslator.provider = data.selects['sel-translate-provider'];
+                localStorage.setItem('tag_translate_provider', TagTranslator.provider);
+            }
+
+            const wfName = data.selects?.['sel-workflow'] || '';
+            const wfSel = document.getElementById('sel-workflow');
+            if (wfSel) {
+                setSelectIfExists(wfSel, wfName);
+                if (wfName) {
+                    const workflows = loadWorkflows();
+                    currentWorkflowData = workflows[wfName] || null;
+                    await renderWorkflowParams(currentWorkflowData);
+                    _profileApplyWfInputs(data.wfInputs);
+                } else {
+                    currentWorkflowData = null;
+                    await renderWorkflowParams(null);
+                }
+            }
+
+            _profileApplyActiveMode(data.activeMode);
+            _profileRefreshTogglePanels();
+        } finally {
+            _profileApplying = false;
+        }
+    }
+
+    const ProfileManager = {
+        store: { activeId: 'default', profiles: {} },
+
+        loadStore() {
+            try {
+                const raw = localStorage.getItem(PROFILE_STORE_KEY);
+                if (raw) this.store = JSON.parse(raw);
+            } catch { /* ignore */ }
+            if (!this.store.profiles || !Object.keys(this.store.profiles).length) {
+                this.store = {
+                    activeId: 'default',
+                    profiles: {
+                        default: {
+                            id: 'default',
+                            name: '默认',
+                            updatedAt: Date.now(),
+                            data: null,
+                        },
+                    },
+                };
+            }
+            if (!this.store.activeId || !this.store.profiles[this.store.activeId]) {
+                this.store.activeId = Object.keys(this.store.profiles)[0];
+            }
+            return this.store;
+        },
+
+        saveStore() {
+            localStorage.setItem(PROFILE_STORE_KEY, JSON.stringify(this.store));
+        },
+
+        getActiveProfile() {
+            return this.store.profiles[this.store.activeId];
+        },
+
+        listProfiles() {
+            return Object.values(this.store.profiles).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'));
+        },
+
+        refreshSelects() {
+            const selects = [dom.selProfile, dom.selProfileQuick].filter(Boolean);
+            const activeId = this.store.activeId;
+            selects.forEach(sel => {
+                sel.innerHTML = '';
+                this.listProfiles().forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    sel.appendChild(opt);
+                });
+                sel.value = activeId;
+            });
+        },
+
+        saveActiveFromUI(silent) {
+            const profile = this.getActiveProfile();
+            if (!profile) return;
+            profile.data = captureProfileSnapshot();
+            profile.updatedAt = Date.now();
+            this.saveStore();
+            if (!silent) showToast(`已保存到「${profile.name}」`);
+        },
+
+        async switchTo(id, silent) {
+            if (!id || !this.store.profiles[id]) return;
+            if (id !== this.store.activeId && !_profileApplying) {
+                this.saveActiveFromUI(true);
+            }
+            this.store.activeId = id;
+            this.saveStore();
+            this.refreshSelects();
+            const profile = this.store.profiles[id];
+            if (profile?.data) await applyProfileSnapshot(profile.data);
+            if (!silent) showToast(`已切换至「${profile.name}」`);
+        },
+
+        createProfile(name) {
+            const trimmed = (name || '').trim();
+            if (!trimmed) return null;
+            const id = `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+            this.store.profiles[id] = {
+                id,
+                name: trimmed,
+                updatedAt: Date.now(),
+                data: captureProfileSnapshot(),
+            };
+            this.store.activeId = id;
+            this.saveStore();
+            this.refreshSelects();
+            return id;
+        },
+
+        renameActive(name) {
+            const trimmed = (name || '').trim();
+            const profile = this.getActiveProfile();
+            if (!profile || !trimmed) return;
+            profile.name = trimmed;
+            profile.updatedAt = Date.now();
+            this.saveStore();
+            this.refreshSelects();
+            showToast(`已重命名为「${trimmed}」`);
+        },
+
+        deleteActive() {
+            const keys = Object.keys(this.store.profiles);
+            if (keys.length <= 1) {
+                showToast('至少保留一个配置方案');
+                return;
+            }
+            const id = this.store.activeId;
+            const name = this.store.profiles[id]?.name || '方案';
+            delete this.store.profiles[id];
+            this.store.activeId = Object.keys(this.store.profiles)[0];
+            this.saveStore();
+            this.refreshSelects();
+            this.switchTo(this.store.activeId, true);
+            showToast(`已删除「${name}」`);
+        },
+
+        scheduleAutosave() {
+            if (_profileApplying) return;
+            clearTimeout(_profileAutosaveTimer);
+            _profileAutosaveTimer = setTimeout(() => this.saveActiveFromUI(true), PROFILE_AUTOSAVE_MS);
+        },
+
+        async restoreActiveProfile() {
+            this.loadStore();
+            const profile = this.getActiveProfile();
+            if (!profile.data) {
+                profile.data = captureProfileSnapshot();
+                this.saveStore();
+            } else {
+                await applyProfileSnapshot(profile.data);
+            }
+            this.refreshSelects();
+        },
+
+        setup() {
+            this.loadStore();
+            this.refreshSelects();
+
+            const onSwitch = async (id) => {
+                if (!id || id === this.store.activeId) return;
+                await this.switchTo(id);
+            };
+
+            dom.selProfile?.addEventListener('change', (e) => onSwitch(e.target.value));
+            dom.selProfileQuick?.addEventListener('change', (e) => {
+                onSwitch(e.target.value);
+                if (dom.selProfile) dom.selProfile.value = e.target.value;
+            });
+
+            dom.btnProfileSave?.addEventListener('click', () => this.saveActiveFromUI(false));
+            dom.btnProfileSaveAs?.addEventListener('click', () => {
+                const name = prompt('新配置方案名称', `方案 ${Object.keys(this.store.profiles).length + 1}`);
+                if (!name) return;
+                const id = this.createProfile(name);
+                if (id) showToast(`已创建「${name}」`);
+            });
+            dom.btnProfileRename?.addEventListener('click', () => {
+                const cur = this.getActiveProfile();
+                const name = prompt('重命名配置方案', cur?.name || '');
+                if (name) this.renameActive(name);
+            });
+            dom.btnProfileDelete?.addEventListener('click', () => {
+                const cur = this.getActiveProfile();
+                if (confirm(`确定删除配置方案「${cur?.name || ''}」？`)) this.deleteActive();
+            });
+
+            const autosaveRoot = document.querySelector('.app');
+            if (autosaveRoot) {
+                autosaveRoot.addEventListener('input', (e) => {
+                    if (_profileApplying) return;
+                    const t = e.target;
+                    if (!t || t.closest('#history-grid, #tag-picker, .char-browser-overlay, #modal-settings')) return;
+                    if (t.matches('input, select, textarea')) this.scheduleAutosave();
+                });
+                autosaveRoot.addEventListener('change', (e) => {
+                    if (_profileApplying) return;
+                    const t = e.target;
+                    if (!t || t.closest('#history-grid, #tag-picker, .char-browser-overlay')) return;
+                    if (t.matches('input, select, textarea')) this.scheduleAutosave();
+                });
+            }
+
+            document.querySelectorAll('.mode-tab').forEach(tab => {
+                tab.addEventListener('click', () => this.scheduleAutosave());
+            });
+            document.getElementById('theme-panel')?.addEventListener('click', () => this.scheduleAutosave());
+        },
+    };
 
     async function loadAnimaModels() {
         try {
@@ -2135,6 +2641,7 @@
         // Settings modal
         dom.btnSettings.addEventListener('click', () => {
             dom.inpServer.value = getComfyUIAddress();
+            if (dom.selProfile) dom.selProfile.value = ProfileManager.store.activeId;
             const admInput = document.getElementById('inp-admin-key');
             const admStatus = document.getElementById('admin-status');
             if (admInput) admInput.value = sessionStorage.getItem('_adm') || '';
@@ -2146,6 +2653,7 @@
             const url = dom.inpServer.value.trim();
             if (!url) return;
             setComfyUIAddress(url);
+            ProfileManager.saveActiveFromUI(true);
             const admKey = document.getElementById('inp-admin-key')?.value.trim();
             if (admKey) {
                 sessionStorage.setItem('_adm', admKey);
@@ -4075,7 +4583,10 @@
             loadControlNets(),
             loadIPAdapterModels(),
             loadAnimaModels(),
-        ]).then(() => updateArchAwarePanels());
+        ]).then(async () => {
+            updateArchAwarePanels();
+            await ProfileManager.restoreActiveProfile();
+        });
     }
 
     // ==================== 手机端角色全屏浏览 ====================
@@ -7204,5 +7715,6 @@
     setupDzmm();
     setupNai();
     setupConnectionStatus();
+    ProfileManager.setup();
     init();
 })();

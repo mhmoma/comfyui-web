@@ -1393,6 +1393,43 @@ textarea {
     justify-content: flex-end;
 }
 
+.settings-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+}
+
+.settings-section-title {
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+.profile-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 12px 0 8px;
+}
+
+.profile-hint {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    display: block;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.profile-quick-select {
+    max-width: 132px;
+    min-width: 88px;
+    font-size: 0.78rem;
+    padding: 5px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+}
+
 .tutorial-content {
     max-width: 680px;
     max-height: 85vh;
@@ -2240,6 +2277,13 @@ textarea {
         padding: 8px;
         min-width: 40px;
         min-height: 40px;
+    }
+
+    .profile-quick-select {
+        max-width: 96px;
+        min-width: 72px;
+        font-size: 0.72rem;
+        padding: 4px 6px;
     }
 
     /* ===== Mobile bottom tab navigation ===== */
