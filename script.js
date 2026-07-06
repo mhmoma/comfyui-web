@@ -147,6 +147,13 @@
         connDot: $('#conn-dot'),
         connText: $('#conn-text'),
         livePreview: $('#result-live-preview'),
+        // Post-process preview gate
+        chkPostPreview: $('#chk-post-preview'),
+        modalPostPreview: $('#modal-post-preview'),
+        postPreviewImg: $('#post-preview-img'),
+        btnPostContinue: $('#btn-post-continue'),
+        btnPostRegenerate: $('#btn-post-regenerate'),
+        btnPostCancel: $('#btn-post-cancel'),
     };
 
     // ==================== 连接状态灯 ====================
@@ -1115,19 +1122,24 @@
     }
 
     // ==================== 动态工作流构建 ====================
-    function buildWorkflow(uploadedImages) {
+    function buildWorkflow(uploadedImages, opts = {}) {
+        const stage = opts.stage || 'full'; // 'full' | 'base' | 'post'
+        const baseImageName = opts.baseImageName || null;
         const seed = parseInt(dom.inpSeed.value);
-        const actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
+        let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
+        if (opts.seedOverride !== undefined && opts.seedOverride !== null) {
+            actualSeed = opts.seedOverride;
+        }
         const nodes = {};
         let nextId = 10;
         const id = () => String(nextId++);
 
         const useVae = dom.chkVae.checked;
         const useLora = dom.chkLora.checked;
-        const useHires = dom.chkHires.checked;
+        const useHires = dom.chkHires.checked && stage !== 'base';
         const useControlnet = dom.chkControlnet.checked && uploadedImages.controlnet;
-        const useImg2img = dom.chkImg2img.checked && (uploadedImages.img2img || refImageUrl);
-        const useAdetailer = dom.chkAdetailer.checked;
+        const useImg2img = dom.chkImg2img.checked && (uploadedImages.img2img || refImageUrl) && stage !== 'post';
+        const useAdetailer = dom.chkAdetailer.checked && stage !== 'base';
         const useRegional = dom.chkRegional.checked;
         const useIpadapter = dom.chkIpadapter?.checked && uploadedImages.ipadapter && !isAnimaMode();
 
@@ -1381,36 +1393,6 @@
             }
         }
 
-        // Latent Image source
-        let latentOut;
-        let denoise = 1;
-
-        if (useImg2img) {
-            const imgLoadId = id();
-            nodes[imgLoadId] = {
-                class_type: "LoadImage",
-                inputs: { image: uploadedImages.img2img },
-            };
-            const vaeEncId = id();
-            nodes[vaeEncId] = {
-                class_type: "VAEEncode",
-                inputs: { pixels: [imgLoadId, 0], vae: vaeOut },
-            };
-            latentOut = [vaeEncId, 0];
-            denoise = parseFloat(dom.inpDenoise.value);
-        } else {
-            const emptyId = id();
-            nodes[emptyId] = {
-                class_type: "EmptyLatentImage",
-                inputs: {
-                    width: parseInt(dom.inpWidth.value),
-                    height: parseInt(dom.inpHeight.value),
-                    batch_size: 1,
-                },
-            };
-            latentOut = [emptyId, 0];
-        }
-
         // FreeU (quality enhancement)
         const useFreeu = document.getElementById('chk-freeu')?.checked;
         if (useFreeu) {
@@ -1448,68 +1430,155 @@
             modelOut = [downscaleId, 0];
         }
 
-        // KSampler
-        const samplerId = id();
-        nodes[samplerId] = {
-            class_type: "KSampler",
-            inputs: {
-                seed: actualSeed,
-                steps: parseInt(dom.inpSteps.value),
-                cfg: parseFloat(dom.inpCfg.value),
-                sampler_name: dom.selSampler.value,
-                scheduler: dom.selScheduler.value,
-                denoise: denoise,
-                model: modelOut,
-                positive: positiveOut,
-                negative: negativeOut,
-                latent_image: latentOut,
-            },
-        };
+        let finalImage;
 
-        let finalLatent = [samplerId, 0];
-
-        // Hires Fix (optional)
-        if (useHires) {
-            const scale = parseFloat(dom.inpHiresScale.value);
-            const upscaleId = id();
-            nodes[upscaleId] = {
-                class_type: "LatentUpscale",
-                inputs: {
-                    samples: finalLatent,
-                    upscale_method: dom.selUpscaleMethod.value,
-                    width: Math.round(parseInt(dom.inpWidth.value) * scale),
-                    height: Math.round(parseInt(dom.inpHeight.value) * scale),
-                    crop: "disabled",
-                },
+        if (stage === 'post' && baseImageName) {
+            const baseLoadId = id();
+            nodes[baseLoadId] = {
+                class_type: "LoadImage",
+                inputs: { image: baseImageName },
             };
 
-            const hiresSamplerId = id();
-            nodes[hiresSamplerId] = {
+            if (useHires) {
+                const vaeEncId = id();
+                nodes[vaeEncId] = {
+                    class_type: "VAEEncode",
+                    inputs: { pixels: [baseLoadId, 0], vae: vaeOut },
+                };
+
+                const scale = parseFloat(dom.inpHiresScale.value);
+                const upscaleId = id();
+                nodes[upscaleId] = {
+                    class_type: "LatentUpscale",
+                    inputs: {
+                        samples: [vaeEncId, 0],
+                        upscale_method: dom.selUpscaleMethod.value,
+                        width: Math.round(parseInt(dom.inpWidth.value) * scale),
+                        height: Math.round(parseInt(dom.inpHeight.value) * scale),
+                        crop: "disabled",
+                    },
+                };
+
+                const hiresSamplerId = id();
+                nodes[hiresSamplerId] = {
+                    class_type: "KSampler",
+                    inputs: {
+                        seed: actualSeed,
+                        steps: parseInt(dom.inpHiresSteps.value),
+                        cfg: parseFloat(dom.inpCfg.value),
+                        sampler_name: dom.selSampler.value,
+                        scheduler: dom.selScheduler.value,
+                        denoise: parseFloat(dom.inpHiresDenoise.value),
+                        model: modelOut,
+                        positive: positiveOut,
+                        negative: negativeOut,
+                        latent_image: [upscaleId, 0],
+                    },
+                };
+
+                const decodeId = id();
+                nodes[decodeId] = {
+                    class_type: "VAEDecode",
+                    inputs: { samples: [hiresSamplerId, 0], vae: vaeOut },
+                };
+                finalImage = [decodeId, 0];
+            } else {
+                finalImage = [baseLoadId, 0];
+            }
+        } else {
+            // Latent Image source
+            let latentOut;
+            let denoise = 1;
+
+            if (useImg2img) {
+                const imgLoadId = id();
+                nodes[imgLoadId] = {
+                    class_type: "LoadImage",
+                    inputs: { image: uploadedImages.img2img },
+                };
+                const vaeEncId = id();
+                nodes[vaeEncId] = {
+                    class_type: "VAEEncode",
+                    inputs: { pixels: [imgLoadId, 0], vae: vaeOut },
+                };
+                latentOut = [vaeEncId, 0];
+                denoise = parseFloat(dom.inpDenoise.value);
+            } else {
+                const emptyId = id();
+                nodes[emptyId] = {
+                    class_type: "EmptyLatentImage",
+                    inputs: {
+                        width: parseInt(dom.inpWidth.value),
+                        height: parseInt(dom.inpHeight.value),
+                        batch_size: 1,
+                    },
+                };
+                latentOut = [emptyId, 0];
+            }
+
+            // KSampler
+            const samplerId = id();
+            nodes[samplerId] = {
                 class_type: "KSampler",
                 inputs: {
                     seed: actualSeed,
-                    steps: parseInt(dom.inpHiresSteps.value),
+                    steps: parseInt(dom.inpSteps.value),
                     cfg: parseFloat(dom.inpCfg.value),
                     sampler_name: dom.selSampler.value,
                     scheduler: dom.selScheduler.value,
-                    denoise: parseFloat(dom.inpHiresDenoise.value),
+                    denoise: denoise,
                     model: modelOut,
                     positive: positiveOut,
                     negative: negativeOut,
-                    latent_image: [upscaleId, 0],
+                    latent_image: latentOut,
                 },
             };
-            finalLatent = [hiresSamplerId, 0];
+
+            let finalLatent = [samplerId, 0];
+
+            // Hires Fix (optional)
+            if (useHires) {
+                const scale = parseFloat(dom.inpHiresScale.value);
+                const upscaleId = id();
+                nodes[upscaleId] = {
+                    class_type: "LatentUpscale",
+                    inputs: {
+                        samples: finalLatent,
+                        upscale_method: dom.selUpscaleMethod.value,
+                        width: Math.round(parseInt(dom.inpWidth.value) * scale),
+                        height: Math.round(parseInt(dom.inpHeight.value) * scale),
+                        crop: "disabled",
+                    },
+                };
+
+                const hiresSamplerId = id();
+                nodes[hiresSamplerId] = {
+                    class_type: "KSampler",
+                    inputs: {
+                        seed: actualSeed,
+                        steps: parseInt(dom.inpHiresSteps.value),
+                        cfg: parseFloat(dom.inpCfg.value),
+                        sampler_name: dom.selSampler.value,
+                        scheduler: dom.selScheduler.value,
+                        denoise: parseFloat(dom.inpHiresDenoise.value),
+                        model: modelOut,
+                        positive: positiveOut,
+                        negative: negativeOut,
+                        latent_image: [upscaleId, 0],
+                    },
+                };
+                finalLatent = [hiresSamplerId, 0];
+            }
+
+            // VAE Decode
+            const decodeId = id();
+            nodes[decodeId] = {
+                class_type: "VAEDecode",
+                inputs: { samples: finalLatent, vae: vaeOut },
+            };
+
+            finalImage = [decodeId, 0];
         }
-
-        // VAE Decode
-        const decodeId = id();
-        nodes[decodeId] = {
-            class_type: "VAEDecode",
-            inputs: { samples: finalLatent, vae: vaeOut },
-        };
-
-        let finalImage = [decodeId, 0];
 
         // Save intermediate "before" image for comparison (only if hires or adetailer is on)
         if (useHires || useAdetailer) {
@@ -1572,14 +1641,45 @@
         const saveId = id();
         nodes[saveId] = {
             class_type: "SaveImage",
-            inputs: { filename_prefix: "ComfyUI_Web", images: finalImage },
+            inputs: {
+                filename_prefix: stage === 'base' ? 'CW_Base' : 'ComfyUI_Web',
+                images: finalImage,
+            },
         };
 
-        return { prompt: nodes };
+        return { prompt: nodes, actualSeed };
     }
 
     // ==================== 生图流程 ====================
-    async function generate() {
+    let _postPreviewResolver = null;
+
+    function needsPostPreviewGate() {
+        return !!(dom.chkPostPreview?.checked && (dom.chkHires.checked || dom.chkAdetailer.checked));
+    }
+
+    function showPostPreviewModal(imageUrl) {
+        return new Promise((resolve) => {
+            if (!dom.modalPostPreview || !dom.postPreviewImg) {
+                resolve('continue');
+                return;
+            }
+            dom.postPreviewImg.src = imageUrl;
+            dom.modalPostPreview.classList.remove('hidden');
+            dom.btnGenerate.textContent = '等待确认底图...';
+            setProgress(100);
+            _postPreviewResolver = resolve;
+        });
+    }
+
+    function resolvePostPreview(decision) {
+        dom.modalPostPreview?.classList.add('hidden');
+        if (_postPreviewResolver) {
+            _postPreviewResolver(decision);
+            _postPreviewResolver = null;
+        }
+    }
+
+    function beginGenerationUI() {
         _gen.active = true;
         _gen.startAt = Date.now();
         _gen.runningAt = 0;
@@ -1595,55 +1695,125 @@
         dom.resultActions.classList.add('hidden');
         updateMobileResultUI(false);
         setProgress(0);
+    }
+
+    function endGenerationUI() {
+        _gen.active = false;
+        _gen.promptId = null;
+        _gen.hasRealtimeProgress = false;
+        _closePreviewWS();
+        _hideLivePreview();
+        _syncFab(0);
+        _setTitleProgress(0, '');
+        dom.btnGenerate.disabled = false;
+        dom.btnGenerate.textContent = '生成图片';
+        dom.progressContainer.classList.add('hidden');
+    }
+
+    function resetStageProgress(label) {
+        _gen.lastPct = 0;
+        _gen.hasRealtimeProgress = false;
+        _gen.runningAt = 0;
+        _hideLivePreview();
+        setProgress(0);
+        dom.btnGenerate.textContent = label;
+    }
+
+    async function collectUploadedImages() {
+        const uploadedImages = {};
+
+        if (dom.chkControlnet.checked && dom.inpCnImage.files[0]) {
+            const res = await uploadImage(dom.inpCnImage.files[0]);
+            uploadedImages.controlnet = res.name;
+        }
+
+        if (dom.chkImg2img.checked) {
+            if (dom.inpRefImage.files[0]) {
+                const res = await uploadImage(dom.inpRefImage.files[0]);
+                uploadedImages.img2img = res.name;
+            } else if (refImageUrl) {
+                const res = await uploadImageFromUrl(refImageUrl);
+                uploadedImages.img2img = res.name;
+            }
+        }
+
+        if (dom.chkIpadapter?.checked && dom.inpIpaImage.files[0] && !isAnimaMode()) {
+            const res = await uploadImage(dom.inpIpaImage.files[0]);
+            uploadedImages.ipadapter = res.name;
+        }
+
+        return uploadedImages;
+    }
+
+    async function runPromptWorkflow(workflowBuilt, fetchOpts = {}) {
+        const payload = {
+            prompt: workflowBuilt.prompt,
+            client_id: _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`),
+        };
+        _gen.wsClientId = payload.client_id;
+        _connectPreviewWS();
+        const result = await apiPost('/prompt', payload);
+        _gen.promptId = result.prompt_id;
+        return await pollProgress(result.prompt_id, fetchOpts);
+    }
+
+    async function runGatedGeneration(uploadedImages) {
+        let seedOverride;
+
+        while (true) {
+            resetStageProgress('生成底图中...');
+            const baseWorkflow = buildWorkflow(uploadedImages, { stage: 'base', seedOverride });
+            const baseResult = await runPromptWorkflow(baseWorkflow, { expectBase: true });
+            if (!baseResult?.url) throw new Error('未能获取底图预览');
+
+            const decision = await showPostPreviewModal(baseResult.url);
+            if (decision === 'cancel') return;
+
+            if (decision === 'regenerate') {
+                if (parseInt(dom.inpSeed.value) === -1) {
+                    seedOverride = undefined;
+                } else {
+                    seedOverride = ((baseWorkflow.actualSeed + 1) >>> 0);
+                    dom.inpSeed.value = String(seedOverride);
+                }
+                continue;
+            }
+
+            if (decision === 'continue') {
+                resetStageProgress('后处理中...');
+                const postWorkflow = buildWorkflow(uploadedImages, {
+                    stage: 'post',
+                    baseImageName: baseResult.filename,
+                    seedOverride: baseWorkflow.actualSeed,
+                });
+                await runPromptWorkflow(postWorkflow);
+                return;
+            }
+        }
+    }
+
+    async function generate() {
+        beginGenerationUI();
 
         try {
-            const uploadedImages = {};
+            const uploadedImages = await collectUploadedImages();
 
-            if (dom.chkControlnet.checked && dom.inpCnImage.files[0]) {
-                const res = await uploadImage(dom.inpCnImage.files[0]);
-                uploadedImages.controlnet = res.name;
+            if (needsPostPreviewGate()) {
+                await runGatedGeneration(uploadedImages);
+            } else {
+                const workflow = buildWorkflow(uploadedImages);
+                await runPromptWorkflow(workflow);
             }
-
-            if (dom.chkImg2img.checked) {
-                if (dom.inpRefImage.files[0]) {
-                    const res = await uploadImage(dom.inpRefImage.files[0]);
-                    uploadedImages.img2img = res.name;
-                } else if (refImageUrl) {
-                    const res = await uploadImageFromUrl(refImageUrl);
-                    uploadedImages.img2img = res.name;
-                }
-            }
-
-            if (dom.chkIpadapter?.checked && dom.inpIpaImage.files[0] && !isAnimaMode()) {
-                const res = await uploadImage(dom.inpIpaImage.files[0]);
-                uploadedImages.ipadapter = res.name;
-            }
-
-            const workflow = buildWorkflow(uploadedImages);
-            workflow.client_id = _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`);
-            _gen.wsClientId = workflow.client_id;
-            _connectPreviewWS();
-            const result = await apiPost('/prompt', workflow);
-            _gen.promptId = result.prompt_id;
-            await pollProgress(result.prompt_id);
         } catch (e) {
             alert('生图失败: ' + e.message);
             console.error(e);
         } finally {
-            _gen.active = false;
-            _gen.promptId = null;
-            _gen.hasRealtimeProgress = false;
-            _closePreviewWS();
-            _hideLivePreview();
-            _syncFab(0);
-            _setTitleProgress(0, '');
-            dom.btnGenerate.disabled = false;
-            dom.btnGenerate.textContent = '生成图片';
-            dom.progressContainer.classList.add('hidden');
+            resolvePostPreview('cancel');
+            endGenerationUI();
         }
     }
 
-    async function pollProgress(promptId) {
+    async function pollProgress(promptId, fetchOpts = {}) {
         const startTime = Date.now();
         const TIMEOUT = 300000;
 
@@ -1654,8 +1824,7 @@
                     const data = await res.json();
                     if (data[promptId] && data[promptId].outputs) {
                         setProgress(100);
-                        await fetchResult(promptId);
-                        return;
+                        return await fetchResult(promptId, fetchOpts);
                     }
                 }
 
@@ -1686,7 +1855,7 @@
     let lastBeforeImage = null;
     let lastAfterImage = null;
 
-    async function fetchResult(promptId) {
+    async function fetchResult(promptId, opts = {}) {
         for (let attempt = 0; attempt < 5; attempt++) {
             const history = await apiGet(`/history/${promptId}`);
             const outputs = history[promptId]?.outputs;
@@ -1695,6 +1864,8 @@
             let mainImage = null;
             let beforeImage = null;
             let previewImage = null;
+            let baseGateImage = null;
+            let baseGateMeta = null;
 
             for (const nodeId of Object.keys(outputs)) {
                 const nodeOutput = outputs[nodeId];
@@ -1703,9 +1874,12 @@
                         const url = `${getServer()}/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || '')}&type=${img.type || 'output'}`;
                         if (img.filename.startsWith('CN_Preview')) {
                             previewImage = url;
+                        } else if (img.filename.startsWith('CW_Base')) {
+                            baseGateImage = url;
+                            baseGateMeta = img;
                         } else if (img.filename.startsWith('CW_Before')) {
                             beforeImage = url;
-                        } else {
+                        } else if (!img.filename.startsWith('CW_Base')) {
                             mainImage = url;
                         }
                     }
@@ -1717,12 +1891,24 @@
                 dom.cnProcessedPreview.classList.remove('hidden');
             }
 
+            if (opts.expectBase) {
+                if (baseGateImage) {
+                    return {
+                        url: baseGateImage,
+                        filename: baseGateMeta.filename,
+                        meta: baseGateMeta,
+                    };
+                }
+                await new Promise(r => setTimeout(r, 1000));
+                continue;
+            }
+
             lastBeforeImage = beforeImage;
             lastAfterImage = mainImage;
 
             if (mainImage) {
                 showResult(mainImage, !!beforeImage);
-                return;
+                return { url: mainImage, hasCompare: !!beforeImage };
             }
             await new Promise(r => setTimeout(r, 1000));
         }
@@ -1999,6 +2185,15 @@
             if (e.target === dom.modalCompare) dom.modalCompare.classList.add('hidden');
         });
         setupCompareSlider();
+
+        if (dom.btnPostContinue) {
+            dom.btnPostContinue.addEventListener('click', () => resolvePostPreview('continue'));
+            dom.btnPostRegenerate.addEventListener('click', () => resolvePostPreview('regenerate'));
+            dom.btnPostCancel.addEventListener('click', () => resolvePostPreview('cancel'));
+            dom.modalPostPreview?.addEventListener('click', (e) => {
+                if (e.target === dom.modalPostPreview) resolvePostPreview('cancel');
+            });
+        }
 
         // Use as reference image
         dom.btnUseAsRef.addEventListener('click', () => {

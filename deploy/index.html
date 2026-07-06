@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.64</title>
+<title>ComfyUI Web v3.65</title>
     <link rel="stylesheet" href="style.css?v=364">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.64</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.65</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -305,6 +305,14 @@
                 <div class="panel-group" data-group="post">
                     <div class="panel-group-header">后处理</div>
                     <div class="panel-group-body">
+                        <section class="panel">
+                            <h2>后处理前预览</h2>
+                            <label style="display:flex;align-items:center;gap:10px">
+                                <input type="checkbox" id="chk-post-preview">
+                                <span style="font-size:0.85rem;color:var(--text-primary)">启用：先生成底图预览，再决定是否进入放大/修复</span>
+                            </label>
+                            <small style="color:var(--text-secondary);display:block;margin-top:6px">仅在开启「高清放大」或「面部修复」时生效。</small>
+                        </section>
                         <section class="panel optional-panel">
                             <div class="panel-header">
                                 <h2>ADetailer 面部修复</h2>
@@ -876,6 +884,20 @@
             </div>
             <div class="modal-actions">
                 <button id="btn-close-compare" class="btn-primary">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 后处理前：底图预览弹窗 -->
+    <div id="modal-post-preview" class="modal hidden">
+        <div class="modal-content preview-content">
+            <h2>底图预览</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:-4px">满意再进入放大/修复；不满意可结束或重新生成底图。</p>
+            <img id="post-preview-img" class="preview-image" alt="底图预览">
+            <div class="modal-actions">
+                <button id="btn-post-continue" class="btn-primary">满意，进入后处理</button>
+                <button id="btn-post-regenerate" class="btn-secondary">不满意，重抽底图</button>
+                <button id="btn-post-cancel" class="btn-danger">结束生图</button>
             </div>
         </div>
     </div>
