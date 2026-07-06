@@ -657,6 +657,11 @@
         });
     }
 
+    function isComfyOutputBaseName(name) {
+        // ComfyUI SaveImage 输出: CW_Base_00007_.png（非我们上传的 cw_base_<ts>.png）
+        return /^CW_Base_\d+_/.test(name || '');
+    }
+
     /** ComfyUI LoadImage 只认 input 目录；底图预览保存在 output，后处理前需重新上传 */
     async function uploadBaseImageForPost(baseResult) {
         const meta = baseResult?.meta || {};
@@ -2794,7 +2799,6 @@
         dom.inpaintStage?.classList.toggle('wand-mode', tool === 'wand');
         dom.inpaintStage?.classList.toggle('pan-mode', tool === 'pan' || _inpaint.spacePan);
         dom.inpaintViewport?.classList.toggle('pan-mode', tool === 'pan' || _inpaint.spacePan);
-        dom.inpaintViewport?.classList.toggle('draw-tool', ['brush', 'eraser', 'wand'].includes(tool));
         if (tool === 'pan' || _inpaint.spacePan) {
             _inpaintHideBrushRing();
         } else if (_inpaint.lastClientX || _inpaint.lastClientY) {
@@ -5590,7 +5594,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.75');
+        console.log('[ComfyUI Web] v3.76');
         await loadTags();
         renderHistory();
         setupTagPickers();
