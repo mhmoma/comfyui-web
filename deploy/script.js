@@ -164,6 +164,7 @@
         inpaintCanvasWrap: $('#inpaint-canvas-wrap'),
         inpaintStage: $('#inpaint-stage'),
         inpaintCanvas: $('#inpaint-canvas'),
+        inpaintCursor: $('#inpaint-cursor'),
         inpaintImage: $('#inpaint-image'),
         selInpaintPreset: $('#sel-inpaint-preset'),
         inpaintHint: $('#inpaint-hint'),
@@ -2515,11 +2516,61 @@
         dom.inpaintCanvas.height = dh;
         const ctx = dom.inpaintCanvas.getContext('2d');
         ctx.clearRect(0, 0, dw, dh);
-        ctx.drawImage(_inpaint._maskNative, 0, 0, dw, dh);
-        ctx.globalCompositeOperation = 'source-in';
-        ctx.fillStyle = 'rgba(233, 69, 96, 0.55)';
-        ctx.fillRect(0, 0, dw, dh);
-        ctx.globalCompositeOperation = 'source-over';
+
+        const tmp = document.createElement('canvas');
+        tmp.width = dw;
+        tmp.height = dh;
+        const tctx = tmp.getContext('2d');
+        tctx.drawImage(_inpaint._maskNative, 0, 0, dw, dh);
+        const maskData = tctx.getImageData(0, 0, dw, dh);
+        const overlay = ctx.createImageData(dw, dh);
+        for (let i = 0; i < maskData.data.length; i += 4) {
+            const lum = maskData.data[i];
+            if (lum < 4) continue;
+            overlay.data[i] = 233;
+            overlay.data[i + 1] = 69;
+            overlay.data[i + 2] = 96;
+            overlay.data[i + 3] = Math.min(255, Math.round(lum * 0.55));
+        }
+        ctx.putImageData(overlay, 0, 0);
+    }
+
+    function _inpaintHideBrushRing() {
+        dom.inpaintCursor?.classList.add('hidden');
+    }
+
+    function _inpaintUpdateBrushRing(clientX, clientY) {
+        const ring = dom.inpaintCursor;
+        const img = dom.inpaintImage;
+        const stage = dom.inpaintStage;
+        if (!ring || !img || !stage) return;
+        const rect = img.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) {
+            ring.classList.add('hidden');
+            return;
+        }
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+            ring.classList.add('hidden');
+            return;
+        }
+        const stageRect = stage.getBoundingClientRect();
+        const brush = parseFloat(dom.inpaintBrush?.value || 36);
+        ring.style.left = `${clientX - stageRect.left}px`;
+        ring.style.top = `${clientY - stageRect.top}px`;
+        ring.style.width = `${brush}px`;
+        ring.style.height = `${brush}px`;
+        ring.classList.toggle('eraser', !!_inpaint.eraser);
+        ring.classList.remove('hidden');
+    }
+
+    function _inpaintSetToolMode(eraser) {
+        _inpaint.eraser = eraser;
+        dom.btnInpaintBrush?.classList.toggle('active', !eraser);
+        dom.btnInpaintEraser?.classList.toggle('active', eraser);
+        dom.inpaintStage?.classList.toggle('eraser-mode', eraser);
+        dom.inpaintStage?.classList.toggle('brush-mode', !eraser);
     }
 
     function _inpaintPointerToNative(clientX, clientY) {
@@ -2564,8 +2615,17 @@
         if (!imageUrl || !dom.modalInpaint) return;
         _inpaint.sourceUrl = imageUrl;
         _inpaint.drawing = false;
+        _inpaint._maskNative = null;
+        _inpaint._maskCtx = null;
+        _inpaintSetToolMode(false);
         applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
         dom.modalInpaint.classList.remove('hidden');
+        _inpaintHideBrushRing();
+
+        if (dom.inpaintCanvas) {
+            dom.inpaintCanvas.width = 0;
+            dom.inpaintCanvas.height = 0;
+        }
 
         const onReady = () => {
             _inpaint.naturalW = dom.inpaintImage.naturalWidth;
@@ -2585,6 +2645,7 @@
     function closeInpaintModal() {
         dom.modalInpaint?.classList.add('hidden');
         _inpaint.drawing = false;
+        _inpaintHideBrushRing();
     }
 
     async function runInpaintGeneration() {
@@ -2647,15 +2708,17 @@
         wireInpaint(dom.btnIpaInpaint, () => dom.ipaPreview?.src);
 
         dom.selInpaintPreset?.addEventListener('change', (e) => applyInpaintPreset(e.target.value));
-        dom.btnInpaintBrush?.addEventListener('click', () => {
-            _inpaint.eraser = false;
-            dom.btnInpaintBrush?.classList.add('active');
-            dom.btnInpaintEraser?.classList.remove('active');
-        });
-        dom.btnInpaintEraser?.addEventListener('click', () => {
-            _inpaint.eraser = true;
-            dom.btnInpaintEraser?.classList.add('active');
-            dom.btnInpaintBrush?.classList.remove('active');
+        dom.btnInpaintBrush?.addEventListener('click', () => _inpaintSetToolMode(false));
+        dom.btnInpaintEraser?.addEventListener('click', () => _inpaintSetToolMode(true));
+        dom.inpaintBrush?.addEventListener('input', () => {
+            if (dom.inpaintCursor && !dom.inpaintCursor.classList.contains('hidden')) {
+                const rect = dom.inpaintStage?.getBoundingClientRect();
+                if (rect) {
+                    const left = parseFloat(dom.inpaintCursor.style.left || '0');
+                    const top = parseFloat(dom.inpaintCursor.style.top || '0');
+                    _inpaintUpdateBrushRing(rect.left + left, rect.top + top);
+                }
+            }
         });
         dom.btnInpaintClear?.addEventListener('click', () => _inpaintInitMask());
         dom.btnInpaintCancel?.addEventListener('click', closeInpaintModal);
@@ -2666,26 +2729,32 @@
 
         const onPointerDown = (e) => {
             if (!dom.modalInpaint || dom.modalInpaint.classList.contains('hidden')) return;
+            if (e.button !== undefined && e.button !== 0) return;
             _inpaint.drawing = true;
             const pt = e.touches ? e.touches[0] : e;
             _inpaintPaintAt(pt.clientX, pt.clientY);
+            _inpaintUpdateBrushRing(pt.clientX, pt.clientY);
             e.preventDefault();
         };
         const onPointerMove = (e) => {
-            if (!_inpaint.drawing) return;
             const pt = e.touches ? e.touches[0] : e;
+            _inpaintUpdateBrushRing(pt.clientX, pt.clientY);
+            if (!_inpaint.drawing) return;
             _inpaintPaintAt(pt.clientX, pt.clientY);
             e.preventDefault();
         };
         const onPointerUp = () => { _inpaint.drawing = false; };
+        const onPointerLeave = () => { _inpaint.drawing = false; _inpaintHideBrushRing(); };
 
-        const paintTarget = dom.inpaintCanvas || dom.inpaintStage;
+        const paintTarget = dom.inpaintStage || dom.inpaintCanvas;
         paintTarget?.addEventListener('mousedown', onPointerDown);
         paintTarget?.addEventListener('mousemove', onPointerMove);
+        paintTarget?.addEventListener('mouseleave', onPointerLeave);
         window.addEventListener('mouseup', onPointerUp);
         paintTarget?.addEventListener('touchstart', onPointerDown, { passive: false });
         paintTarget?.addEventListener('touchmove', onPointerMove, { passive: false });
-        window.addEventListener('touchend', onPointerUp);
+        paintTarget?.addEventListener('touchend', onPointerUp);
+        paintTarget?.addEventListener('touchcancel', onPointerUp);
 
         window.addEventListener('resize', () => {
             if (!dom.modalInpaint?.classList.contains('hidden')) _inpaintRedrawOverlay();

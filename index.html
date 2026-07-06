@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.72</title>
-    <link rel="stylesheet" href="style.css?v=372">
+<title>ComfyUI Web v3.73</title>
+    <link rel="stylesheet" href="style.css?v=373">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.72</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.73</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -947,6 +947,7 @@
                 <div id="inpaint-stage" class="inpaint-stage">
                     <img id="inpaint-image" class="inpaint-image" alt="重绘底图">
                     <canvas id="inpaint-canvas" class="inpaint-canvas"></canvas>
+                    <div id="inpaint-cursor" class="inpaint-cursor hidden" aria-hidden="true"></div>
                 </div>
             </div>
             <div class="inpaint-tools">
@@ -1181,6 +1182,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=372"></script>
+    <script src="script.js?v=373"></script>
 </body>
 </html>
