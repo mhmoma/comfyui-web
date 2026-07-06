@@ -612,6 +612,25 @@
     };
 
     const _archState = { sdxl: null, anima: null };
+    const _archModules = { sdxl: null, anima: null };
+
+    const ARCH_MODULE_CHECKBOX_IDS = [
+        'chk-speedup', 'chk-vae', 'chk-lora', 'chk-hires', 'chk-freeu',
+        'chk-controlnet', 'chk-img2img', 'chk-regional', 'chk-post-preview', 'chk-adetailer', 'chk-ipadapter',
+    ];
+    const ARCH_MODULE_SELECT_IDS = [
+        'sel-checkpoint', 'sel-unet', 'sel-clip', 'sel-anima-vae',
+        'sel-vae', 'sel-upscale-method', 'sel-controlnet', 'sel-adetailer-model',
+        'sel-ipadapter-model', 'sel-ipa-weight-type',
+    ];
+    const ARCH_MODULE_INPUT_IDS = [
+        'inp-hires-scale', 'inp-hires-steps', 'inp-hires-denoise',
+        'inp-cn-strength', 'inp-cn-start', 'inp-cn-end',
+        'inp-denoise', 'inp-ipa-weight', 'inp-ipa-start', 'inp-ipa-end',
+        'inp-adetailer-steps', 'inp-adetailer-denoise', 'inp-adetailer-threshold',
+        'inp-adetailer-dilation', 'inp-adetailer-feather', 'inp-adetailer-cycle',
+        'inp-freeu-b1', 'inp-freeu-b2', 'inp-freeu-s1', 'inp-freeu-s2',
+    ];
 
     function isAnimaMode() {
         return dom.selArch.value === 'anima';
@@ -671,6 +690,7 @@
             const newArch = dom.selArch.value;
             const prevArch = newArch === 'anima' ? 'sdxl' : 'anima';
             _archState[prevArch] = captureArchState();
+            _archModules[prevArch] = captureArchModules();
 
             const isAnima = newArch === 'anima';
             dom.panelSdxlModel.classList.toggle('hidden', isAnima);
@@ -678,9 +698,92 @@
 
             const defaults = isAnima ? ANIMA_DEFAULTS : SDXL_DEFAULTS;
             applyArchState(_archState[newArch] || defaults);
+            applyArchModules(_archModules[newArch]);
 
             updateArchAwarePanels();
+            ProfileManager.scheduleAutosave();
         });
+    }
+
+    function createEmptyArchModules() {
+        const checkboxes = {};
+        ARCH_MODULE_CHECKBOX_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            checkboxes[id] = el?.type === 'checkbox' ? el.defaultChecked : false;
+        });
+        const inputs = {};
+        ARCH_MODULE_INPUT_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) inputs[id] = el.value;
+        });
+        return { loras: [], regions: [], checkboxes, selects: {}, inputs };
+    }
+
+    function captureArchModules() {
+        return {
+            loras: getLoraSelections(),
+            regions: Array.from(dom.regionalList.querySelectorAll('.region-row')).map(row => ({
+                x: parseFloat(row.querySelector('.region-x')?.value || 0),
+                y: parseFloat(row.querySelector('.region-y')?.value || 0),
+                w: parseFloat(row.querySelector('.region-w')?.value || 50),
+                h: parseFloat(row.querySelector('.region-h')?.value || 50),
+                prompt: row.querySelector('.region-prompt')?.value || '',
+            })),
+            checkboxes: _profileReadMap(ARCH_MODULE_CHECKBOX_IDS),
+            selects: _profileReadMap(ARCH_MODULE_SELECT_IDS),
+            inputs: _profileReadMap(ARCH_MODULE_INPUT_IDS),
+        };
+    }
+
+    function applyArchModules(modules) {
+        const data = modules || createEmptyArchModules();
+        _profileWriteMap(data.checkboxes);
+        _profileWriteMap(data.selects);
+        _profileWriteMap(data.inputs);
+        dom.loraList.innerHTML = '';
+        loraCount = 0;
+        (data.loras || []).forEach(l => {
+            addLoraRow();
+            const row = dom.loraList.lastElementChild;
+            if (!row) return;
+            setSelectIfExists(row.querySelector('.lora-select'), l.name);
+            const strength = row.querySelector('.lora-strength');
+            if (strength && l.strength !== undefined) strength.value = l.strength;
+        });
+        dom.regionalList.innerHTML = '';
+        regionCount = 0;
+        (data.regions || []).forEach(r => {
+            addRegionRow(r.x, r.y, r.w, r.h);
+            const row = dom.regionalList.lastElementChild;
+            const prompt = row?.querySelector('.region-prompt');
+            if (prompt) prompt.value = r.prompt || '';
+        });
+        drawRegionCanvas();
+        _profileRefreshTogglePanels();
+    }
+
+    function migrateSnapshotToV2(data) {
+        if (!data || (data.v >= 2 && data.archModules)) return data;
+        const arch = data.arch || data.selects?.['sel-arch'] || 'sdxl';
+        const other = arch === 'anima' ? 'sdxl' : 'anima';
+        const modules = createEmptyArchModules();
+        ARCH_MODULE_CHECKBOX_IDS.forEach(id => {
+            if (data.checkboxes?.[id] !== undefined) modules.checkboxes[id] = data.checkboxes[id];
+        });
+        ARCH_MODULE_SELECT_IDS.forEach(id => {
+            if (data.selects?.[id] !== undefined) modules.selects[id] = data.selects[id];
+        });
+        ARCH_MODULE_INPUT_IDS.forEach(id => {
+            if (data.inputs?.[id] !== undefined) modules.inputs[id] = data.inputs[id];
+        });
+        modules.loras = data.loras || [];
+        modules.regions = data.regions || [];
+        data.archModules = {
+            [arch]: modules,
+            [other]: createEmptyArchModules(),
+        };
+        data.v = 2;
+        return data;
     }
 
     // ==================== 配置方案（本地持久化） ====================
@@ -690,27 +793,14 @@
     let _profileAutosaveTimer = null;
 
     const PROFILE_INPUT_IDS = [
-        'inp-steps', 'inp-cfg', 'inp-clip-skip', 'inp-width', 'inp-height', 'inp-seed',
-        'inp-hires-scale', 'inp-hires-steps', 'inp-hires-denoise',
-        'inp-cn-strength', 'inp-cn-start', 'inp-cn-end',
-        'inp-denoise', 'inp-ipa-weight', 'inp-ipa-start', 'inp-ipa-end',
-        'inp-adetailer-steps', 'inp-adetailer-denoise', 'inp-adetailer-threshold',
-        'inp-adetailer-dilation', 'inp-adetailer-feather', 'inp-adetailer-cycle',
-        'inp-freeu-b1', 'inp-freeu-b2', 'inp-freeu-s1', 'inp-freeu-s2',
-        'txt-positive', 'txt-negative',
         'inp-nai-apikey', 'inp-nai-seed', 'inp-nai-strength', 'inp-nai-noise',
         'inp-nai-videocode', 'inp-nai-video-seed',
     ];
     const PROFILE_SELECT_IDS = [
-        'sel-arch', 'sel-checkpoint', 'sel-unet', 'sel-clip', 'sel-anima-vae',
-        'sel-sampler', 'sel-scheduler', 'sel-vae', 'sel-upscale-method',
-        'sel-controlnet', 'sel-adetailer-model', 'sel-ipadapter-model', 'sel-ipa-weight-type',
-        'sel-workflow', 'sel-translate-provider',
+        'sel-arch', 'sel-workflow', 'sel-translate-provider',
         'sel-nai-model', 'sel-nai-sampler', 'sel-nai-noise-schedule', 'sel-nai-fps', 'sel-nai-uc-preset',
     ];
     const PROFILE_CHECKBOX_IDS = [
-        'chk-speedup', 'chk-vae', 'chk-lora', 'chk-hires', 'chk-freeu',
-        'chk-controlnet', 'chk-img2img', 'chk-regional', 'chk-post-preview', 'chk-adetailer', 'chk-ipadapter',
         'chk-nai-upscale', 'chk-nai-smea', 'chk-nai-dyn', 'chk-nai-variety', 'chk-nai-decrisp',
         'chk-nai-use-coords', 'chk-nai-legacy', 'chk-nai-legacy-uc', 'chk-nai-legacy-v3',
         'chk-nai-auto-smea', 'chk-nai-brownian', 'chk-nai-euler-bug',
@@ -881,9 +971,10 @@
     function captureProfileSnapshot() {
         const arch = dom.selArch.value;
         _archState[arch] = captureArchState();
+        _archModules[arch] = captureArchModules();
         const activeSize = document.querySelector('.nai-size-btn.active');
         return {
-            v: 1,
+            v: 2,
             activeMode: _profileGetActiveMode(),
             server: getComfyUIAddress(),
             theme: localStorage.getItem('comfyui_theme') || 'default',
@@ -893,12 +984,14 @@
                 sdxl: _archState.sdxl,
                 anima: _archState.anima,
             },
+            archModules: {
+                sdxl: _archModules.sdxl,
+                anima: _archModules.anima,
+            },
             inputs: _profileReadMap(PROFILE_INPUT_IDS),
             selects: _profileReadMap(PROFILE_SELECT_IDS),
             checkboxes: _profileReadMap(PROFILE_CHECKBOX_IDS),
             ranges: _profileReadMap(PROFILE_RANGE_IDS),
-            loras: _profileCaptureLoras(),
-            regions: _profileCaptureRegions(),
             naiSize: activeSize ? { w: activeSize.dataset.w, h: activeSize.dataset.h } : null,
             naiCharacters: _profileCaptureNaiCharacters(),
             wfInputs: _profileCaptureWfInputs(),
@@ -909,6 +1002,8 @@
         if (!data) return;
         _profileApplying = true;
         try {
+            data = migrateSnapshotToV2({ ...data });
+
             if (data.server) {
                 setComfyUIAddress(data.server);
                 if (dom.inpServer) dom.inpServer.value = data.server;
@@ -926,6 +1021,10 @@
             if (data.archState) {
                 _archState.sdxl = data.archState.sdxl || null;
                 _archState.anima = data.archState.anima || null;
+            }
+            if (data.archModules) {
+                _archModules.sdxl = data.archModules.sdxl || null;
+                _archModules.anima = data.archModules.anima || null;
             }
 
             _profileWriteMap(data.inputs);
@@ -946,10 +1045,9 @@
             dom.panelSdxlModel.classList.toggle('hidden', isAnima);
             dom.panelAnimaModel.classList.toggle('hidden', !isAnima);
             applyArchState(_archState[arch] || (isAnima ? ANIMA_DEFAULTS : SDXL_DEFAULTS));
+            applyArchModules(_archModules[arch]);
             updateArchAwarePanels();
 
-            _profileApplyLoras(data.loras);
-            _profileApplyRegions(data.regions);
             _profileApplyNaiCharacters(data.naiCharacters);
 
             if (data.naiSize?.w && data.naiSize?.h) {
@@ -984,7 +1082,6 @@
             }
 
             _profileApplyActiveMode(data.activeMode);
-            _profileRefreshTogglePanels();
         } finally {
             _profileApplying = false;
         }
@@ -1175,6 +1272,8 @@
                 const cur = this.getActiveProfile();
                 if (confirm(`确定删除配置方案「${cur?.name || ''}」？`)) this.deleteActive();
             });
+
+            dom.selArch?.addEventListener('change', () => this.scheduleAutosave());
 
             const autosaveRoot = document.querySelector('.app');
             if (autosaveRoot) {
