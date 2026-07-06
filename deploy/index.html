@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.67</title>
+<title>ComfyUI Web v3.68</title>
     <link rel="stylesheet" href="style.css?v=366">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.67</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.68</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -864,7 +864,7 @@
                 <button type="button" id="btn-profile-rename" class="btn-secondary">重命名</button>
                 <button type="button" id="btn-profile-delete" class="btn-danger">删除</button>
             </div>
-            <small class="profile-hint">修改后会自动保存到当前方案；刷新页面将恢复上次使用的方案。</small>
+            <small class="profile-hint">方案仅在点击「保存当前」或「另存为」时更新；日常修改会自动记入会话，刷新可恢复，但不会覆盖已保存的方案。</small>
             <div class="modal-actions">
                 <button id="btn-save-settings" class="btn-primary">保存</button>
                 <button id="btn-cancel-settings" class="btn-secondary">取消</button>
@@ -1125,6 +1125,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=358"></script>
+    <script src="script.js?v=368"></script>
 </body>
 </html>

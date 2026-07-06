@@ -1049,20 +1049,30 @@
             if (!profile) return;
             profile.data = captureProfileSnapshot();
             profile.updatedAt = Date.now();
+            this.saveSessionFromUI(true);
             this.saveStore();
             if (!silent) showToast(`已保存到「${profile.name}」`);
         },
 
+        saveSessionFromUI() {
+            this.store.session = {
+                activeId: this.store.activeId,
+                data: captureProfileSnapshot(),
+                updatedAt: Date.now(),
+            };
+            this.saveStore();
+        },
+
         async switchTo(id, silent) {
             if (!id || !this.store.profiles[id]) return;
-            if (id !== this.store.activeId && !_profileApplying) {
-                this.saveActiveFromUI(true);
-            }
             this.store.activeId = id;
             this.saveStore();
             this.refreshSelects();
             const profile = this.store.profiles[id];
-            if (profile?.data) await applyProfileSnapshot(profile.data);
+            if (profile?.data) {
+                await applyProfileSnapshot(profile.data);
+            }
+            this.saveSessionFromUI();
             if (!silent) showToast(`已切换至「${profile.name}」`);
         },
 
@@ -1077,6 +1087,7 @@
                 data: captureProfileSnapshot(),
             };
             this.store.activeId = id;
+            this.saveSessionFromUI();
             this.saveStore();
             this.refreshSelects();
             return id;
@@ -1112,17 +1123,23 @@
         scheduleAutosave() {
             if (_profileApplying) return;
             clearTimeout(_profileAutosaveTimer);
-            _profileAutosaveTimer = setTimeout(() => this.saveActiveFromUI(true), PROFILE_AUTOSAVE_MS);
+            _profileAutosaveTimer = setTimeout(() => this.saveSessionFromUI(), PROFILE_AUTOSAVE_MS);
         },
 
         async restoreActiveProfile() {
             this.loadStore();
-            const profile = this.getActiveProfile();
-            if (!profile.data) {
-                profile.data = captureProfileSnapshot();
-                this.saveStore();
+            const session = this.store.session;
+            if (session?.data) {
+                if (session.activeId && this.store.profiles[session.activeId]) {
+                    this.store.activeId = session.activeId;
+                }
+                await applyProfileSnapshot(session.data);
             } else {
-                await applyProfileSnapshot(profile.data);
+                const profile = this.getActiveProfile();
+                if (profile?.data) {
+                    await applyProfileSnapshot(profile.data);
+                }
+                this.saveSessionFromUI();
             }
             this.refreshSelects();
         },
@@ -2660,7 +2677,7 @@
             const url = dom.inpServer.value.trim();
             if (!url) return;
             setComfyUIAddress(url);
-            ProfileManager.saveActiveFromUI(true);
+            ProfileManager.saveSessionFromUI();
             const admKey = document.getElementById('inp-admin-key')?.value.trim();
             if (admKey) {
                 sessionStorage.setItem('_adm', admKey);
