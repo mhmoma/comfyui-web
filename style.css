@@ -1696,6 +1696,14 @@ body.inpaint-open {
     cursor: none;
 }
 
+.inpaint-viewport.pan-mode {
+    cursor: grab;
+}
+
+.inpaint-viewport.pan-mode:active {
+    cursor: grabbing;
+}
+
 .inpaint-transform {
     position: absolute;
     left: 0;
