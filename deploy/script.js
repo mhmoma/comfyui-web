@@ -574,11 +574,17 @@
         return res.json();
     }
 
-    async function uploadImageFromUrl(imageUrl) {
+    async function uploadImageFromUrl(imageUrl, filename) {
         const response = await fetch(imageUrl);
         const blob = await response.blob();
-        const file = new File([blob], `ref_${Date.now()}.png`, { type: blob.type || 'image/png' });
+        const file = new File([blob], filename || `ref_${Date.now()}.png`, { type: blob.type || 'image/png' });
         return uploadImage(file);
+    }
+
+    /** ComfyUI LoadImage 只认 input 目录；底图预览保存在 output，后处理前需重新上传 */
+    async function uploadBaseImageForPost(baseResult) {
+        const uploaded = await uploadImageFromUrl(baseResult.url, `cw_base_${Date.now()}.png`);
+        return uploaded.name;
     }
 
     const ANIMA_DEFAULTS = {
@@ -2287,9 +2293,10 @@
 
             if (decision === 'continue') {
                 resetStageProgress('后处理中...');
+                const inputImageName = await uploadBaseImageForPost(baseResult);
                 const postWorkflow = buildWorkflow(uploadedImages, {
                     stage: 'post',
-                    baseImageName: baseResult.filename,
+                    baseImageName: inputImageName,
                     seedOverride: baseWorkflow.actualSeed,
                 });
                 await runPromptWorkflow(postWorkflow);
