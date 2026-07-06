@@ -2554,12 +2554,14 @@
     function openInpaintModal(imageUrl) {
         if (!imageUrl || !dom.modalInpaint) return;
         _inpaint.sourceUrl = imageUrl;
-        dom.inpaintImage.onload = () => {
+        dom.inpaintImage.src = imageUrl;
+        const onReady = () => {
             _inpaint.naturalW = dom.inpaintImage.naturalWidth;
             _inpaint.naturalH = dom.inpaintImage.naturalHeight;
-            _inpaintInitMask();
+            if (_inpaint.naturalW > 0) _inpaintInitMask();
         };
-        dom.inpaintImage.src = imageUrl;
+        dom.inpaintImage.onload = onReady;
+        if (dom.inpaintImage.complete) onReady();
         applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
         dom.modalInpaint.classList.remove('hidden');
     }
