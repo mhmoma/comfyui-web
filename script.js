@@ -222,6 +222,57 @@
         btnProfileSaveAs: $('#btn-profile-saveas'),
         btnProfileRename: $('#btn-profile-rename'),
         btnProfileDelete: $('#btn-profile-delete'),
+        // Composite
+        btnComposite: $('#btn-composite'),
+        btnCompositeResult: $('#btn-composite-result'),
+        btnPreviewCompositeBase: $('#btn-preview-composite-base'),
+        btnPreviewCompositeOverlay: $('#btn-preview-composite-overlay'),
+        modalComposite: $('#modal-composite'),
+        compositeViewport: $('#composite-viewport'),
+        compositeCanvas: $('#composite-canvas'),
+        btnCompositeClose: $('#btn-composite-close'),
+        btnCompositeFitView: $('#btn-composite-fit-view'),
+        btnCompositeToggleGuides: $('#btn-composite-toggle-guides'),
+        btnCompositeExport: $('#btn-composite-export'),
+        btnCompositeSaveHistory: $('#btn-composite-save-history'),
+        btnCompositeLoadBase: $('#btn-composite-load-base'),
+        btnCompositeLoadOverlay: $('#btn-composite-load-overlay'),
+        btnCompositeBaseResult: $('#btn-composite-base-result'),
+        btnCompositeOverlayResult: $('#btn-composite-overlay-result'),
+        btnCompositeFitHalf: $('#btn-composite-fit-half'),
+        btnCompositeFitWidth: $('#btn-composite-fit-width'),
+        btnCompositeSwap: $('#btn-composite-swap'),
+        inpCompositeBase: $('#inp-composite-base'),
+        inpCompositeOverlay: $('#inp-composite-overlay'),
+        compositeBaseThumb: $('#composite-base-thumb'),
+        compositeOverlayThumb: $('#composite-overlay-thumb'),
+        compositeBaseEmpty: $('#composite-base-empty'),
+        compositeOverlayEmpty: $('#composite-overlay-empty'),
+        compositeOpacity: $('#composite-opacity'),
+        compositeOpacityVal: $('#composite-opacity-val'),
+        compositeRotation: $('#composite-rotation'),
+        compositeRotationVal: $('#composite-rotation-val'),
+        btnCompositeCutoutOverlay: $('#btn-composite-cutout-overlay'),
+        // Cutout
+        btnCutout: $('#btn-cutout'),
+        btnCutoutResult: $('#btn-cutout-result'),
+        btnPreviewCutout: $('#btn-preview-cutout'),
+        modalCutout: $('#modal-cutout'),
+        cutoutSrcPreview: $('#cutout-src-preview'),
+        cutoutResultPreview: $('#cutout-result-preview'),
+        cutoutSrcEmpty: $('#cutout-src-empty'),
+        cutoutResultEmpty: $('#cutout-result-empty'),
+        cutoutProgress: $('#cutout-progress'),
+        cutoutProgressBar: $('#cutout-progress-bar'),
+        cutoutProgressText: $('#cutout-progress-text'),
+        btnCutoutLoad: $('#btn-cutout-load'),
+        btnCutoutFromResult: $('#btn-cutout-from-result'),
+        btnCutoutRun: $('#btn-cutout-run'),
+        btnCutoutComposite: $('#btn-cutout-composite'),
+        btnCutoutDownload: $('#btn-cutout-download'),
+        btnCutoutHistory: $('#btn-cutout-history'),
+        btnCutoutClose: $('#btn-cutout-close'),
+        inpCutout: $('#inp-cutout'),
     };
 
     // ==================== 连接状态灯 ====================
@@ -4300,6 +4351,1091 @@
         _inpaintUpdateSamRangeLabel();
     }
 
+    // ==================== 图层合成 ====================
+    const _composite = {
+        baseImg: null,
+        baseW: 0,
+        baseH: 0,
+        overlayImg: null,
+        overlay: { x: 0, y: 0, w: 0, h: 0, rotation: 0, opacity: 1 },
+        scale: 1,
+        panX: 0,
+        panY: 0,
+        showGuides: true,
+        drag: null,
+        panning: false,
+        panStartX: 0,
+        panStartY: 0,
+        panOriginX: 0,
+        panOriginY: 0,
+        spaceHeld: false,
+        _objectUrls: [],
+        _raf: 0,
+    };
+
+    function _compositeRevokeUrls() {
+        _composite._objectUrls.forEach((u) => URL.revokeObjectURL(u));
+        _composite._objectUrls = [];
+    }
+
+    function _compositeImageFromSrc(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('图片加载失败'));
+            img.src = src;
+        });
+    }
+
+    async function _compositeFetchImage(url) {
+        if (!url) throw new Error('无图片地址');
+        if (url.startsWith('blob:') || url.startsWith('data:')) {
+            return _compositeImageFromSrc(url);
+        }
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 64) {
+                    const objUrl = URL.createObjectURL(blob);
+                    _composite._objectUrls.push(objUrl);
+                    return _compositeImageFromSrc(objUrl);
+                }
+            }
+        } catch (_) { /* fall through */ }
+        return _compositeImageFromSrc(url);
+    }
+
+    function _compositeGetResultUrl() {
+        const url = dom.resultImage?.src;
+        if (!url || dom.resultImage?.classList.contains('hidden')) return '';
+        return url;
+    }
+
+    function _compositeUpdateThumbs() {
+        if (dom.compositeBaseThumb) {
+            const has = !!_composite.baseImg;
+            dom.compositeBaseThumb.classList.toggle('hidden', !has);
+            dom.compositeBaseEmpty?.classList.toggle('hidden', has);
+            if (has) dom.compositeBaseThumb.src = _composite.baseImg.src;
+        }
+        if (dom.compositeOverlayThumb) {
+            const has = !!_composite.overlayImg;
+            dom.compositeOverlayThumb.classList.toggle('hidden', !has);
+            dom.compositeOverlayEmpty?.classList.toggle('hidden', has);
+            if (has) dom.compositeOverlayThumb.src = _composite.overlayImg.src;
+        }
+    }
+
+    function _compositeSyncSlidersFromOverlay() {
+        const o = _composite.overlay;
+        if (dom.compositeOpacity) {
+            dom.compositeOpacity.value = String(Math.round((o.opacity ?? 1) * 100));
+            if (dom.compositeOpacityVal) dom.compositeOpacityVal.textContent = `${dom.compositeOpacity.value}%`;
+        }
+        if (dom.compositeRotation) {
+            dom.compositeRotation.value = String(Math.round(o.rotation || 0));
+            if (dom.compositeRotationVal) dom.compositeRotationVal.textContent = `${dom.compositeRotation.value}°`;
+        }
+    }
+
+    function _compositeSyncOverlayFromSliders() {
+        if (!_composite.overlay) return;
+        if (dom.compositeOpacity) {
+            _composite.overlay.opacity = Number(dom.compositeOpacity.value) / 100;
+            if (dom.compositeOpacityVal) dom.compositeOpacityVal.textContent = `${dom.compositeOpacity.value}%`;
+        }
+        if (dom.compositeRotation) {
+            _composite.overlay.rotation = Number(dom.compositeRotation.value);
+            if (dom.compositeRotationVal) dom.compositeRotationVal.textContent = `${dom.compositeRotation.value}°`;
+        }
+    }
+
+    function _compositeSetBase(img) {
+        _composite.baseImg = img;
+        _composite.baseW = img.naturalWidth;
+        _composite.baseH = img.naturalHeight;
+        _compositeUpdateThumbs();
+        _compositeFitView();
+        _compositeScheduleRender();
+    }
+
+    function _compositeSetOverlay(img, autoPlace = true) {
+        _composite.overlayImg = img;
+        if (autoPlace && _composite.baseImg) {
+            _compositeFitOverlayHalf();
+        }
+        _compositeUpdateThumbs();
+        _compositeSyncSlidersFromOverlay();
+        _compositeScheduleRender();
+    }
+
+    function _compositeFitOverlayHalf() {
+        if (!_composite.baseImg || !_composite.overlayImg) return;
+        const bw = _composite.baseW;
+        const bh = _composite.baseH;
+        const iw = _composite.overlayImg.naturalWidth;
+        const ih = _composite.overlayImg.naturalHeight;
+        const target = Math.min(bw, bh) * 0.5;
+        const s = target / Math.max(iw, ih);
+        const w = iw * s;
+        const h = ih * s;
+        _composite.overlay = {
+            x: (bw - w) / 2,
+            y: (bh - h) / 2,
+            w,
+            h,
+            rotation: _composite.overlay?.rotation || 0,
+            opacity: _composite.overlay?.opacity ?? 1,
+        };
+        _compositeSyncSlidersFromOverlay();
+    }
+
+    function _compositeFitOverlayWidth() {
+        if (!_composite.baseImg || !_composite.overlayImg) return;
+        const bw = _composite.baseW;
+        const bh = _composite.baseH;
+        const iw = _composite.overlayImg.naturalWidth;
+        const ih = _composite.overlayImg.naturalHeight;
+        const w = bw;
+        const h = ih * (w / iw);
+        _composite.overlay = {
+            x: 0,
+            y: (bh - h) / 2,
+            w,
+            h,
+            rotation: _composite.overlay?.rotation || 0,
+            opacity: _composite.overlay?.opacity ?? 1,
+        };
+        _compositeSyncSlidersFromOverlay();
+    }
+
+    function _compositeAlign(mode) {
+        if (!_composite.overlayImg || !_composite.baseImg) return;
+        const o = _composite.overlay;
+        const bw = _composite.baseW;
+        const bh = _composite.baseH;
+        switch (mode) {
+            case 'left': o.x = 0; break;
+            case 'right': o.x = bw - o.w; break;
+            case 'top': o.y = 0; break;
+            case 'bottom': o.y = bh - o.h; break;
+            case 'hcenter': o.x = (bw - o.w) / 2; break;
+            case 'vcenter': o.y = (bh - o.h) / 2; break;
+            case 'center':
+                o.x = (bw - o.w) / 2;
+                o.y = (bh - o.h) / 2;
+                break;
+            default: break;
+        }
+        _compositeScheduleRender();
+    }
+
+    function _compositeSwapLayers() {
+        if (!_composite.baseImg && !_composite.overlayImg) return;
+        const tmpImg = _composite.baseImg;
+        _composite.baseImg = _composite.overlayImg;
+        _composite.overlayImg = tmpImg;
+        if (_composite.baseImg) {
+            _composite.baseW = _composite.baseImg.naturalWidth;
+            _composite.baseH = _composite.baseImg.naturalHeight;
+        } else {
+            _composite.baseW = 0;
+            _composite.baseH = 0;
+        }
+        if (_composite.overlayImg && _composite.baseImg) {
+            _compositeFitOverlayHalf();
+        } else if (_composite.overlayImg && !_composite.baseImg) {
+            _composite.baseImg = _composite.overlayImg;
+            _composite.overlayImg = null;
+            _composite.baseW = _composite.baseImg.naturalWidth;
+            _composite.baseH = _composite.baseImg.naturalHeight;
+            _composite.overlay = { x: 0, y: 0, w: 0, h: 0, rotation: 0, opacity: 1 };
+        }
+        _compositeUpdateThumbs();
+        _compositeFitView();
+        _compositeScheduleRender();
+    }
+
+    function _compositeFitView() {
+        const vp = dom.compositeViewport;
+        if (!vp || !_composite.baseW || !_composite.baseH) return;
+        const pad = 24;
+        const vw = Math.max(1, vp.clientWidth - pad * 2);
+        const vh = Math.max(1, vp.clientHeight - pad * 2);
+        const s = Math.min(vw / _composite.baseW, vh / _composite.baseH, 1);
+        _composite.scale = s;
+        _composite.panX = (vp.clientWidth - _composite.baseW * s) / 2;
+        _composite.panY = (vp.clientHeight - _composite.baseH * s) / 2;
+        _compositeScheduleRender();
+    }
+
+    function _compositeZoomAt(clientX, clientY, factor) {
+        const vp = dom.compositeViewport;
+        if (!vp) return;
+        const rect = vp.getBoundingClientRect();
+        const px = clientX - rect.left;
+        const py = clientY - rect.top;
+        const oldScale = _composite.scale;
+        const newScale = Math.min(8, Math.max(0.05, oldScale * factor));
+        const wx = (px - _composite.panX) / oldScale;
+        const wy = (py - _composite.panY) / oldScale;
+        _composite.scale = newScale;
+        _composite.panX = px - wx * newScale;
+        _composite.panY = py - wy * newScale;
+        _compositeScheduleRender();
+    }
+
+    function _compositeClientToBase(clientX, clientY) {
+        const vp = dom.compositeViewport?.getBoundingClientRect();
+        if (!vp || _composite.scale < 0.001) return { x: 0, y: 0 };
+        const px = clientX - vp.left;
+        const py = clientY - vp.top;
+        return {
+            x: (px - _composite.panX) / _composite.scale,
+            y: (py - _composite.panY) / _composite.scale,
+        };
+    }
+
+    function _compositeWorldToLocal(nx, ny) {
+        const o = _composite.overlay;
+        const cx = o.x + o.w / 2;
+        const cy = o.y + o.h / 2;
+        const rad = -(o.rotation || 0) * Math.PI / 180;
+        const dx = nx - cx;
+        const dy = ny - cy;
+        return {
+            lx: dx * Math.cos(rad) - dy * Math.sin(rad),
+            ly: dx * Math.sin(rad) + dy * Math.cos(rad),
+        };
+    }
+
+    function _compositeGetOverlayCorners() {
+        const o = _composite.overlay;
+        const cx = o.x + o.w / 2;
+        const cy = o.y + o.h / 2;
+        const rad = (o.rotation || 0) * Math.PI / 180;
+        const locals = [
+            { x: -o.w / 2, y: -o.h / 2 },
+            { x: o.w / 2, y: -o.h / 2 },
+            { x: o.w / 2, y: o.h / 2 },
+            { x: -o.w / 2, y: o.h / 2 },
+        ];
+        return locals.map((p) => ({
+            x: cx + p.x * Math.cos(rad) - p.y * Math.sin(rad),
+            y: cy + p.x * Math.sin(rad) + p.y * Math.cos(rad),
+        }));
+    }
+
+    function _compositeHitHandle(nx, ny) {
+        const names = ['nw', 'ne', 'se', 'sw'];
+        const corners = _compositeGetOverlayCorners();
+        const threshold = 12 / _composite.scale;
+        for (let i = 0; i < corners.length; i++) {
+            const c = corners[i];
+            if (Math.hypot(nx - c.x, ny - c.y) <= threshold) return names[i];
+        }
+        return null;
+    }
+
+    function _compositePointInOverlay(nx, ny) {
+        const o = _composite.overlay;
+        if (!o || o.w < 1 || o.h < 1) return false;
+        const { lx, ly } = _compositeWorldToLocal(nx, ny);
+        return Math.abs(lx) <= o.w / 2 && Math.abs(ly) <= o.h / 2;
+    }
+
+    function _compositeIsPanMode(e) {
+        return e.button === 1 || _composite.spaceHeld || (e.button === 0 && e.altKey);
+    }
+
+    function _compositeScheduleRender() {
+        if (_composite._raf) return;
+        _composite._raf = requestAnimationFrame(() => {
+            _composite._raf = 0;
+            _compositeRender();
+        });
+    }
+
+    function _compositeDrawChecker(ctx, w, h) {
+        const size = 16;
+        for (let y = 0; y < h; y += size) {
+            for (let x = 0; x < w; x += size) {
+                const odd = ((x / size) + (y / size)) % 2;
+                ctx.fillStyle = odd ? '#2a2a36' : '#1e1e28';
+                ctx.fillRect(x, y, size, size);
+            }
+        }
+    }
+
+    function _compositeRender() {
+        const canvas = dom.compositeCanvas;
+        const vp = dom.compositeViewport;
+        if (!canvas || !vp) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const vw = vp.clientWidth;
+        const vh = vp.clientHeight;
+        if (vw < 1 || vh < 1) return;
+
+        canvas.width = Math.round(vw * dpr);
+        canvas.height = Math.round(vh * dpr);
+        canvas.style.width = `${vw}px`;
+        canvas.style.height = `${vh}px`;
+
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, vw, vh);
+        ctx.fillStyle = '#0c0c14';
+        ctx.fillRect(0, 0, vw, vh);
+
+        if (!_composite.baseImg) {
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('请加载底图 B', vw / 2, vh / 2);
+            return;
+        }
+
+        ctx.save();
+        ctx.translate(_composite.panX, _composite.panY);
+        ctx.scale(_composite.scale, _composite.scale);
+
+        _compositeDrawChecker(ctx, _composite.baseW, _composite.baseH);
+        ctx.drawImage(_composite.baseImg, 0, 0, _composite.baseW, _composite.baseH);
+
+        if (_composite.showGuides) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(99, 179, 237, 0.55)';
+            ctx.lineWidth = 1 / _composite.scale;
+            ctx.setLineDash([6 / _composite.scale, 6 / _composite.scale]);
+            ctx.beginPath();
+            ctx.moveTo(_composite.baseW / 2, 0);
+            ctx.lineTo(_composite.baseW / 2, _composite.baseH);
+            ctx.moveTo(0, _composite.baseH / 2);
+            ctx.lineTo(_composite.baseW, _composite.baseH / 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        if (_composite.overlayImg && _composite.overlay.w > 0 && _composite.overlay.h > 0) {
+            const o = _composite.overlay;
+            ctx.save();
+            ctx.globalAlpha = o.opacity ?? 1;
+            ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
+            ctx.rotate((o.rotation || 0) * Math.PI / 180);
+            ctx.drawImage(_composite.overlayImg, -o.w / 2, -o.h / 2, o.w, o.h);
+            ctx.restore();
+
+            const corners = _compositeGetOverlayCorners();
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 200, 80, 0.95)';
+            ctx.lineWidth = 2 / _composite.scale;
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y);
+            for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+            ctx.closePath();
+            ctx.stroke();
+            const r = 5 / _composite.scale;
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = 'rgba(255, 160, 40, 0.95)';
+            corners.forEach((c) => {
+                ctx.beginPath();
+                ctx.rect(c.x - r, c.y - r, r * 2, r * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
+    async function _compositeRenderToCanvas() {
+        if (!_composite.baseImg) throw new Error('请先加载底图');
+        const c = document.createElement('canvas');
+        c.width = _composite.baseW;
+        c.height = _composite.baseH;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(_composite.baseImg, 0, 0);
+        if (_composite.overlayImg && _composite.overlay.w > 0 && _composite.overlay.h > 0) {
+            const o = _composite.overlay;
+            ctx.save();
+            ctx.globalAlpha = o.opacity ?? 1;
+            ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
+            ctx.rotate((o.rotation || 0) * Math.PI / 180);
+            ctx.drawImage(_composite.overlayImg, -o.w / 2, -o.h / 2, o.w, o.h);
+            ctx.restore();
+        }
+        return c;
+    }
+
+    async function _compositeExportPng() {
+        const c = await _compositeRenderToCanvas();
+        const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error('导出失败');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `composite_${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('已导出合成图');
+    }
+
+    async function _compositeSaveToHistory() {
+        const c = await _compositeRenderToCanvas();
+        const dataUrl = c.toDataURL('image/png');
+        saveToHistory(dataUrl);
+        showToast('已保存到历史');
+    }
+
+    async function _compositeLoadBaseFromUrl(url) {
+        const img = await _compositeFetchImage(url);
+        _compositeSetBase(img);
+    }
+
+    async function _compositeLoadOverlayFromUrl(url, autoPlace = true) {
+        const img = await _compositeFetchImage(url);
+        _compositeSetOverlay(img, autoPlace);
+    }
+
+    async function _compositeLoadBaseFromFile(file) {
+        const objUrl = URL.createObjectURL(file);
+        _composite._objectUrls.push(objUrl);
+        const img = await _compositeImageFromSrc(objUrl);
+        _compositeSetBase(img);
+    }
+
+    async function _compositeLoadOverlayFromFile(file) {
+        const objUrl = URL.createObjectURL(file);
+        _composite._objectUrls.push(objUrl);
+        const img = await _compositeImageFromSrc(objUrl);
+        _compositeSetOverlay(img, true);
+    }
+
+    function _compositeClose() {
+        dom.modalComposite?.classList.add('hidden');
+        document.body.classList.remove('composite-open');
+        _composite.drag = null;
+        _composite.panning = false;
+        dom.compositeViewport?.classList.remove('is-pan', 'is-move');
+    }
+
+    async function openCompositorModal(opts = {}) {
+        if (!dom.modalComposite) return;
+        dom.modalComposite.classList.remove('hidden');
+        document.body.classList.add('composite-open');
+        requestAnimationFrame(() => {
+            _compositeFitView();
+            _compositeScheduleRender();
+        });
+
+        if (opts.baseUrl) {
+            try {
+                await _compositeLoadBaseFromUrl(opts.baseUrl);
+            } catch (e) {
+                showToast(`底图加载失败: ${e.message}`);
+            }
+        }
+        if (opts.overlayUrl) {
+            try {
+                await _compositeLoadOverlayFromUrl(opts.overlayUrl, true);
+            } catch (e) {
+                showToast(`叠加图加载失败: ${e.message}`);
+            }
+        }
+    }
+
+    function _compositeOnResizeDrag(nx, ny) {
+        const start = _composite.drag.startOverlay;
+        const o = _composite.overlay;
+        const cx = start.x + start.w / 2;
+        const cy = start.y + start.h / 2;
+        const rad = -(start.rotation || 0) * Math.PI / 180;
+        const dx = nx - cx;
+        const dy = ny - cy;
+        const lx = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const ly = dx * Math.sin(rad) + dy * Math.cos(rad);
+        let nw = Math.max(20, Math.abs(lx) * 2);
+        let nh = Math.max(20, Math.abs(ly) * 2);
+        if (_composite.drag.lockRatio) {
+            const ratio = start.w / start.h;
+            if (nw / nh > ratio) nw = nh * ratio;
+            else nh = nw / ratio;
+        }
+        o.w = nw;
+        o.h = nh;
+        o.x = cx - nw / 2;
+        o.y = cy - nh / 2;
+        o.rotation = start.rotation;
+    }
+
+    function setupCompositor() {
+        if (!dom.modalComposite) return;
+
+        const wireOpen = (btn, factory) => {
+            btn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const opts = typeof factory === 'function' ? factory() : factory;
+                if (opts === null) return;
+                openCompositorModal(opts);
+            });
+        };
+
+        dom.btnComposite?.addEventListener('click', () => openCompositorModal());
+
+        wireOpen(dom.btnCompositeResult, () => {
+            const url = _compositeGetResultUrl();
+            if (!url) { alert('请先生成或选择一张结果图'); return null; }
+            return { baseUrl: url };
+        });
+
+        wireOpen(dom.btnPreviewCompositeBase, () => {
+            const url = dom.previewImage?.src;
+            if (!url) return null;
+            dom.modalPreview?.classList.add('hidden');
+            return { baseUrl: url };
+        });
+
+        wireOpen(dom.btnPreviewCompositeOverlay, () => {
+            const url = dom.previewImage?.src;
+            if (!url) return null;
+            dom.modalPreview?.classList.add('hidden');
+            const open = dom.modalComposite?.classList.contains('hidden');
+            if (open) return { overlayUrl: url };
+            return { overlayUrl: url };
+        });
+
+        dom.btnCompositeClose?.addEventListener('click', _compositeClose);
+
+        dom.btnCompositeFitView?.addEventListener('click', () => {
+            _compositeFitView();
+            _compositeScheduleRender();
+        });
+
+        dom.btnCompositeToggleGuides?.addEventListener('click', () => {
+            _composite.showGuides = !_composite.showGuides;
+            dom.btnCompositeToggleGuides?.classList.toggle('active', _composite.showGuides);
+            _compositeScheduleRender();
+        });
+
+        dom.btnCompositeExport?.addEventListener('click', async () => {
+            try {
+                await _compositeExportPng();
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        dom.btnCompositeSaveHistory?.addEventListener('click', async () => {
+            try {
+                await _compositeSaveToHistory();
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        dom.btnCompositeLoadBase?.addEventListener('click', () => dom.inpCompositeBase?.click());
+        dom.btnCompositeLoadOverlay?.addEventListener('click', () => dom.inpCompositeOverlay?.click());
+
+        dom.btnCompositeBaseResult?.addEventListener('click', async () => {
+            const url = _compositeGetResultUrl();
+            if (!url) { alert('当前没有可用的生成结果'); return; }
+            try {
+                await _compositeLoadBaseFromUrl(url);
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        dom.btnCompositeOverlayResult?.addEventListener('click', async () => {
+            const url = _compositeGetResultUrl();
+            if (!url) { alert('当前没有可用的生成结果'); return; }
+            try {
+                await _compositeLoadOverlayFromUrl(url, true);
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        dom.inpCompositeBase?.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            try {
+                await _compositeLoadBaseFromFile(file);
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        dom.inpCompositeOverlay?.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            try {
+                await _compositeLoadOverlayFromFile(file);
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        dom.btnCompositeFitHalf?.addEventListener('click', () => {
+            _compositeFitOverlayHalf();
+            _compositeScheduleRender();
+        });
+
+        dom.btnCompositeFitWidth?.addEventListener('click', () => {
+            _compositeFitOverlayWidth();
+            _compositeScheduleRender();
+        });
+
+        dom.btnCompositeSwap?.addEventListener('click', () => _compositeSwapLayers());
+
+        dom.compositeOpacity?.addEventListener('input', () => {
+            _compositeSyncOverlayFromSliders();
+            _compositeScheduleRender();
+        });
+
+        dom.compositeRotation?.addEventListener('input', () => {
+            _compositeSyncOverlayFromSliders();
+            _compositeScheduleRender();
+        });
+
+        document.querySelectorAll('.composite-align').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                _compositeAlign(btn.dataset.align);
+            });
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (dom.modalComposite?.classList.contains('hidden')) return;
+            if (e.code === 'Space' && !e.repeat) {
+                _composite.spaceHeld = true;
+                dom.compositeViewport?.classList.add('is-pan');
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                _composite.spaceHeld = false;
+                dom.compositeViewport?.classList.remove('is-pan');
+            }
+        });
+
+        const onPointerDown = (e) => {
+            if (dom.modalComposite?.classList.contains('hidden')) return;
+            const pt = e.touches ? e.touches[0] : e;
+            if (_compositeIsPanMode(e)) {
+                _composite.panning = true;
+                _composite.panStartX = pt.clientX;
+                _composite.panStartY = pt.clientY;
+                _composite.panOriginX = _composite.panX;
+                _composite.panOriginY = _composite.panY;
+                dom.compositeViewport?.classList.add('is-pan');
+                e.preventDefault();
+                return;
+            }
+            if (!_composite.overlayImg || !_composite.baseImg) return;
+            const { x, y } = _compositeClientToBase(pt.clientX, pt.clientY);
+            const handle = _compositeHitHandle(x, y);
+            if (handle) {
+                _composite.drag = {
+                    mode: `resize-${handle}`,
+                    startX: x,
+                    startY: y,
+                    startOverlay: { ..._composite.overlay },
+                    lockRatio: e.shiftKey,
+                };
+                e.preventDefault();
+                return;
+            }
+            if (_compositePointInOverlay(x, y)) {
+                _composite.drag = {
+                    mode: 'move',
+                    startX: x,
+                    startY: y,
+                    startOverlay: { ..._composite.overlay },
+                };
+                dom.compositeViewport?.classList.add('is-move');
+                e.preventDefault();
+            }
+        };
+
+        const onPointerMove = (e) => {
+            if (dom.modalComposite?.classList.contains('hidden')) return;
+            const pt = e.touches ? e.touches[0] : e;
+            if (_composite.panning) {
+                _composite.panX = _composite.panOriginX + (pt.clientX - _composite.panStartX);
+                _composite.panY = _composite.panOriginY + (pt.clientY - _composite.panStartY);
+                _compositeScheduleRender();
+                e.preventDefault();
+                return;
+            }
+            if (!_composite.drag) return;
+            const { x, y } = _compositeClientToBase(pt.clientX, pt.clientY);
+            const d = _composite.drag;
+            if (d.mode === 'move') {
+                const o = _composite.overlay;
+                o.x = d.startOverlay.x + (x - d.startX);
+                o.y = d.startOverlay.y + (y - d.startY);
+                _compositeScheduleRender();
+            } else if (d.mode.startsWith('resize-')) {
+                _compositeOnResizeDrag(x, y);
+                _compositeScheduleRender();
+            }
+            e.preventDefault();
+        };
+
+        const onPointerUp = () => {
+            _composite.drag = null;
+            _composite.panning = false;
+            dom.compositeViewport?.classList.remove('is-move');
+            if (!_composite.spaceHeld) dom.compositeViewport?.classList.remove('is-pan');
+        };
+
+        const vp = dom.compositeViewport;
+        vp?.addEventListener('mousedown', onPointerDown);
+        vp?.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
+        vp?.addEventListener('touchstart', onPointerDown, { passive: false });
+        vp?.addEventListener('touchmove', onPointerMove, { passive: false });
+        vp?.addEventListener('touchend', onPointerUp);
+        vp?.addEventListener('touchcancel', onPointerUp);
+
+        vp?.addEventListener('wheel', (e) => {
+            if (dom.modalComposite?.classList.contains('hidden')) return;
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.12 : 0.89;
+            _compositeZoomAt(e.clientX, e.clientY, factor);
+        }, { passive: false });
+
+        window.addEventListener('resize', () => {
+            if (!dom.modalComposite?.classList.contains('hidden')) {
+                _compositeScheduleRender();
+            }
+        });
+    }
+
+    // ==================== 抠图（浏览器端） ====================
+    const CUTOUT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+    const _cutout = {
+        lib: null,
+        srcBlob: null,
+        srcPreviewUrl: '',
+        resultBlob: null,
+        resultUrl: '',
+        running: false,
+        _revoke: [],
+    };
+
+    function _cutoutRevoke() {
+        _cutout._revoke.forEach((u) => URL.revokeObjectURL(u));
+        _cutout._revoke = [];
+    }
+
+    function _cutoutTrackUrl(url) {
+        if (url && url.startsWith('blob:')) _cutout._revoke.push(url);
+        return url;
+    }
+
+    function _cutoutSetResultEnabled(on) {
+        dom.btnCutoutComposite && (dom.btnCutoutComposite.disabled = !on);
+        dom.btnCutoutDownload && (dom.btnCutoutDownload.disabled = !on);
+        dom.btnCutoutHistory && (dom.btnCutoutHistory.disabled = !on);
+    }
+
+    function _cutoutResetResult() {
+        if (_cutout.resultUrl) {
+            URL.revokeObjectURL(_cutout.resultUrl);
+        }
+        _cutout.resultBlob = null;
+        _cutout.resultUrl = '';
+        dom.cutoutResultPreview?.classList.add('hidden');
+        dom.cutoutResultEmpty?.classList.remove('hidden');
+        if (dom.cutoutResultPreview) dom.cutoutResultPreview.removeAttribute('src');
+        _cutoutSetResultEnabled(false);
+    }
+
+    function _cutoutShowProgress(show, text, pct) {
+        dom.cutoutProgress?.classList.toggle('hidden', !show);
+        if (typeof pct === 'number' && dom.cutoutProgressBar) {
+            dom.cutoutProgressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        }
+        if (text && dom.cutoutProgressText) dom.cutoutProgressText.textContent = text;
+    }
+
+    async function _cutoutEnsureLib() {
+        if (_cutout.lib) return _cutout.lib;
+        _cutoutShowProgress(true, '正在加载抠图引擎…', 5);
+        const mod = await import(/* @vite-ignore */ CUTOUT_LIB_URL);
+        const fn = mod.removeBackground || mod.default;
+        if (typeof fn !== 'function') throw new Error('抠图引擎加载失败');
+        _cutout.lib = fn;
+        return fn;
+    }
+
+    async function _cutoutUrlToBlob(url) {
+        if (!url) throw new Error('无图片地址');
+        if (url.startsWith('blob:') || url.startsWith('data:')) {
+            const res = await fetch(url);
+            return res.blob();
+        }
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 64) return blob;
+            }
+        } catch (_) { /* fall through */ }
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    const c = document.createElement('canvas');
+                    c.width = img.naturalWidth;
+                    c.height = img.naturalHeight;
+                    c.getContext('2d').drawImage(img, 0, 0);
+                    c.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('图片读取失败'));
+                    }, 'image/png');
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            img.onerror = () => reject(new Error('图片加载失败（可能跨域）'));
+            img.src = url;
+        });
+    }
+
+    async function _cutoutLoadSource(urlOrFile) {
+        _cutoutResetResult();
+        let blob;
+        let previewUrl;
+        if (urlOrFile instanceof File || urlOrFile instanceof Blob) {
+            blob = urlOrFile instanceof File ? urlOrFile : urlOrFile;
+            previewUrl = _cutoutTrackUrl(URL.createObjectURL(blob));
+        } else {
+            blob = await _cutoutUrlToBlob(urlOrFile);
+            previewUrl = _cutoutTrackUrl(URL.createObjectURL(blob));
+        }
+        _cutout.srcBlob = blob;
+        _cutout.srcPreviewUrl = previewUrl;
+        if (dom.cutoutSrcPreview) {
+            dom.cutoutSrcPreview.src = previewUrl;
+            dom.cutoutSrcPreview.classList.remove('hidden');
+        }
+        dom.cutoutSrcEmpty?.classList.add('hidden');
+    }
+
+    async function _cutoutProcessBlob(blob) {
+        const removeBackground = await _cutoutEnsureLib();
+        _cutoutShowProgress(true, '正在抠图…', 10);
+        const result = await removeBackground(blob, {
+            progress: (key, current, total) => {
+                const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+                const label = key === 'fetch' || key === 'fetch:wasm'
+                    ? `下载模型资源 ${pct}%`
+                    : `AI 处理中 ${pct}%`;
+                _cutoutShowProgress(true, label, pct);
+            },
+        });
+        if (!(result instanceof Blob) || result.size < 64) {
+            throw new Error('抠图结果无效');
+        }
+        return result;
+    }
+
+    async function _cutoutRun() {
+        if (_cutout.running) return;
+        if (!_cutout.srcBlob) {
+            alert('请先选择一张图片');
+            return;
+        }
+        _cutout.running = true;
+        _cutoutResetResult();
+        if (dom.btnCutoutRun) {
+            dom.btnCutoutRun.disabled = true;
+            dom.btnCutoutRun.textContent = '处理中…';
+        }
+        try {
+            const result = await _cutoutProcessBlob(_cutout.srcBlob);
+            _cutout.resultBlob = result;
+            _cutout.resultUrl = URL.createObjectURL(result);
+            if (dom.cutoutResultPreview) {
+                dom.cutoutResultPreview.src = _cutout.resultUrl;
+                dom.cutoutResultPreview.classList.remove('hidden');
+            }
+            dom.cutoutResultEmpty?.classList.add('hidden');
+            _cutoutSetResultEnabled(true);
+            _cutoutShowProgress(false);
+            showToast('抠图完成');
+        } catch (e) {
+            console.error('[Cutout]', e);
+            _cutoutShowProgress(false);
+            alert(`抠图失败: ${e.message}`);
+        } finally {
+            _cutout.running = false;
+            if (dom.btnCutoutRun) {
+                dom.btnCutoutRun.disabled = false;
+                dom.btnCutoutRun.textContent = '开始抠图';
+            }
+        }
+    }
+
+    function _cutoutClose() {
+        dom.modalCutout?.classList.add('hidden');
+        _cutoutShowProgress(false);
+    }
+
+    async function openCutoutModal(opts = {}) {
+        if (!dom.modalCutout) return;
+        dom.modalCutout.classList.remove('hidden');
+        _cutoutShowProgress(false);
+        if (opts.imageUrl) {
+            try {
+                await _cutoutLoadSource(opts.imageUrl);
+            } catch (e) {
+                showToast(`图片加载失败: ${e.message}`);
+            }
+        }
+        if (opts.autoRun && _cutout.srcBlob) {
+            await _cutoutRun();
+        }
+    }
+
+    async function _compositeCutoutOverlay() {
+        if (!_composite.overlayImg) {
+            alert('请先加载叠加图 A');
+            return;
+        }
+        if (_cutout.running) return;
+        const btn = dom.btnCompositeCutoutOverlay;
+        const oldText = btn?.textContent;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '抠图中…';
+        }
+        try {
+            const c = document.createElement('canvas');
+            c.width = _composite.overlayImg.naturalWidth;
+            c.height = _composite.overlayImg.naturalHeight;
+            c.getContext('2d').drawImage(_composite.overlayImg, 0, 0);
+            const blob = await new Promise((resolve, reject) => {
+                c.toBlob((b) => (b ? resolve(b) : reject(new Error('读取叠加图失败'))), 'image/png');
+            });
+            showToast('正在抠图，请稍候…');
+            const result = await _cutoutProcessBlob(blob);
+            const objUrl = URL.createObjectURL(result);
+            _composite._objectUrls.push(objUrl);
+            const img = await _compositeImageFromSrc(objUrl);
+            const prev = { ..._composite.overlay };
+            _composite.overlayImg = img;
+            _composite.overlay = { ...prev };
+            _compositeUpdateThumbs();
+            _compositeScheduleRender();
+            showToast('叠加图 A 已去背景');
+        } catch (e) {
+            console.error('[Cutout][Composite]', e);
+            alert(`抠图失败: ${e.message}`);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = oldText || '抠图 A（去背景）';
+            }
+        }
+    }
+
+    function setupCutout() {
+        if (!dom.modalCutout) return;
+
+        const wireOpen = (btn, factory) => {
+            btn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const opts = typeof factory === 'function' ? factory() : factory;
+                if (opts === null) return;
+                openCutoutModal(opts);
+            });
+        };
+
+        dom.btnCutout?.addEventListener('click', () => openCutoutModal());
+
+        wireOpen(dom.btnCutoutResult, () => {
+            const url = _compositeGetResultUrl();
+            if (!url) { alert('请先生成或选择一张结果图'); return null; }
+            return { imageUrl: url };
+        });
+
+        wireOpen(dom.btnPreviewCutout, () => {
+            const url = dom.previewImage?.src;
+            if (!url) return null;
+            dom.modalPreview?.classList.add('hidden');
+            return { imageUrl: url };
+        });
+
+        dom.btnCutoutClose?.addEventListener('click', _cutoutClose);
+        dom.modalCutout?.addEventListener('click', (e) => {
+            if (e.target === dom.modalCutout) _cutoutClose();
+        });
+
+        dom.btnCutoutLoad?.addEventListener('click', () => dom.inpCutout?.click());
+        dom.inpCutout?.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            try {
+                await _cutoutLoadSource(file);
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        dom.btnCutoutFromResult?.addEventListener('click', async () => {
+            const url = _compositeGetResultUrl();
+            if (!url) { alert('当前没有可用的生成结果'); return; }
+            try {
+                await _cutoutLoadSource(url);
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        dom.btnCutoutRun?.addEventListener('click', () => _cutoutRun());
+
+        dom.btnCutoutDownload?.addEventListener('click', () => {
+            if (!_cutout.resultUrl) return;
+            const a = document.createElement('a');
+            a.href = _cutout.resultUrl;
+            a.download = `cutout_${Date.now()}.png`;
+            a.click();
+        });
+
+        dom.btnCutoutHistory?.addEventListener('click', async () => {
+            if (!_cutout.resultBlob) return;
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('读取失败'));
+                reader.readAsDataURL(_cutout.resultBlob);
+            });
+            saveToHistory(dataUrl);
+            showToast('已保存到历史');
+        });
+
+        dom.btnCutoutComposite?.addEventListener('click', () => {
+            if (!_cutout.resultUrl) return;
+            _cutoutClose();
+            openCompositorModal({ overlayUrl: _cutout.resultUrl });
+            showToast('已送入图层合成（作为叠加 A）');
+        });
+
+        dom.btnCompositeCutoutOverlay?.addEventListener('click', () => _compositeCutoutOverlay());
+    }
+
     // ==================== 生图流程 ====================
     let _postPreviewResolver = null;
 
@@ -4670,7 +5806,7 @@
             div.appendChild(img);
             const overlay = document.createElement('div');
             overlay.className = 'history-overlay';
-            overlay.innerHTML = '<button class="btn-history-ref" title="用作参考图">📌</button><button class="btn-history-inpaint" title="局部重绘">🖌</button>';
+            overlay.innerHTML = '<button class="btn-history-ref" title="用作参考图">📌</button><button class="btn-history-inpaint" title="局部重绘">🖌</button><button class="btn-history-composite" title="图层合成">🧩</button><button class="btn-history-cutout" title="抠图">✂️</button>';
             overlay.querySelector('.btn-history-ref').addEventListener('click', (e) => {
                 e.stopPropagation();
                 useImageAsRef(item.url);
@@ -4678,6 +5814,14 @@
             overlay.querySelector('.btn-history-inpaint').addEventListener('click', (e) => {
                 e.stopPropagation();
                 openInpaintModal(item.url);
+            });
+            overlay.querySelector('.btn-history-composite').addEventListener('click', (e) => {
+                e.stopPropagation();
+                openCompositorModal({ baseUrl: item.url });
+            });
+            overlay.querySelector('.btn-history-cutout').addEventListener('click', (e) => {
+                e.stopPropagation();
+                openCutoutModal({ imageUrl: item.url });
             });
             div.appendChild(overlay);
             div.addEventListener('click', () => {
@@ -6721,7 +7865,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.01');
+        console.log('[ComfyUI Web] v4.09');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9874,6 +11018,8 @@
     setupNai();
     setupConnectionStatus();
     setupInpaint();
+    setupCompositor();
+    setupCutout();
     ProfileManager.setup();
     init();
 })();

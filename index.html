@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v4.07</title>
-    <link rel="stylesheet" href="style.css?v=393">
+<title>ComfyUI Web v4.09</title>
+    <link rel="stylesheet" href="style.css?v=395">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.07</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.09</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -21,6 +21,8 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
             </a>
             <button id="btn-tutorial" class="btn-icon" title="教程">📖</button>
+            <button id="btn-composite" class="btn-icon" title="图层合成">🧩</button>
+            <button id="btn-cutout" class="btn-icon" title="抠图">✂️</button>
             <div class="theme-btn">
                 <button id="btn-theme" class="btn-icon" title="切换主题">🎨</button>
                 <div id="theme-panel" class="theme-panel hidden">
@@ -762,6 +764,8 @@
                             <button id="btn-send-to-history" class="btn-secondary">保存到历史</button>
                             <button id="btn-use-as-ref" class="btn-secondary">用作参考图</button>
                             <button id="btn-inpaint" class="btn-secondary">局部重绘</button>
+                            <button id="btn-composite-result" class="btn-secondary">图层合成</button>
+                            <button id="btn-cutout-result" class="btn-secondary">抠图</button>
                             <button id="btn-compare" class="btn-secondary hidden">对比效果</button>
                         </div>
                     </div>
@@ -889,6 +893,9 @@
             <div class="preview-actions">
                 <button id="btn-preview-ref" class="btn-secondary">用作参考图</button>
                 <button id="btn-preview-inpaint" class="btn-secondary">局部重绘</button>
+                <button id="btn-preview-composite-base" class="btn-secondary">作底图合成</button>
+                <button id="btn-preview-composite-overlay" class="btn-secondary">叠加上去</button>
+                <button id="btn-preview-cutout" class="btn-secondary">抠图</button>
                 <button id="btn-preview-download" class="btn-secondary">下载</button>
             </div>
             <button id="btn-close-preview" class="btn-icon close-btn">✕</button>
@@ -1256,6 +1263,120 @@
 
     <input type="file" id="inp-wf-file" accept=".json" hidden>
 
+    <!-- 图层合成（全屏工作台） -->
+    <div id="modal-composite" class="composite-fullscreen hidden" aria-label="图层合成">
+        <header class="composite-topbar">
+            <button type="button" id="btn-composite-close" class="btn-icon composite-close" title="退出">✕</button>
+            <h2 class="composite-title">图层合成</h2>
+            <button type="button" id="btn-composite-fit-view" class="btn-secondary btn-sm">适应窗口</button>
+            <button type="button" id="btn-composite-toggle-guides" class="btn-secondary btn-sm active">对齐线</button>
+            <p class="composite-hint-top">拖拽 A 图移动；拖角点缩放；Shift 等比缩放；滚轮缩放视图；空格+拖动平移</p>
+            <button type="button" id="btn-composite-export" class="btn-primary btn-sm">导出 PNG</button>
+            <button type="button" id="btn-composite-save-history" class="btn-secondary btn-sm">保存到历史</button>
+        </header>
+        <div class="composite-body">
+            <aside id="composite-sidebar" class="composite-sidebar">
+                <div class="composite-sidebar-panel">
+                    <section class="panel">
+                        <h2>底图 B</h2>
+                        <div class="composite-thumb-wrap">
+                            <img id="composite-base-thumb" alt="底图预览" class="hidden">
+                            <span id="composite-base-empty" class="composite-empty-hint">未加载</span>
+                        </div>
+                        <div class="composite-btn-row">
+                            <button type="button" id="btn-composite-load-base" class="btn-secondary btn-sm">上传底图</button>
+                            <button type="button" id="btn-composite-base-result" class="btn-secondary btn-sm">当前结果</button>
+                        </div>
+                    </section>
+                    <section class="panel">
+                        <h2>叠加 A</h2>
+                        <div class="composite-thumb-wrap">
+                            <img id="composite-overlay-thumb" alt="叠加预览" class="hidden">
+                            <span id="composite-overlay-empty" class="composite-empty-hint">未加载</span>
+                        </div>
+                        <div class="composite-btn-row">
+                            <button type="button" id="btn-composite-load-overlay" class="btn-secondary btn-sm">上传叠加</button>
+                            <button type="button" id="btn-composite-overlay-result" class="btn-secondary btn-sm">当前结果</button>
+                        </div>
+                        <div class="composite-btn-row">
+                            <button type="button" id="btn-composite-fit-half" class="btn-secondary btn-sm">适应 50%</button>
+                            <button type="button" id="btn-composite-fit-width" class="btn-secondary btn-sm">宽度铺满</button>
+                        </div>
+                        <button type="button" id="btn-composite-cutout-overlay" class="btn-secondary btn-sm composite-swap-btn">抠图 A（去背景）</button>
+                    </section>
+                    <section class="panel">
+                        <h2>变换</h2>
+                        <label class="composite-range-label">透明度 <span id="composite-opacity-val">100%</span>
+                            <input type="range" id="composite-opacity" min="0" max="100" value="100">
+                        </label>
+                        <label class="composite-range-label">旋转 <span id="composite-rotation-val">0°</span>
+                            <input type="range" id="composite-rotation" min="-180" max="180" value="0">
+                        </label>
+                    </section>
+                    <section class="panel">
+                        <h2>对齐</h2>
+                        <div class="composite-align-grid">
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="left" title="左对齐">⬅</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="hcenter" title="水平居中">↔</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="right" title="右对齐">➡</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="top" title="顶对齐">⬆</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="center" title="居中">◎</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="bottom" title="底对齐">⬇</button>
+                        </div>
+                        <button type="button" id="btn-composite-swap" class="btn-secondary btn-sm composite-swap-btn">交换 A / B</button>
+                    </section>
+                </div>
+            </aside>
+            <div id="composite-viewport" class="composite-viewport">
+                <canvas id="composite-canvas"></canvas>
+            </div>
+        </div>
+        <input type="file" id="inp-composite-base" accept="image/*" hidden>
+        <input type="file" id="inp-composite-overlay" accept="image/*" hidden>
+    </div>
+
+    <!-- 抠图 -->
+    <div id="modal-cutout" class="modal hidden">
+        <div class="modal-content cutout-content">
+            <h2>抠图</h2>
+            <p class="cutout-hint">浏览器本地 AI 抠图，图片不出本机。首次使用需下载约 30MB 模型（会缓存到浏览器）。</p>
+            <div class="cutout-preview-row">
+                <div class="cutout-preview-box">
+                    <span class="cutout-preview-label">原图</span>
+                    <div class="cutout-preview-frame">
+                        <img id="cutout-src-preview" alt="原图" class="hidden">
+                        <span id="cutout-src-empty" class="cutout-empty-hint">未选择图片</span>
+                    </div>
+                </div>
+                <div class="cutout-preview-box">
+                    <span class="cutout-preview-label">抠图结果</span>
+                    <div class="cutout-preview-frame cutout-checker">
+                        <img id="cutout-result-preview" alt="抠图结果" class="hidden">
+                        <span id="cutout-result-empty" class="cutout-empty-hint">等待处理</span>
+                    </div>
+                </div>
+            </div>
+            <div id="cutout-progress" class="cutout-progress hidden">
+                <div class="cutout-progress-bar-wrap">
+                    <div id="cutout-progress-bar" class="cutout-progress-bar"></div>
+                </div>
+                <span id="cutout-progress-text">准备中…</span>
+            </div>
+            <div class="cutout-load-row">
+                <button type="button" id="btn-cutout-load" class="btn-secondary btn-sm">上传图片</button>
+                <button type="button" id="btn-cutout-from-result" class="btn-secondary btn-sm">当前结果</button>
+            </div>
+            <div class="modal-actions cutout-actions">
+                <button type="button" id="btn-cutout-run" class="btn-primary">开始抠图</button>
+                <button type="button" id="btn-cutout-composite" class="btn-secondary" disabled>送入图层合成</button>
+                <button type="button" id="btn-cutout-download" class="btn-secondary" disabled>下载 PNG</button>
+                <button type="button" id="btn-cutout-history" class="btn-secondary" disabled>保存历史</button>
+                <button type="button" id="btn-cutout-close" class="btn-secondary">关闭</button>
+            </div>
+        </div>
+        <input type="file" id="inp-cutout" accept="image/*" hidden>
+    </div>
+
     <!-- 元数据解析弹窗 -->
     <div id="modal-meta" class="modal hidden">
         <div class="modal-content modal-meta-content">
@@ -1276,6 +1397,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=403"></script>
+    <script src="script.js?v=405"></script>
 </body>
 </html>

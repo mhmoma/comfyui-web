@@ -2138,7 +2138,9 @@ body.inpaint-open {
 }
 
 .btn-history-ref,
-.btn-history-inpaint {
+.btn-history-inpaint,
+.btn-history-composite,
+.btn-history-cutout {
     background: var(--accent);
     border: none;
     border-radius: 4px;
@@ -2150,7 +2152,9 @@ body.inpaint-open {
 }
 
 .btn-history-ref:hover,
-.btn-history-inpaint:hover {
+.btn-history-inpaint:hover,
+.btn-history-composite:hover,
+.btn-history-cutout:hover {
     transform: scale(1.1);
 }
 
@@ -3959,7 +3963,9 @@ body.inpaint-open {
     }
 
     .btn-history-ref,
-    .btn-history-inpaint {
+    .btn-history-inpaint,
+    .btn-history-composite,
+    .btn-history-cutout {
         padding: 6px 10px;
         font-size: 0.75rem;
         min-height: 32px;
@@ -5731,5 +5737,316 @@ body.inpaint-open {
     .char-browser-overlay .char-browser-thumb {
         height: 150px !important;
         min-height: 150px !important;
+    }
+}
+
+/* ==================== 图层合成 ==================== */
+body.composite-open {
+    overflow: hidden;
+}
+
+.composite-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1150;
+    display: flex;
+    flex-direction: column;
+    background: #08080f;
+}
+
+.composite-fullscreen.hidden {
+    display: none;
+}
+
+.composite-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+}
+
+.composite-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.composite-title {
+    margin: 0;
+    font-size: 1.05rem;
+    white-space: nowrap;
+}
+
+.composite-hint-top {
+    flex: 1 1 180px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.composite-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.composite-sidebar {
+    flex-shrink: 0;
+    width: 280px;
+    height: 100%;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.composite-sidebar-panel .panel {
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+}
+
+.composite-thumb-wrap {
+    position: relative;
+    width: 100%;
+    height: 88px;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    background: var(--bg-input);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.composite-thumb-wrap img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.composite-empty-hint {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.composite-btn-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.composite-btn-row .btn-secondary {
+    flex: 1;
+}
+
+.composite-range-label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.composite-range-label input[type="range"] {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.composite-align-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.composite-swap-btn {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.composite-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #0c0c14;
+    cursor: default;
+    touch-action: none;
+}
+
+.composite-viewport.is-pan {
+    cursor: grab;
+}
+
+.composite-viewport.is-pan:active {
+    cursor: grabbing;
+}
+
+.composite-viewport.is-move {
+    cursor: move;
+}
+
+#composite-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#btn-composite-toggle-guides.active {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+@media (max-width: 767px) {
+    .composite-body {
+        flex-direction: column-reverse;
+    }
+
+    .composite-sidebar {
+        width: 100%;
+        max-height: 42vh;
+        border-right: none;
+        border-top: 1px solid var(--border);
+    }
+
+    .composite-hint-top {
+        display: none;
+    }
+
+    .composite-topbar {
+        padding: 8px 10px;
+    }
+}
+
+/* ==================== 抠图 ==================== */
+.cutout-content {
+    max-width: 720px;
+    width: min(96vw, 720px);
+}
+
+.cutout-hint {
+    margin: -4px 0 12px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.cutout-preview-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.cutout-preview-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.cutout-preview-frame {
+    position: relative;
+    height: 220px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.cutout-checker {
+    background-color: #1a1a24;
+    background-image:
+        linear-gradient(45deg, #2a2a36 25%, transparent 25%),
+        linear-gradient(-45deg, #2a2a36 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #2a2a36 75%),
+        linear-gradient(-45deg, transparent 75%, #2a2a36 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.cutout-preview-frame img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.cutout-empty-hint {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.cutout-progress {
+    margin-bottom: 12px;
+}
+
+.cutout-progress-bar-wrap {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--bg-input);
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.cutout-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.2s ease;
+}
+
+#cutout-progress-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.cutout-load-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.cutout-load-row .btn-secondary {
+    flex: 1;
+}
+
+.cutout-actions {
+    flex-wrap: wrap;
+}
+
+.btn-history-cutout {
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    color: white;
+    transition: transform 0.15s;
+}
+
+.btn-history-cutout:hover {
+    transform: scale(1.1);
+}
+
+@media (max-width: 600px) {
+    .cutout-preview-row {
+        grid-template-columns: 1fr;
+    }
+
+    .cutout-preview-frame {
+        height: 180px;
     }
 }
