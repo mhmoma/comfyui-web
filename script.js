@@ -2508,6 +2508,52 @@
         return Array.isArray(raw) ? raw.map(String) : [];
     }
 
+    function _inpaintResolveCropInputDefault(inputName, spec) {
+        const key = String(inputName || '').toLowerCase();
+        const preset = {
+            context_from_mask_extend_factor: 1.2,
+            extend_left_factor: 1.2,
+            extend_right_factor: 1.2,
+            extend_top_factor: 1.2,
+            extend_bottom_factor: 1.2,
+            mask_fill_holes: true,
+            fill_mask_holes: true,
+            mask_blend_pixels: 32,
+            blend_pixels: 32,
+            output_resize_to_target_size: true,
+            output_target_width: 1536,
+            output_target_height: 1536,
+            preresize_max_width: 1536,
+            preresize_max_height: 1536,
+        };
+        if (Object.prototype.hasOwnProperty.call(preset, key)) return preset[key];
+
+        const typeRaw = Array.isArray(spec) ? spec[0] : null;
+        const meta = Array.isArray(spec) ? (spec[1] || {}) : {};
+        if (meta && Object.prototype.hasOwnProperty.call(meta, 'default')) {
+            return meta.default;
+        }
+        if (Array.isArray(typeRaw) && typeRaw.length) {
+            return typeRaw[0];
+        }
+
+        const type = String(typeRaw || '').toUpperCase();
+        if (type.includes('BOOLEAN')) return true;
+        if (type.includes('FLOAT') || key.includes('factor')) return 1.2;
+        if (type.includes('INT') || type.includes('NUMBER')) {
+            if (key.includes('pixel') || key.includes('blend') || key.includes('padding') || key.includes('radius')) return 32;
+            if (key.includes('width') || key.includes('height') || key.includes('size')) return 1536;
+            return 0;
+        }
+        if (type.includes('STRING')) return '';
+
+        if (key.includes('factor')) return 1.2;
+        if (key.includes('width') || key.includes('height') || key.includes('size')) return 1536;
+        if (key.includes('pixel') || key.includes('blend')) return 32;
+        if (key.includes('mask_fill') || key.includes('fill_holes') || key.includes('resize')) return true;
+        return 0;
+    }
+
     async function _checkInpaintNodes(force) {
         if (_inpaintNodes && !force) return _inpaintNodes;
         const nodes = {
@@ -2523,6 +2569,7 @@
             fooocusPatch: 'inpaint_v26.fooocus.patch',
             fooocusHeadKey: 'head',
             fooocusPatchKey: 'patch',
+            inpaintCropRequired: {},
         };
         const checks = [
             ['conditioning', 'InpaintModelConditioning'],
@@ -2581,6 +2628,12 @@
                     || all.find(f => /inpainting/i.test(f));
                 if (file) nodes.llliteInpaintFile = file;
                 nodes.llliteFileReady = all.some(f => /lllite-inpainting/i.test(f));
+            } catch { /* ignore */ }
+        }
+        if (nodes.inpaintCrop) {
+            try {
+                const data = await apiGet('/object_info/InpaintCropImproved');
+                nodes.inpaintCropRequired = data?.InpaintCropImproved?.input?.required || {};
             } catch { /* ignore */ }
         }
         _inpaintNodes = nodes;
@@ -3094,18 +3147,25 @@
 
         if (useCrop) {
             const cropId = id();
+            const cropInputs = {
+                image: [baseLoadId, 0],
+                mask: maskProcessed,
+                context_from_mask_extend_factor: 1.2,
+                mask_fill_holes: true,
+                mask_blend_pixels: 32,
+                output_resize_to_target_size: true,
+                output_target_width: 1536,
+                output_target_height: 1536,
+            };
+            const required = nodes.inpaintCropRequired || {};
+            for (const [inputName, spec] of Object.entries(required)) {
+                if (inputName === 'image' || inputName === 'mask') continue;
+                if (Object.prototype.hasOwnProperty.call(cropInputs, inputName)) continue;
+                cropInputs[inputName] = _inpaintResolveCropInputDefault(inputName, spec);
+            }
             wf[cropId] = {
                 class_type: 'InpaintCropImproved',
-                inputs: {
-                    image: [baseLoadId, 0],
-                    mask: maskProcessed,
-                    context_from_mask_extend_factor: 1.2,
-                    mask_fill_holes: true,
-                    mask_blend_pixels: 32,
-                    output_resize_to_target_size: true,
-                    output_target_width: 1536,
-                    output_target_height: 1536,
-                },
+                inputs: cropInputs,
             };
             workImage = [cropId, 1];
             workMask = [cropId, 2];
