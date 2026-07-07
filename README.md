@@ -128,8 +128,12 @@ graph TD
 
 3.  **推送部署**: 将 commit 推送到 `origin` 的 `main` 分支，即可触发 Cloudflare 的自动部署。
     ```powershell
-    # 使用以下命令绕过本地代理进行推送
-    git -c http.proxy="" -c https.proxy="" push origin main
+    # 默认使用 7890 端口代理进行推送
+    git -c http.proxy="http://127.0.0.1:7890" -c https.proxy="http://127.0.0.1:7890" push origin main
+
+    # 若代理推送失败，再尝试清空代理后仅推 origin
+    # $env:ALL_PROXY=''; $env:HTTP_PROXY=''; $env:HTTPS_PROXY=''
+    # git push origin main
     ```
     > **⚠️ PowerShell 命令警告**: 在 PowerShell 终端中，**严禁使用 `&&`** 连接多个命令。请将命令分行执行，或使用分号 `;` (如果适用)。
 

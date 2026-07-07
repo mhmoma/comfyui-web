@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.50
+> **部署版本**: 1.58
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。如果UI有变化，还需更新 `index.html` 中的**前端版本号**。
 
@@ -49,8 +49,8 @@ alwaysApply: true
 
 3.  **推送部署**: 将 commit 推送到 `origin` 的 `main` 分支，即可触发 Cloudflare 的自动部署。
     ```powershell
-    # 必须使用 18888 端口代理进行推送
-    git -c http.proxy="http://127.0.0.1:18888" -c https.proxy="http://127.0.0.1:18888" push origin main
+    # 默认使用 7890 端口代理进行推送
+    git -c http.proxy="http://127.0.0.1:7890" -c https.proxy="http://127.0.0.1:7890" push origin main
     ```
     > **⚠️ PowerShell 命令警告**: 在 PowerShell 终端中，**严禁使用 `&&`** 连接多个命令。请将命令分行执行，或使用分号 `;` (如果适用)。
 
@@ -251,3 +251,11 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.48 | 2026-07-07 | 局部重绘独立模型设置 | 重绘固定 SDXL 专用模型/采样参数，与 Anima 主架构解耦。 |
 | 1.49 | 2026-07-07 | 局部重绘成人预设 | 裸体/去毛/私处/胸/内衣等即用预设，提示词已填好。 |
 | 1.50 | 2026-07-07 | 局部重绘左侧设置栏 | 模型/采样/提示词改左侧竖排，可滑出屏幕外折叠。 |
+| 1.51 | 2026-07-07 | 局部重绘工作流加固 | InpaintModelConditioning + 底图蒙版同尺寸导出，修复重绘无效。 |
+| 1.52 | 2026-07-07 | Inpaint noise_mask 修复 | InpaintModelConditioning 补 noise_mask:true，修复 400 校验失败。 |
+| 1.53 | 2026-07-07 | 局部重绘贴合原图 | 降低去衣强度、自动一致词、贴合原图开关与强度上限 0.68。 |
+| 1.54 | 2026-07-07 | 蒙版内保留原图潜变量 | 贴合原图改 VAEEncode+SetLatentNoiseMask，避免蒙版区整段重画。 |
+| 1.55 | 2026-07-07 | 局部重绘恢复生效 | 统一 InpaintModelConditioning；LoadImageMask；导出顺序与强度下限修复。 |
+| 1.56 | 2026-07-07 | Fooocus Inpaint 引擎 | 自动检测 Fooocus/Differential Diffusion；三档模式；合成保原图；一键下载补丁。 |
+| 1.57 | 2026-07-07 | Anima LLLite 局部重绘 | Anima 模式接入 LLLite+InpaintPreprocessor；裁剪拼接小范围；一键下载 LLLite 权重。 |
+| 1.58 | 2026-07-07 | 统一推送代理端口 | 部署文档默认 Git 推送代理统一为 `7890`，保留失败时绕过代理仅推 `origin` 的备用方案。 |

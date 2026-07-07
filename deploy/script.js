@@ -319,6 +319,11 @@
     }
 
     function _getWsBase() {
+        if (isLocalProxy()) {
+            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const httpPort = parseInt(window.location.port || (window.location.protocol === 'https:' ? '443' : '80'), 10);
+            return `${proto}//${window.location.hostname}:${httpPort + 1}`;
+        }
         const server = getServer();
         if (!server) {
             const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -833,7 +838,10 @@
             applyArchModules(_archModules[newArch]);
 
             updateArchAwarePanels();
-            if (!dom.modalInpaint?.classList.contains('hidden')) updateInpaintModelNote();
+            if (!dom.modalInpaint?.classList.contains('hidden')) {
+                updateInpaintModelNote();
+                updateInpaintEngineUI();
+            }
             ProfileManager.scheduleAutosave();
         });
     }
@@ -2445,6 +2453,11 @@
         startPercent: 0,
         endPercent: 0.8,
     };
+    const INPAINT_ANIMA_V22 = {
+        foveaStrength: 3,
+        sharpness: 0.5,
+        maskInertia: 0.55,
+    };
     const INPAINT_FOOOCUS_DOWNLOADS = [
         {
             url: 'https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/inpaint_v26.fooocus.patch',
@@ -3005,6 +3018,7 @@
         const steps = modelCfg.steps || ANIMA_DEFAULTS.steps;
         const samplerName = modelCfg.sampler || 'euler_ancestral';
         const scheduler = modelCfg.scheduler || 'beta57';
+        const useFlsSampler = !!nodes.flsSampler;
 
         const seed = parseInt(dom.inpSeed.value);
         let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
@@ -3046,7 +3060,7 @@
         let maskSource;
         if (nodes.loadImageMask) {
             const maskLoadId = id();
-            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName } };
+            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName, channel: 'red' } };
             maskSource = [maskLoadId, 0];
         } else {
             const maskLoadId = id();
@@ -3133,21 +3147,43 @@
         modelOut = [llliteId, 0];
 
         const samplerId = id();
-        wf[samplerId] = {
-            class_type: 'KSampler',
-            inputs: {
-                seed: actualSeed,
-                steps,
-                cfg: effectiveCfg,
-                sampler_name: samplerName,
-                scheduler,
-                denoise: effectiveDenoise,
-                model: modelOut,
-                positive: [posId, 0],
-                negative: [negId, 0],
-                latent_image: [latentMaskId, 0],
-            },
-        };
+        if (useFlsSampler) {
+            // Match proven anima_v22 pipeline to improve repaint effectiveness.
+            wf[samplerId] = {
+                class_type: 'FLS_SamplerV4',
+                inputs: {
+                    seed: actualSeed,
+                    steps,
+                    cfg: effectiveCfg,
+                    sampler_name: samplerName,
+                    scheduler: 'simple',
+                    denoise: inpaintMode === 'blend' ? Math.max(0.75, effectiveDenoise) : 1,
+                    fovea_strength: INPAINT_ANIMA_V22.foveaStrength,
+                    sharpness: INPAINT_ANIMA_V22.sharpness,
+                    mask_inertia: INPAINT_ANIMA_V22.maskInertia,
+                    model: modelOut,
+                    positive: [posId, 0],
+                    negative: [negId, 0],
+                    latent_image: [latentMaskId, 0],
+                },
+            };
+        } else {
+            wf[samplerId] = {
+                class_type: 'KSampler',
+                inputs: {
+                    seed: actualSeed,
+                    steps,
+                    cfg: effectiveCfg,
+                    sampler_name: samplerName,
+                    scheduler,
+                    denoise: effectiveDenoise,
+                    model: modelOut,
+                    positive: [posId, 0],
+                    negative: [negId, 0],
+                    latent_image: [latentMaskId, 0],
+                },
+            };
+        }
 
         const decodeId = id();
         wf[decodeId] = { class_type: 'VAEDecode', inputs: { samples: [samplerId, 0], vae: vaeOut } };
@@ -3188,6 +3224,7 @@
             effectiveDenoise,
             effectiveCfg,
             engine: animaEngine,
+            sampler: useFlsSampler ? 'FLS_SamplerV4' : 'KSampler',
             inpaintMode,
         };
     }
@@ -3247,7 +3284,7 @@
         let maskSource;
         if (nodes.loadImageMask) {
             const maskLoadId = id();
-            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName } };
+            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName, channel: 'red' } };
             maskSource = [maskLoadId, 0];
         } else {
             const maskLoadId = id();
