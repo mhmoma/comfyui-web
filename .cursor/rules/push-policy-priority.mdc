@@ -1,0 +1,42 @@
+---
+description: ComfyUI-Web 推送策略最高优先级规则（长期生效）
+globs: *
+alwaysApply: true
+---
+
+# 推送策略最高优先级（必须遵守）
+
+本规则为本项目内 AI 代理的**最高优先级操作规则**之一，执行 Git 提交与推送时必须优先遵守。
+
+## 1) 文档优先
+
+- 任何提交/推送前，必须先遵循：`.cursor/rules/deploy-and-d1.mdc` 的最新规范。
+- 若与其他说明冲突，以 `deploy-and-d1.mdc` 为准。
+
+## 2) 部署与推送固定策略
+
+- Cloudflare Pages 构建输出目录固定为：`deploy/`（部署源目录）。
+- 仅允许推送到远程：`origin` 的 `main` 分支。
+- 禁止向 `deploy` 远程推送本项目代码。
+
+## 3) 代理与命令策略
+
+- 默认推送代理端口固定为：`7890`。
+- 推送命令默认使用：
+  - `git -c http.proxy="http://127.0.0.1:7890" -c https.proxy="http://127.0.0.1:7890" push origin main`
+- 若代理失败，才可使用“清空代理后仅推 `origin`”的备用命令。
+
+## 4) 版本号强制同步
+
+- 每次发生前端相关代码变更（含 `index.html`、`script.js`、`style.css` 及 `deploy/` 对应文件）时，提交前必须**递增前端版本号**，禁止沿用上一次版本号。
+- 递增时必须同步更新：
+  - `index.html` 前端版本号；
+  - `deploy/index.html` 前端版本号；
+  - 对应静态资源版本参数（如 `script.js?v=...`、`style.css?v=...`）；
+  - 必要时同步 `script.js` / `deploy/script.js` 内部版本日志。
+- 同时更新 `.cursor/rules/deploy-and-d1.mdc` 中部署版本号与版本历史。
+
+## 5) 用户偏好（本项目）
+
+- 用户明确要求“更新完成后自动提交并推送”，默认执行，不重复询问是否推送。
+- 仅在存在高风险操作或明显冲突（如目标分支/远程不一致）时再中断并确认。
