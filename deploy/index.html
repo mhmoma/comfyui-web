@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v4.09</title>
-    <link rel="stylesheet" href="style.css?v=395">
+<title>ComfyUI Web v4.10</title>
+    <link rel="stylesheet" href="style.css?v=396">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.09</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.10</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1366,6 +1366,20 @@
                 <button type="button" id="btn-cutout-load" class="btn-secondary btn-sm">上传图片</button>
                 <button type="button" id="btn-cutout-from-result" class="btn-secondary btn-sm">当前结果</button>
             </div>
+            <div id="cutout-adjust-panel" class="cutout-adjust-panel hidden">
+                <h3 class="cutout-adjust-title">边缘调节</h3>
+                <p class="cutout-adjust-hint">AI 抠完后可微调。扣得过大时加大「边缘收缩」；毛边多时可提高「透明阈值」。</p>
+                <label class="cutout-range-label">边缘收缩 <span id="cutout-shrink-val">0px</span>
+                    <input type="range" id="cutout-shrink" min="0" max="24" value="0" step="1">
+                </label>
+                <label class="cutout-range-label">透明阈值 <span id="cutout-threshold-val">12</span>
+                    <input type="range" id="cutout-threshold" min="0" max="80" value="12" step="1">
+                </label>
+                <label class="cutout-range-label">边缘羽化 <span id="cutout-feather-val">0px</span>
+                    <input type="range" id="cutout-feather" min="0" max="8" value="0" step="1">
+                </label>
+                <button type="button" id="btn-cutout-reset-adjust" class="btn-secondary btn-sm">重置调节</button>
+            </div>
             <div class="modal-actions cutout-actions">
                 <button type="button" id="btn-cutout-run" class="btn-primary">开始抠图</button>
                 <button type="button" id="btn-cutout-composite" class="btn-secondary" disabled>送入图层合成</button>
@@ -1397,6 +1411,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=405"></script>
+    <script src="script.js?v=406"></script>
 </body>
 </html>

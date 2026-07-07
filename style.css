@@ -6022,6 +6022,47 @@ body.composite-open {
     flex: 1;
 }
 
+.cutout-adjust-panel {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+}
+
+.cutout-adjust-panel.hidden {
+    display: none;
+}
+
+.cutout-adjust-title {
+    margin: 0 0 4px;
+    font-size: 0.9rem;
+}
+
+.cutout-adjust-hint {
+    margin: 0 0 10px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.cutout-range-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.cutout-range-label input[type="range"] {
+    width: 100%;
+    margin-top: 4px;
+}
+
+#btn-cutout-reset-adjust {
+    width: 100%;
+    margin-top: 4px;
+}
+
 .cutout-actions {
     flex-wrap: wrap;
 }

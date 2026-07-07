@@ -273,6 +273,14 @@
         btnCutoutHistory: $('#btn-cutout-history'),
         btnCutoutClose: $('#btn-cutout-close'),
         inpCutout: $('#inp-cutout'),
+        cutoutAdjustPanel: $('#cutout-adjust-panel'),
+        cutoutShrink: $('#cutout-shrink'),
+        cutoutShrinkVal: $('#cutout-shrink-val'),
+        cutoutThreshold: $('#cutout-threshold'),
+        cutoutThresholdVal: $('#cutout-threshold-val'),
+        cutoutFeather: $('#cutout-feather'),
+        cutoutFeatherVal: $('#cutout-feather-val'),
+        btnCutoutResetAdjust: $('#btn-cutout-reset-adjust'),
     };
 
     // ==================== 连接状态灯 ====================
@@ -5121,14 +5129,17 @@
 
     // ==================== 抠图（浏览器端） ====================
     const CUTOUT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+    const CUTOUT_ADJUST_DEFAULTS = { shrink: 0, threshold: 12, feather: 0 };
     const _cutout = {
         lib: null,
         srcBlob: null,
         srcPreviewUrl: '',
+        rawResultBlob: null,
         resultBlob: null,
         resultUrl: '',
         running: false,
         _revoke: [],
+        _adjustTimer: 0,
     };
 
     function _cutoutRevoke() {

@@ -273,6 +273,14 @@
         btnCutoutHistory: $('#btn-cutout-history'),
         btnCutoutClose: $('#btn-cutout-close'),
         inpCutout: $('#inp-cutout'),
+        cutoutAdjustPanel: $('#cutout-adjust-panel'),
+        cutoutShrink: $('#cutout-shrink'),
+        cutoutShrinkVal: $('#cutout-shrink-val'),
+        cutoutThreshold: $('#cutout-threshold'),
+        cutoutThresholdVal: $('#cutout-threshold-val'),
+        cutoutFeather: $('#cutout-feather'),
+        cutoutFeatherVal: $('#cutout-feather-val'),
+        btnCutoutResetAdjust: $('#btn-cutout-reset-adjust'),
     };
 
     // ==================== 连接状态灯 ====================
@@ -5121,14 +5129,17 @@
 
     // ==================== 抠图（浏览器端） ====================
     const CUTOUT_LIB_URL = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+    const CUTOUT_ADJUST_DEFAULTS = { shrink: 0, threshold: 12, feather: 0 };
     const _cutout = {
         lib: null,
         srcBlob: null,
         srcPreviewUrl: '',
+        rawResultBlob: null,
         resultBlob: null,
         resultUrl: '',
         running: false,
         _revoke: [],
+        _adjustTimer: 0,
     };
 
     function _cutoutRevoke() {
@@ -5151,12 +5162,163 @@
         if (_cutout.resultUrl) {
             URL.revokeObjectURL(_cutout.resultUrl);
         }
+        _cutout.rawResultBlob = null;
         _cutout.resultBlob = null;
         _cutout.resultUrl = '';
         dom.cutoutResultPreview?.classList.add('hidden');
         dom.cutoutResultEmpty?.classList.remove('hidden');
         if (dom.cutoutResultPreview) dom.cutoutResultPreview.removeAttribute('src');
+        dom.cutoutAdjustPanel?.classList.add('hidden');
         _cutoutSetResultEnabled(false);
+    }
+
+    function _cutoutGetSettings() {
+        return {
+            shrink: Number(dom.cutoutShrink?.value || 0),
+            threshold: Number(dom.cutoutThreshold?.value || CUTOUT_ADJUST_DEFAULTS.threshold),
+            feather: Number(dom.cutoutFeather?.value || 0),
+        };
+    }
+
+    function _cutoutSyncAdjustLabels() {
+        const s = _cutoutGetSettings();
+        if (dom.cutoutShrinkVal) dom.cutoutShrinkVal.textContent = `${s.shrink}px`;
+        if (dom.cutoutThresholdVal) dom.cutoutThresholdVal.textContent = String(s.threshold);
+        if (dom.cutoutFeatherVal) dom.cutoutFeatherVal.textContent = `${s.feather}px`;
+    }
+
+    function _cutoutResetAdjustSliders() {
+        if (dom.cutoutShrink) dom.cutoutShrink.value = String(CUTOUT_ADJUST_DEFAULTS.shrink);
+        if (dom.cutoutThreshold) dom.cutoutThreshold.value = String(CUTOUT_ADJUST_DEFAULTS.threshold);
+        if (dom.cutoutFeather) dom.cutoutFeather.value = String(CUTOUT_ADJUST_DEFAULTS.feather);
+        _cutoutSyncAdjustLabels();
+    }
+
+    function _cutoutErodeAlpha(alpha, w, h, radius) {
+        if (radius <= 0) return alpha;
+        let src = alpha;
+        for (let iter = 0; iter < radius; iter++) {
+            const dst = new Uint8ClampedArray(src.length);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let minA = 255;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                minA = Math.min(minA, src[ny * w + nx]);
+                            }
+                        }
+                    }
+                    dst[y * w + x] = minA;
+                }
+            }
+            src = dst;
+        }
+        return src;
+    }
+
+    function _cutoutBlurAlpha(alpha, w, h, radius) {
+        if (radius <= 0) return alpha;
+        let src = alpha;
+        for (let pass = 0; pass < 2; pass++) {
+            const dst = new Uint8ClampedArray(src.length);
+            const r = Math.max(1, radius);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let dx = -r; dx <= r; dx++) {
+                        const nx = x + dx;
+                        if (nx >= 0 && nx < w) {
+                            sum += src[y * w + nx];
+                            count++;
+                        }
+                    }
+                    dst[y * w + x] = Math.round(sum / count);
+                }
+            }
+            src = dst;
+            const dst2 = new Uint8ClampedArray(src.length);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let dy = -r; dy <= r; dy++) {
+                        const ny = y + dy;
+                        if (ny >= 0 && ny < h) {
+                            sum += src[ny * w + x];
+                            count++;
+                        }
+                    }
+                    dst2[y * w + x] = Math.round(sum / count);
+                }
+            }
+            src = dst2;
+        }
+        return src;
+    }
+
+    async function _cutoutRefineBlob(blob, settings = _cutoutGetSettings()) {
+        const bitmap = await createImageBitmap(blob);
+        const w = bitmap.width;
+        const h = bitmap.height;
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close?.();
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+        const alpha = new Uint8ClampedArray(w * h);
+        for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+
+        const cutoff = Math.round((settings.threshold / 80) * 255);
+        for (let i = 0; i < alpha.length; i++) {
+            if (alpha[i] < cutoff) alpha[i] = 0;
+        }
+
+        let refined = _cutoutErodeAlpha(alpha, w, h, settings.shrink);
+        refined = _cutoutBlurAlpha(refined, w, h, settings.feather);
+
+        for (let i = 0; i < alpha.length; i++) {
+            data[i * 4 + 3] = refined[i];
+        }
+        ctx.putImageData(imageData, 0, 0);
+        return new Promise((resolve, reject) => {
+            c.toBlob((b) => (b ? resolve(b) : reject(new Error('边缘调节失败'))), 'image/png');
+        });
+    }
+
+    async function _cutoutApplyAdjustments() {
+        if (!_cutout.rawResultBlob) return;
+        const refined = await _cutoutRefineBlob(_cutout.rawResultBlob);
+        if (_cutout.resultUrl) URL.revokeObjectURL(_cutout.resultUrl);
+        _cutout.resultBlob = refined;
+        _cutout.resultUrl = URL.createObjectURL(refined);
+        if (dom.cutoutResultPreview) {
+            dom.cutoutResultPreview.src = _cutout.resultUrl;
+            dom.cutoutResultPreview.classList.remove('hidden');
+        }
+        dom.cutoutResultEmpty?.classList.add('hidden');
+        dom.cutoutAdjustPanel?.classList.remove('hidden');
+        _cutoutSetResultEnabled(true);
+    }
+
+    function _cutoutScheduleAdjust() {
+        if (!_cutout.rawResultBlob) return;
+        clearTimeout(_cutout._adjustTimer);
+        _cutout._adjustTimer = setTimeout(() => {
+            _cutoutApplyAdjustments().catch((e) => console.warn('[Cutout] adjust failed', e));
+        }, 60);
+    }
+
+    async function _cutoutFinalizeResult(rawBlob) {
+        _cutout.rawResultBlob = rawBlob;
+        await _cutoutApplyAdjustments();
+        return _cutout.resultBlob;
     }
 
     function _cutoutShowProgress(show, text, pct) {
@@ -5264,16 +5426,9 @@
         }
         try {
             const result = await _cutoutProcessBlob(_cutout.srcBlob);
-            _cutout.resultBlob = result;
-            _cutout.resultUrl = URL.createObjectURL(result);
-            if (dom.cutoutResultPreview) {
-                dom.cutoutResultPreview.src = _cutout.resultUrl;
-                dom.cutoutResultPreview.classList.remove('hidden');
-            }
-            dom.cutoutResultEmpty?.classList.add('hidden');
-            _cutoutSetResultEnabled(true);
+            await _cutoutFinalizeResult(result);
             _cutoutShowProgress(false);
-            showToast('抠图完成');
+            showToast('抠图完成，可拖动滑块微调边缘');
         } catch (e) {
             console.error('[Cutout]', e);
             _cutoutShowProgress(false);
@@ -5329,7 +5484,8 @@
                 c.toBlob((b) => (b ? resolve(b) : reject(new Error('读取叠加图失败'))), 'image/png');
             });
             showToast('正在抠图，请稍候…');
-            const result = await _cutoutProcessBlob(blob);
+            const raw = await _cutoutProcessBlob(blob);
+            const result = await _cutoutRefineBlob(raw, _cutoutGetSettings());
             const objUrl = URL.createObjectURL(result);
             _composite._objectUrls.push(objUrl);
             const img = await _compositeImageFromSrc(objUrl);
@@ -5405,6 +5561,20 @@
         });
 
         dom.btnCutoutRun?.addEventListener('click', () => _cutoutRun());
+
+        ['cutout-shrink', 'cutout-threshold', 'cutout-feather'].forEach((id) => {
+            document.getElementById(id)?.addEventListener('input', () => {
+                _cutoutSyncAdjustLabels();
+                _cutoutScheduleAdjust();
+            });
+        });
+
+        dom.btnCutoutResetAdjust?.addEventListener('click', () => {
+            _cutoutResetAdjustSliders();
+            _cutoutScheduleAdjust();
+        });
+
+        _cutoutSyncAdjustLabels();
 
         dom.btnCutoutDownload?.addEventListener('click', () => {
             if (!_cutout.resultUrl) return;
@@ -7865,7 +8035,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.09');
+        console.log('[ComfyUI Web] v4.10');
         await loadTags();
         renderHistory();
         setupTagPickers();
