@@ -170,7 +170,6 @@
         selInpaintPreset: $('#sel-inpaint-preset'),
         inpaintHint: $('#inpaint-hint'),
         txtInpaintPos: $('#txt-inpaint-pos'),
-        txtInpaintNeg: $('#txt-inpaint-neg'),
         inpInpaintDenoise: $('#inp-inpaint-denoise'),
         inpaintBrush: $('#inpaint-brush'),
         inpaintWandTol: $('#inpaint-wand-tol'),
@@ -2455,6 +2454,7 @@
         small: { key: 'small', label: '强化小范围', steps: 12, cfg: 1, sampler: 'euler' },
         large: { key: 'large', label: '大范围重绘', steps: 30, cfg: 4, sampler: 'er_sde' },
     };
+    const INPAINT_ANIMA_NEGATIVE_FIXED = 'worst quality, low quality, score_1, score_2, score_3, bad quality, worst detail, sketch, censor, extra limbs, deformed fingers, bad anatomy, mutated body, lowres, low score, bad score, blurry, text, ugly, hooded eyes, watermark, pale, bad hands, bad proportions, poorly drawn face, poorly drawn hand, missing finger, pixelated, distorted, jpeg artifacts, signature, (deformed:1.5), (bad hand:1.3), overexposed, underexposed, censored, mutated, extra finger, cloned face, bad eyes, red sleeves, red sleeve cuffs';
 
     function _applyAnimaInpaintModeToUI(modeKey) {
         const mode = INPAINT_ANIMA_V22_MODES[String(modeKey || 'small')] || INPAINT_ANIMA_V22_MODES.small;
@@ -2960,8 +2960,7 @@
         }
 
         const positive = inpaintOpts.positive || '';
-        let negative = inpaintOpts.negative || '';
-        if (!negative.trim()) negative = ANIMA_DEFAULTS.negative;
+        const negative = INPAINT_ANIMA_NEGATIVE_FIXED;
 
         const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
         const useFlsSampler = !!nodes.flsSampler;
@@ -3225,7 +3224,6 @@
             dom.inpaintHint.textContent = preset.hint + '  空格+拖动平移，滚轮缩放，魔棒点选相似区域。';
         }
         if (dom.txtInpaintPos) dom.txtInpaintPos.value = preset.positive;
-        if (dom.txtInpaintNeg) dom.txtInpaintNeg.value = preset.negative;
         if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(preset.denoise);
     }
 
@@ -3680,7 +3678,6 @@
         }
 
         const positive = dom.txtInpaintPos?.value.trim() || '';
-        const negative = dom.txtInpaintNeg?.value.trim() || '';
         const denoise = parseFloat(dom.inpInpaintDenoise?.value || '0.45');
         const inpaintMode = _normalizeInpaintMode(dom.selInpaintMode?.value, isAnimaMode());
         if (!positive) {
@@ -3720,7 +3717,6 @@
                 baseImageName: baseUpload.name,
                 maskImageName: maskUpload.name,
                 positive,
-                negative,
                 denoise,
                 inpaintMode,
                 modelCfg,
@@ -6340,7 +6336,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.98');
+        console.log('[ComfyUI Web] v3.99');
         await loadTags();
         renderHistory();
         setupTagPickers();
