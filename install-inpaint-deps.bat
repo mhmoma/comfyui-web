@@ -1,14 +1,14 @@
 @echo off
 cd /d "%~dp0"
 title ComfyUI Web Inpaint Setup
+set "FINAL_HINT=Done. Please restart ComfyUI before using inpaint."
 
 if not exist "%~dp0install-inpaint-deps.ps1" (
     echo.
     echo [ERROR] Missing install-inpaint-deps.ps1
     echo         Copy BOTH .bat and .ps1 to the same ComfyUI folder.
     echo.
-    pause
-    exit /b 1
+    goto HOLD_WINDOW
 )
 
 echo.
@@ -27,11 +27,21 @@ if exist "%PS_EXE%" (
         echo [ERROR] PowerShell not found on this system.
         echo         Please enable Windows PowerShell and run again.
         echo.
-        pause
-        exit /b 1
+        goto HOLD_WINDOW
     )
 )
 echo.
 echo Report: %CD%\inpaint-deps-report.txt
 echo.
+echo %FINAL_HINT%
+echo.
 pause
+
+:HOLD_WINDOW
+echo.
+echo ==================================================
+echo  %FINAL_HINT%
+echo  This window will stay open. Close it manually.
+echo ==================================================
+echo.
+cmd /k
