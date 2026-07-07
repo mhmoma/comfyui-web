@@ -6577,7 +6577,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.85');
+        console.log('[ComfyUI Web] v3.91');
         await loadTags();
         renderHistory();
         setupTagPickers();
