@@ -1,15 +1,27 @@
 # ComfyUI Web inpaint deps: check then install missing only. NO pip. Place next to install-inpaint-deps.bat in ComfyUI root.
 $ErrorActionPreference = 'Continue'
-$Root = (Get-Location).Path
+$StartDir = (Get-Location).Path
+$Root = $StartDir
 $CustomNodes = Join-Path $Root 'custom_nodes'
 $Models = Join-Path $Root 'models'
 $Api = if ($env:COMFYUI_URL) { $env:COMFYUI_URL } else { 'http://127.0.0.1:8188' }
-$ReportPath = Join-Path $Root 'inpaint-deps-report.txt'
+$ReportPath = Join-Path $StartDir 'inpaint-deps-report.txt'
 
 function Write-Ok($m) { Write-Host "[OK] $m" -ForegroundColor Green }
 function Write-Miss($m) { Write-Host "[--] $m" -ForegroundColor Yellow }
 function Write-Warn($m) { Write-Host "[!] $m" -ForegroundColor Red }
 function Write-Info($m) { Write-Host "[..] $m" -ForegroundColor Cyan }
+
+function Resolve-ComfyRoot($baseDir) {
+    if ((Test-Path (Join-Path $baseDir 'custom_nodes')) -and (Test-Path (Join-Path $baseDir 'models'))) {
+        return $baseDir
+    }
+    $candidate = Join-Path $baseDir 'ComfyUI'
+    if ((Test-Path (Join-Path $candidate 'custom_nodes')) -and (Test-Path (Join-Path $candidate 'models'))) {
+        return $candidate
+    }
+    return $null
+}
 
 $Plugins = @(
     @{ Id='anima-lllite'; Label='ComfyUI-Anima-LLLite'; Folders=@('ComfyUI-Anima-LLLite'); Git='https://github.com/kohya-ss/ComfyUI-Anima-LLLite.git'; Nodes=@('AnimaLLLiteApply'); Any=$false; Optional=$false }
@@ -153,10 +165,29 @@ function Save-ModelFile($m) {
 }
 
 Write-Host ""
+$resolvedRoot = Resolve-ComfyRoot $StartDir
+if (-not $resolvedRoot) {
+    Write-Warn "Cannot find ComfyUI root from: $StartDir"
+    Write-Warn "Expected either:"
+    Write-Warn "  1) current folder contains custom_nodes and models"
+    Write-Warn "  2) current folder contains ComfyUI\\custom_nodes and ComfyUI\\models"
+    $report = @(
+        "ComfyUI Inpaint Dependency Report",
+        "Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+        "StartDir: $StartDir",
+        "Result: failed - comfy root not found"
+    )
+    $report | Set-Content -Path $ReportPath -Encoding UTF8
+    exit 1
+}
+$Root = $resolvedRoot
+$CustomNodes = Join-Path $Root 'custom_nodes'
+$Models = Join-Path $Root 'models'
 Write-Host "ComfyUI root: $Root"
 $report = [System.Collections.Generic.List[string]]::new()
 $report.Add("ComfyUI Inpaint Dependency Report")
 $report.Add("Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
+$report.Add("StartDir: $StartDir")
 $report.Add("Root: $Root")
 $report.Add("API: $Api")
 $report.Add("")

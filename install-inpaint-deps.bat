@@ -2,17 +2,6 @@
 cd /d "%~dp0"
 title ComfyUI Web Inpaint Setup
 
-if not exist "custom_nodes\" (
-    echo.
-    echo [ERROR] Put this bat in ComfyUI ROOT folder.
-    echo         Must contain custom_nodes and models folders.
-    echo         NOT the comfyui-web website project folder.
-    echo         Current: %CD%
-    echo.
-    pause
-    exit /b 1
-)
-
 if not exist "%~dp0install-inpaint-deps.ps1" (
     echo.
     echo [ERROR] Missing install-inpaint-deps.ps1
@@ -25,6 +14,7 @@ if not exist "%~dp0install-inpaint-deps.ps1" (
 echo.
 echo ComfyUI Web - Inpaint dependencies check and install
 echo NO pip - git clone and model download only
+echo Script location: %CD%
 echo.
 set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 if exist "%PS_EXE%" (
