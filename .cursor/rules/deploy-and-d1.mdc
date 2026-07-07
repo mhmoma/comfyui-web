@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.79
+> **部署版本**: 1.80
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -280,3 +280,4 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.77 | 2026-07-07 | FLS 调度器不可用回退默认 | 小范围优先 beta57；当前 FLS_SamplerV4 不支持时改用该节点 object_info 默认 scheduler。 |
 | 1.78 | 2026-07-07 | 局部重绘采样调度可编辑 | 小范围默认 scheduler 改为 simple；采样器/调度器可在面板修改并用于构建工作流。 |
 | 1.79 | 2026-07-07 | 安装脚本对齐新版重绘节点 | 一键安装加入 FLS_Sampler、CropAndStitch、essentials；移除 Fooocus 旧依赖。 |
+| 1.80 | 2026-07-07 | 同步线上前端版本号 | `deploy/index.html` 版本号同步到 `v4.07`（`script.js?v=402`），保证线上显示与本次发布一致。 |
