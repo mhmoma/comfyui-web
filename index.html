@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.94</title>
-    <link rel="stylesheet" href="style.css?v=386">
+<title>ComfyUI Web v3.95</title>
+    <link rel="stylesheet" href="style.css?v=387">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.94</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.95</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1004,11 +1004,10 @@
                             <label>CFG <input type="number" id="inp-inpaint-cfg" value="5.0" min="1" max="30" step="0.5"></label>
                         </div>
                         <label>强度 <input type="number" id="inp-inpaint-denoise" value="0.55" min="0.1" max="1" step="0.01" title="实际强度会按模式自动限制"></label>
-                        <label>重绘模式
-                            <select id="sel-inpaint-mode" title="微调保留原图；标准日常；强力大改">
-                                <option value="blend">微调 — 修细节、小改</option>
-                                <option value="standard" selected>标准 — 换衣服/去衣</option>
-                                <option value="replace">强力 — 蒙版内大改</option>
+                        <label>重绘方案
+                            <select id="sel-inpaint-mode" title="Anima 工作流两套方案：强化小范围 / 大范围重绘">
+                                <option value="small" selected>强化小范围</option>
+                                <option value="large">大范围重绘</option>
                             </select>
                         </label>
                     </section>
@@ -1264,6 +1263,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=390"></script>
+    <script src="script.js?v=391"></script>
 </body>
 </html>

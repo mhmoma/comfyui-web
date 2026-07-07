@@ -2463,6 +2463,10 @@
         sharpness: 0.5,
         maskInertia: 0.55,
     };
+    const INPAINT_ANIMA_V22_MODES = {
+        small: { key: 'small', label: '强化小范围', steps: 12, cfg: 1, sampler: 'euler' },
+        large: { key: 'large', label: '大范围重绘', steps: 30, cfg: 4, sampler: 'er_sde' },
+    };
     const INPAINT_FOOOCUS_DOWNLOADS = [
         {
             url: 'https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/inpaint_v26.fooocus.patch',
@@ -2501,6 +2505,17 @@
         const base = Number.isFinite(cfg) ? cfg : INPAINT_MODEL_DEFAULTS.cfg;
         const cap = (INPAINT_MODE_DENOISE[inpaintMode] || INPAINT_MODE_DENOISE.standard).cfgMax;
         return cap ? Math.min(base, cap) : base;
+    }
+
+    function _normalizeInpaintMode(rawMode, anima) {
+        const mode = String(rawMode || '').trim().toLowerCase();
+        if (anima) {
+            if (mode === 'large' || mode === 'replace') return 'large';
+            return 'small';
+        }
+        if (mode === 'large') return 'replace';
+        if (mode === 'small') return 'standard';
+        return mode || 'standard';
     }
 
     const INPAINT_SETTINGS_KEY = 'comfyui_inpaint_settings';
@@ -2705,7 +2720,8 @@
         _inpaintUpdateArchPanels();
 
         if (isAnimaMode()) {
-            const engine = _inpaintResolveAnimaEngine(nodes, dom.selInpaintMode?.value || 'standard');
+            const modeKey = _normalizeInpaintMode(dom.selInpaintMode?.value, true);
+            const engine = _inpaintResolveAnimaEngine(nodes, modeKey);
             const labels = {
                 'lllite-crop': 'Anima LLLite · 裁剪拼接（推荐）',
                 'lllite-full': 'Anima LLLite · 全图重绘',
@@ -2899,7 +2915,7 @@
             sampler: dom.selInpaintSampler?.value || INPAINT_MODEL_DEFAULTS.sampler,
             scheduler: dom.selInpaintScheduler?.value || INPAINT_MODEL_DEFAULTS.scheduler,
             denoise: parseFloat(dom.inpInpaintDenoise?.value || '0.45'),
-            inpaintMode: dom.selInpaintMode?.value || 'standard',
+            inpaintMode: _normalizeInpaintMode(dom.selInpaintMode?.value, isAnimaMode()),
         };
     }
 
@@ -2920,11 +2936,7 @@
         if (data.sampler && dom.selInpaintSampler) dom.selInpaintSampler.value = data.sampler;
         if (data.scheduler && dom.selInpaintScheduler) dom.selInpaintScheduler.value = data.scheduler;
         if (data.denoise && dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(data.denoise);
-        if (dom.selInpaintMode) {
-            if (data.inpaintMode) dom.selInpaintMode.value = data.inpaintMode;
-            else if (data.preserveBlend === false) dom.selInpaintMode.value = 'replace';
-            else if (data.preserveBlend === true) dom.selInpaintMode.value = 'blend';
-        }
+        if (dom.selInpaintMode) dom.selInpaintMode.value = _normalizeInpaintMode(data.inpaintMode, isAnimaMode());
     }
 
     function saveInpaintSettings() {
@@ -2952,6 +2964,7 @@
         if (dom.selInpaintSampler) dom.selInpaintSampler.value = defs.sampler;
         if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = defs.scheduler;
         if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(defs.denoise ?? 0.55);
+        if (dom.selInpaintMode) dom.selInpaintMode.value = isAnima ? 'small' : 'standard';
         _inpaintUpdateArchPanels();
     }
 
@@ -3061,7 +3074,8 @@
 
     function buildAnimaInpaintWorkflow(inpaintOpts) {
         const { baseImageName, maskImageName, denoise } = inpaintOpts;
-        const inpaintMode = inpaintOpts.inpaintMode || 'standard';
+        const inpaintMode = _normalizeInpaintMode(inpaintOpts.inpaintMode, true);
+        const modePreset = INPAINT_ANIMA_V22_MODES[inpaintMode] || INPAINT_ANIMA_V22_MODES.small;
         const nodes = _inpaintNodes || {};
         const animaEngine = _inpaintResolveAnimaEngine(nodes, inpaintMode);
         if (!animaEngine) {
@@ -3071,23 +3085,17 @@
             throw new Error('请下载 anima-lllite-inpainting-v2 到 models/controlnet/');
         }
 
-        const blended = _inpaintWithBlend(inpaintOpts.positive, inpaintOpts.negative, inpaintMode);
-        const positive = blended.positive;
-        let negative = blended.negative;
+        const positive = inpaintOpts.positive || '';
+        let negative = inpaintOpts.negative || '';
         if (!negative.trim()) negative = ANIMA_DEFAULTS.negative;
 
         const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
         const useFlsSampler = !!nodes.flsSampler;
         const effectiveDenoise = _inpaintResolveAnimaDenoise(inpaintMode, denoise);
-        const cfgBase = useFlsSampler
-            ? (Number.isFinite(parseFloat(modelCfg.cfg)) ? parseFloat(modelCfg.cfg) : INPAINT_ANIMA_V22.defaultCfg)
-            : modelCfg.cfg;
+        const cfgBase = useFlsSampler ? modePreset.cfg : modelCfg.cfg;
         const effectiveCfg = _inpaintResolveAnimaCfg(inpaintMode, cfgBase);
-        const stepsRaw = parseInt(modelCfg.steps, 10);
-        const steps = Number.isFinite(stepsRaw)
-            ? stepsRaw
-            : (useFlsSampler ? INPAINT_ANIMA_V22.defaultSteps : ANIMA_DEFAULTS.steps);
-        const samplerName = (modelCfg.sampler || (useFlsSampler ? INPAINT_ANIMA_V22.defaultSampler : ANIMA_DEFAULTS.sampler) || 'euler').toLowerCase();
+        const steps = useFlsSampler ? modePreset.steps : (parseInt(modelCfg.steps, 10) || ANIMA_DEFAULTS.steps);
+        const samplerName = (useFlsSampler ? modePreset.sampler : (modelCfg.sampler || ANIMA_DEFAULTS.sampler || 'euler')).toLowerCase();
         const scheduler = useFlsSampler
             ? INPAINT_ANIMA_V22.defaultScheduler
             : (modelCfg.scheduler || ANIMA_DEFAULTS.scheduler || 'simple');
@@ -3313,7 +3321,7 @@
             return buildAnimaInpaintWorkflow(inpaintOpts);
         }
         const { baseImageName, maskImageName, denoise } = inpaintOpts;
-        const inpaintMode = inpaintOpts.inpaintMode || 'standard';
+        const inpaintMode = _normalizeInpaintMode(inpaintOpts.inpaintMode, false);
         const nodes = _inpaintNodes || {};
         const engine = _inpaintResolveEngine(nodes);
         const blended = _inpaintWithBlend(inpaintOpts.positive, inpaintOpts.negative, inpaintMode);
@@ -3999,7 +4007,7 @@
         const positive = dom.txtInpaintPos?.value.trim() || '';
         const negative = dom.txtInpaintNeg?.value.trim() || '';
         const denoise = parseFloat(dom.inpInpaintDenoise?.value || '0.45');
-        const inpaintMode = dom.selInpaintMode?.value || 'standard';
+        const inpaintMode = _normalizeInpaintMode(dom.selInpaintMode?.value, isAnimaMode());
         if (!positive) {
             alert('请填写蒙版内正向提示词');
             return;
@@ -4043,7 +4051,7 @@
                 inpaintMode,
                 modelCfg,
             });
-            const modeLabels = { blend: '微调', standard: '标准', replace: '强力' };
+            const modeLabels = { small: '强化小范围', large: '大范围重绘', standard: '标准', replace: '强力' };
             console.info('[Inpaint]', {
                 engine: workflow.engine,
                 inpaintMode: workflow.inpaintMode,
@@ -6656,7 +6664,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.94');
+        console.log('[ComfyUI Web] v3.95');
         await loadTags();
         renderHistory();
         setupTagPickers();
