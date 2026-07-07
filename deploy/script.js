@@ -2433,18 +2433,6 @@
         clipSkip: 2,
         useVae: false,
     };
-    const INPAINT_BLEND_POS = 'same character, same pose, seamless blend, consistent skin tone, consistent lighting';
-    const INPAINT_BLEND_NEG = 'different person, different face, style change, inconsistent lighting, harsh seam, color mismatch';
-    const INPAINT_MODE_DENOISE = {
-        blend: { max: 0.52, min: 0.35, cfgMax: 4.5 },
-        standard: { min: 0.55, max: 0.72, cfgMax: 5.5 },
-        replace: { min: 0.82, max: 1.0, cfgMax: 6.0 },
-    };
-    const INPAINT_ANIMA_MODE_DENOISE = {
-        blend: { max: 0.52, min: 0.4, cfgMax: 3.5 },
-        standard: { min: 0.5, max: 0.58, cfgMax: 4.5 },
-        replace: { min: 0.65, max: 0.78, cfgMax: 5.0 },
-    };
     const INPAINT_ANIMA_LLLITE = {
         filename: 'anima-lllite-inpainting-v2.safetensors',
         url: 'https://huggingface.co/kohya-ss/Anima-LLLite/resolve/main/anima-lllite-inpainting-v2.safetensors',
@@ -2467,55 +2455,13 @@
         small: { key: 'small', label: '强化小范围', steps: 12, cfg: 1, sampler: 'euler' },
         large: { key: 'large', label: '大范围重绘', steps: 30, cfg: 4, sampler: 'er_sde' },
     };
-    const INPAINT_FOOOCUS_DOWNLOADS = [
-        {
-            url: 'https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/inpaint_v26.fooocus.patch',
-            filename: 'inpaint_v26.fooocus.patch',
-            save_path: 'inpaint',
-            size: '~350MB',
-        },
-        {
-            url: 'https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/fooocus_inpaint_head.pth',
-            filename: 'fooocus_inpaint_head.pth',
-            save_path: 'inpaint',
-            size: '~50MB',
-        },
-    ];
-
-    function _inpaintWithBlend(positive, negative, inpaintMode) {
-        if (inpaintMode === 'replace') return { positive: positive || '', negative: negative || '' };
-        const p = positive ? `${positive}, ${INPAINT_BLEND_POS}` : INPAINT_BLEND_POS;
-        const n = negative ? `${negative}, ${INPAINT_BLEND_NEG}` : INPAINT_BLEND_NEG;
-        return { positive: p, negative: n };
-    }
-
-    function _inpaintResolveDenoise(inpaintMode, userDenoise, engine) {
-        const d = parseFloat(userDenoise);
-        const base = Number.isFinite(d) ? d : 0.55;
-        const rules = INPAINT_MODE_DENOISE[inpaintMode] || INPAINT_MODE_DENOISE.standard;
-        let out = base;
-        if (rules.min !== undefined) out = Math.max(out, rules.min);
-        if (rules.max !== undefined) out = Math.min(out, rules.max);
-        if (inpaintMode === 'replace' && engine === 'fooocus') out = Math.max(out, 0.88);
-        return Math.round(out * 100) / 100;
-    }
-
-    function _inpaintResolveCfg(inpaintMode, userCfg) {
-        const cfg = parseFloat(userCfg);
-        const base = Number.isFinite(cfg) ? cfg : INPAINT_MODEL_DEFAULTS.cfg;
-        const cap = (INPAINT_MODE_DENOISE[inpaintMode] || INPAINT_MODE_DENOISE.standard).cfgMax;
-        return cap ? Math.min(base, cap) : base;
-    }
-
     function _normalizeInpaintMode(rawMode, anima) {
         const mode = String(rawMode || '').trim().toLowerCase();
         if (anima) {
-            if (mode === 'large' || mode === 'replace') return 'large';
+            if (mode === 'large') return 'large';
             return 'small';
         }
-        if (mode === 'large') return 'replace';
-        if (mode === 'small') return 'standard';
-        return mode || 'standard';
+        return 'small';
     }
 
     const INPAINT_SETTINGS_KEY = 'comfyui_inpaint_settings';
@@ -2577,28 +2523,13 @@
     async function _checkInpaintNodes(force) {
         if (_inpaintNodes && !force) return _inpaintNodes;
         const nodes = {
-            conditioning: false,
             loadImageMask: false,
-            differential: false,
-            vaeEncodeForInpaint: false,
             composite: false,
-            fooocus: false,
-            fooocusRefine: false,
-            fooocusFiles: false,
-            fooocusHead: 'fooocus_inpaint_head.pth',
-            fooocusPatch: 'inpaint_v26.fooocus.patch',
-            fooocusHeadKey: 'head',
-            fooocusPatchKey: 'patch',
             inpaintCropRequired: {},
         };
         const checks = [
-            ['conditioning', 'InpaintModelConditioning'],
             ['loadImageMask', 'LoadImageMask'],
-            ['differential', 'DifferentialDiffusion'],
-            ['vaeEncodeForInpaint', 'VAEEncodeForInpaint'],
             ['composite', 'ImageCompositeMasked'],
-            ['fooocus', 'INPAINT_LoadFooocusInpaint'],
-            ['fooocusRefine', 'INPAINT_VAEEncodeInpaintConditioning'],
             ['animaLLLite', 'AnimaLLLiteApply'],
             ['inpaintPreprocessor', 'InpaintPreprocessor'],
             ['inpaintCrop', 'InpaintCropImproved'],
@@ -2614,21 +2545,6 @@
                 nodes[key] = false;
             }
         }));
-        if (nodes.fooocus) {
-            try {
-                const data = await apiGet('/object_info/INPAINT_LoadFooocusInpaint');
-                const req = data?.INPAINT_LoadFooocusInpaint?.input?.required || {};
-                const keys = Object.keys(req);
-                if (keys[0]) nodes.fooocusHeadKey = keys[0];
-                if (keys[1]) nodes.fooocusPatchKey = keys[1];
-                const all = keys.flatMap(k => _inpaintListFromObjectInfo(req[k]));
-                const head = all.find(f => /fooocus_inpaint_head/i.test(f));
-                const patch = all.find(f => /inpaint_v26\.fooocus\.patch/i.test(f));
-                if (head) nodes.fooocusHead = head;
-                if (patch) nodes.fooocusPatch = patch;
-                nodes.fooocusFiles = !!(head && patch);
-            } catch { /* ignore */ }
-        }
         nodes.llliteInpaintFile = INPAINT_ANIMA_LLLITE.filename;
         nodes.llliteFileReady = false;
         if (nodes.animaLLLite) {
@@ -2670,11 +2586,9 @@
         return INPAINT_ANIMA_V22.defaultDenoise;
     }
 
-    function _inpaintResolveAnimaCfg(inpaintMode, userCfg) {
+    function _inpaintResolveAnimaCfg(_inpaintMode, userCfg) {
         const cfg = parseFloat(userCfg);
-        const base = Number.isFinite(cfg) ? cfg : ANIMA_DEFAULTS.cfg;
-        const cap = (INPAINT_ANIMA_MODE_DENOISE[inpaintMode] || INPAINT_ANIMA_MODE_DENOISE.standard).cfgMax;
-        return Math.min(base, cap);
+        return Number.isFinite(cfg) ? cfg : ANIMA_DEFAULTS.cfg;
     }
 
     function _inpaintUpdateArchPanels() {
@@ -2697,13 +2611,6 @@
             const vae = dom.selAnimaVae?.selectedOptions?.[0]?.textContent || dom.selAnimaVae?.value || '—';
             dom.inpaintAnimaModelInfo.textContent = `UNET: ${unet} · CLIP: ${clip} · VAE: ${vae}`;
         }
-    }
-
-    function _inpaintResolveEngine(nodes) {
-        if (nodes.fooocus && nodes.fooocusFiles && nodes.vaeEncodeForInpaint) return 'fooocus';
-        if (nodes.differential && nodes.conditioning) return 'differential';
-        if (nodes.conditioning) return 'native';
-        return 'latent-mask';
     }
 
     function _inpaintPreferCheckpoint(selectEl) {
@@ -2755,39 +2662,6 @@
             }
             return;
         }
-
-        const engine = _inpaintResolveEngine(nodes);
-        const labels = {
-            fooocus: 'Fooocus Inpaint（推荐）',
-            differential: 'Differential Diffusion',
-            native: '基础 Inpaint',
-            'latent-mask': '兼容模式',
-        };
-        if (dom.inpaintEngineStatus) {
-            let status = `引擎：${labels[engine] || engine}`;
-            if (engine === 'fooocus') status += ' · 已就绪';
-            else if (engine === 'latent-mask') status += ' · 效果有限';
-            else status += ' · 建议安装 Fooocus 组件';
-            dom.inpaintEngineStatus.textContent = status;
-        }
-        const needSetup = !nodes.fooocus || !nodes.fooocusFiles;
-        dom.inpaintDownloadArea?.classList.toggle('hidden', !needSetup);
-        if (needSetup && dom.inpaintDownloadArea) {
-            const hint = dom.inpaintDownloadArea.querySelector('.inpaint-download-hint');
-            if (hint) {
-                if (!nodes.fooocus) {
-                    hint.textContent = '推荐：在 ComfyUI Manager 安装 comfyui-inpaint-nodes，再一键下载补丁';
-                } else {
-                    hint.textContent = '已检测到插件，点击下载 Fooocus Inpaint 补丁文件';
-                }
-            }
-            const manual = dom.inpaintDownloadArea.querySelector('.inpaint-download-manual');
-            if (manual) {
-                manual.innerHTML = '插件：ComfyUI Manager 搜索 <code>comfyui-inpaint-nodes</code>（作者 Acly）';
-            }
-            const btn = dom.btnInpaintDownload;
-            if (btn) btn.textContent = '📥 一键下载 Inpaint 补丁';
-        }
     }
 
     async function downloadInpaintAssets() {
@@ -2802,13 +2676,11 @@
         }
         if (dom.inpaintProgressBar) dom.inpaintProgressBar.style.width = '8%';
         try {
-            const downloads = anima
-                ? [{
-                    url: INPAINT_ANIMA_LLLITE.url,
-                    filename: INPAINT_ANIMA_LLLITE.filename,
-                    save_path: INPAINT_ANIMA_LLLITE.save_path,
-                }]
-                : INPAINT_FOOOCUS_DOWNLOADS;
+            const downloads = [{
+                url: INPAINT_ANIMA_LLLITE.url,
+                filename: INPAINT_ANIMA_LLLITE.filename,
+                save_path: INPAINT_ANIMA_LLLITE.save_path,
+            }];
             for (const dl of downloads) {
                 const res = await fetch(`${getServer()}/api/install-model`, {
                     method: 'POST',
@@ -2827,7 +2699,7 @@
                     }
                     try {
                         await _checkInpaintNodes(true);
-                        const ready = anima ? _inpaintNodes?.llliteFileReady : _inpaintNodes?.fooocusFiles;
+                        const ready = _inpaintNodes?.llliteFileReady;
                         if (ready) {
                             clearInterval(timer);
                             resolve();
@@ -3313,207 +3185,6 @@
 
     function buildInpaintWorkflow(inpaintOpts) {
         return buildAnimaInpaintWorkflow(inpaintOpts);
-        /*
-         * Legacy SDXL inpaint workflow retained below for reference only.
-         * It is intentionally unreachable because inpaint is now Anima-only.
-         */
-        const { baseImageName, maskImageName, denoise } = inpaintOpts;
-        const inpaintMode = _normalizeInpaintMode(inpaintOpts.inpaintMode, false);
-        const nodes = _inpaintNodes || {};
-        const engine = _inpaintResolveEngine(nodes);
-        const blended = _inpaintWithBlend(inpaintOpts.positive, inpaintOpts.negative, inpaintMode);
-        const positive = blended.positive;
-        const negative = blended.negative;
-        const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
-        const effectiveDenoise = _inpaintResolveDenoise(inpaintMode, denoise, engine);
-        const effectiveCfg = _inpaintResolveCfg(inpaintMode, modelCfg.cfg);
-        const seed = parseInt(dom.inpSeed.value);
-        let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
-        if (inpaintOpts.seedOverride !== undefined && inpaintOpts.seedOverride !== null) {
-            actualSeed = inpaintOpts.seedOverride;
-        }
-        const wf = {};
-        let nextId = 10;
-        const id = () => String(nextId++);
-
-        const ckptName = modelCfg.checkpoint || dom.selInpaintCheckpoint?.value || dom.selCheckpoint?.value;
-        if (!ckptName) throw new Error('请先选择局部重绘用的 SDXL 模型');
-
-        const ckptId = id();
-        wf[ckptId] = { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: ckptName } };
-        let modelOut = [ckptId, 0];
-        let clipOut = [ckptId, 1];
-        let vaeOut = [ckptId, 2];
-
-        if (modelCfg.useVae && modelCfg.vae) {
-            const vaeId = id();
-            wf[vaeId] = { class_type: 'VAELoader', inputs: { vae_name: modelCfg.vae } };
-            vaeOut = [vaeId, 0];
-        }
-
-        if (INPAINT_MODEL_DEFAULTS.clipSkip > 1) {
-            const csId = id();
-            wf[csId] = { class_type: 'CLIPSetLastLayer', inputs: { clip: clipOut, stop_at_clip_layer: -INPAINT_MODEL_DEFAULTS.clipSkip } };
-            clipOut = [csId, 0];
-        }
-
-        const posId = id();
-        wf[posId] = { class_type: 'CLIPTextEncode', inputs: { text: resolveWildcards(positive || ''), clip: clipOut } };
-        const negId = id();
-        wf[negId] = { class_type: 'CLIPTextEncode', inputs: { text: resolveWildcards(negative || ''), clip: clipOut } };
-
-        const baseLoadId = id();
-        wf[baseLoadId] = { class_type: 'LoadImage', inputs: { image: baseImageName } };
-
-        let maskSource;
-        if (nodes.loadImageMask) {
-            const maskLoadId = id();
-            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName, channel: 'red' } };
-            maskSource = [maskLoadId, 0];
-        } else {
-            const maskLoadId = id();
-            wf[maskLoadId] = { class_type: 'LoadImage', inputs: { image: maskImageName } };
-            const maskConvertId = id();
-            wf[maskConvertId] = { class_type: 'ImageToMask', inputs: { image: [maskLoadId, 0], channel: 'red' } };
-            maskSource = [maskConvertId, 0];
-        }
-
-        const maskGrowId = id();
-        wf[maskGrowId] = {
-            class_type: 'GrowMask',
-            inputs: { mask: maskSource, expand: inpaintMode === 'replace' ? 10 : 8, tapered_corners: true },
-        };
-
-        let samplerPos = [posId, 0];
-        let samplerNeg = [negId, 0];
-        let samplerLatent;
-        let fooocusLatentForPatch = null;
-
-        if (engine === 'fooocus') {
-            const patchLoadId = id();
-            const patchInputs = {};
-            patchInputs[nodes.fooocusHeadKey] = nodes.fooocusHead;
-            patchInputs[nodes.fooocusPatchKey] = nodes.fooocusPatch;
-            wf[patchLoadId] = { class_type: 'INPAINT_LoadFooocusInpaint', inputs: patchInputs };
-
-            if (inpaintMode !== 'replace' && nodes.fooocusRefine) {
-                const condId = id();
-                wf[condId] = {
-                    class_type: 'INPAINT_VAEEncodeInpaintConditioning',
-                    inputs: {
-                        positive: [posId, 0],
-                        negative: [negId, 0],
-                        vae: vaeOut,
-                        pixels: [baseLoadId, 0],
-                        mask: [maskGrowId, 0],
-                    },
-                };
-                samplerPos = [condId, 0];
-                samplerNeg = [condId, 1];
-                samplerLatent = [condId, 3];
-                fooocusLatentForPatch = [condId, 2];
-            } else {
-                const vaeEncId = id();
-                wf[vaeEncId] = {
-                    class_type: 'VAEEncodeForInpaint',
-                    inputs: {
-                        pixels: [baseLoadId, 0],
-                        vae: vaeOut,
-                        mask: [maskGrowId, 0],
-                        grow_mask_by: 8,
-                    },
-                };
-                samplerLatent = [vaeEncId, 0];
-                fooocusLatentForPatch = [vaeEncId, 0];
-            }
-
-            const applyId = id();
-            wf[applyId] = {
-                class_type: 'INPAINT_ApplyFooocusInpaint',
-                inputs: {
-                    model: modelOut,
-                    patch: [patchLoadId, 0],
-                    latent: fooocusLatentForPatch,
-                },
-            };
-            modelOut = [applyId, 0];
-        } else if (engine === 'differential' || engine === 'native') {
-            const condId = id();
-            wf[condId] = {
-                class_type: 'InpaintModelConditioning',
-                inputs: {
-                    positive: [posId, 0],
-                    negative: [negId, 0],
-                    vae: vaeOut,
-                    pixels: [baseLoadId, 0],
-                    mask: [maskGrowId, 0],
-                    noise_mask: true,
-                },
-            };
-            samplerPos = [condId, 0];
-            samplerNeg = [condId, 1];
-            samplerLatent = [condId, 2];
-            if (engine === 'differential') {
-                const diffId = id();
-                wf[diffId] = { class_type: 'DifferentialDiffusion', inputs: { model: modelOut } };
-                modelOut = [diffId, 0];
-            }
-        } else {
-            const vaeEncId = id();
-            wf[vaeEncId] = { class_type: 'VAEEncode', inputs: { pixels: [baseLoadId, 0], vae: vaeOut } };
-            const latentMaskId = id();
-            wf[latentMaskId] = { class_type: 'SetLatentNoiseMask', inputs: { samples: [vaeEncId, 0], mask: [maskGrowId, 0] } };
-            samplerLatent = [latentMaskId, 0];
-        }
-
-        const samplerId = id();
-        wf[samplerId] = {
-            class_type: 'KSampler',
-            inputs: {
-                seed: actualSeed,
-                steps: modelCfg.steps || INPAINT_MODEL_DEFAULTS.steps,
-                cfg: effectiveCfg,
-                sampler_name: modelCfg.sampler || INPAINT_MODEL_DEFAULTS.sampler,
-                scheduler: modelCfg.scheduler || INPAINT_MODEL_DEFAULTS.scheduler,
-                denoise: effectiveDenoise,
-                model: modelOut,
-                positive: samplerPos,
-                negative: samplerNeg,
-                latent_image: samplerLatent,
-            },
-        };
-
-        const decodeId = id();
-        wf[decodeId] = { class_type: 'VAEDecode', inputs: { samples: [samplerId, 0], vae: vaeOut } };
-
-        let finalImage = [decodeId, 0];
-        if (nodes.composite !== false) {
-            const compositeId = id();
-            wf[compositeId] = {
-                class_type: 'ImageCompositeMasked',
-                inputs: {
-                    destination: [baseLoadId, 0],
-                    source: [decodeId, 0],
-                    mask: [maskGrowId, 0],
-                    x: 0,
-                    y: 0,
-                    resize_source: false,
-                },
-            };
-            finalImage = [compositeId, 0];
-        }
-
-        const saveId = id();
-        wf[saveId] = { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI_Web', images: finalImage } };
-
-        return {
-            prompt: wf,
-            actualSeed,
-            effectiveDenoise,
-            effectiveCfg,
-            engine,
-            inpaintMode,
-        };
     }
 
     const _inpaint = {
@@ -6660,7 +6331,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.96');
+        console.log('[ComfyUI Web] v3.97');
         await loadTags();
         renderHistory();
         setupTagPickers();
