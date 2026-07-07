@@ -179,6 +179,8 @@
         btnInpaintBrush: $('#btn-inpaint-brush'),
         btnInpaintEraser: $('#btn-inpaint-eraser'),
         btnInpaintWand: $('#btn-inpaint-wand'),
+        btnInpaintAuto: $('#btn-inpaint-auto'),
+        btnInpaintAutoYolo: $('#btn-inpaint-auto-yolo'),
         btnInpaintPan: $('#btn-inpaint-pan'),
         btnInpaintInvert: $('#btn-inpaint-invert'),
         btnInpaintFit: $('#btn-inpaint-fit'),
@@ -192,6 +194,8 @@
         chkInpaintVae: $('#chk-inpaint-vae'),
         selInpaintMode: $('#sel-inpaint-mode'),
         inpaintEngineStatus: $('#inpaint-engine-status'),
+        inpaintYoloStatus: $('#inpaint-yolo-status'),
+        inpaintSamStatus: $('#inpaint-sam-status'),
         inpaintDownloadArea: $('#inpaint-download-area'),
         btnInpaintDownload: $('#btn-inpaint-download'),
         inpaintDownloadProgress: $('#inpaint-download-progress'),
@@ -202,6 +206,8 @@
         inpInpaintCfg: $('#inp-inpaint-cfg'),
         selInpaintSampler: $('#sel-inpaint-sampler'),
         selInpaintScheduler: $('#sel-inpaint-scheduler'),
+        inpInpaintSamRange: $('#inp-inpaint-sam-range'),
+        inpaintSamRangeValue: $('#inpaint-sam-range-value'),
         inpaintModelNote: $('#inpaint-model-note'),
         inpaintSdxlPanel: $('#inpaint-sdxl-panel'),
         inpaintAnimaPanel: $('#inpaint-anima-panel'),
@@ -2444,18 +2450,72 @@
         endPercent: 0.8,
     };
     const INPAINT_ANIMA_V22 = {
-        defaultSteps: 12,
-        defaultCfg: 1,
-        defaultSampler: 'euler',
-        defaultScheduler: 'simple',
         defaultDenoise: 1,
         foveaStrength: 3,
         sharpness: 0.5,
         maskInertia: 0.55,
     };
+    // 参数来源：D:\TOM\Unsaved Workflow (2).json（小范围）/ D:\TOM\大范围.json（大范围）
     const INPAINT_ANIMA_V22_MODES = {
-        small: { key: 'small', label: '强化小范围', steps: 12, cfg: 1, sampler: 'euler' },
-        large: { key: 'large', label: '大范围重绘', steps: 30, cfg: 4, sampler: 'er_sde' },
+        small: {
+            key: 'small',
+            label: '强化小范围',
+            engine: 'lllite-crop',
+            steps: 10,
+            cfg: 1,
+            sampler: 'euler_ancestral',
+            scheduler: 'simple',
+            denoise: 1,
+            foveaStrength: 3,
+            sharpness: 0.5,
+            maskInertia: 0.55,
+        },
+        large: {
+            key: 'large',
+            label: '大范围重绘',
+            engine: 'lllite-full',
+            steps: 10,
+            cfg: 1,
+            sampler: 'euler_ancestral',
+            scheduler: 'simple',
+            denoise: 1,
+            foveaStrength: 3,
+            sharpness: 0.5,
+            maskInertia: 0.55,
+        },
+    };
+    const INPAINT_ANIMA_MASK_FIX = {
+        erode_dilate: 0,
+        fill_holes: 0,
+        remove_isolated_pixels: 0,
+        smooth: 0,
+        blur: 0,
+    };
+    const INPAINT_ANIMA_CROP_DEFAULTS = {
+        downscale_algorithm: 'bilinear',
+        upscale_algorithm: 'bicubic',
+        preresize: false,
+        preresize_mode: 'ensure minimum resolution',
+        preresize_min_width: 1024,
+        preresize_min_height: 1024,
+        preresize_max_width: 16384,
+        preresize_max_height: 16384,
+        mask_fill_holes: true,
+        mask_expand_pixels: 0,
+        mask_invert: false,
+        mask_blend_pixels: 32,
+        mask_hipass_filter: 0.1,
+        extend_for_outpainting: false,
+        extend_up_factor: 1,
+        extend_down_factor: 1,
+        extend_left_factor: 1,
+        extend_right_factor: 1,
+        context_from_mask_extend_factor: 1.2,
+        output_resize_to_target_size: true,
+        output_target_width: 1536,
+        output_target_height: 1536,
+        output_padding: '32',
+        device_mode: 'gpu (much faster)',
     };
     const INPAINT_ANIMA_NEGATIVE_FIXED = 'worst quality, low quality, score_1, score_2, score_3, bad quality, worst detail, sketch, censor, extra limbs, deformed fingers, bad anatomy, mutated body, lowres, low score, bad score, blurry, text, ugly, hooded eyes, watermark, pale, bad hands, bad proportions, poorly drawn face, poorly drawn hand, missing finger, pixelated, distorted, jpeg artifacts, signature, (deformed:1.5), (bad hand:1.3), overexposed, underexposed, censored, mutated, extra finger, cloned face, bad eyes, red sleeves, red sleeve cuffs';
     const INPAINT_PRESETS_SIMPLE = {
@@ -2521,8 +2581,8 @@
         if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(mode.steps);
         if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(mode.cfg);
         if (dom.selInpaintSampler) dom.selInpaintSampler.value = mode.sampler;
-        if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_ANIMA_V22.defaultScheduler;
-        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(INPAINT_ANIMA_V22.defaultDenoise);
+        if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = mode.scheduler;
+        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(mode.denoise);
     }
     function _normalizeInpaintMode(rawMode, anima) {
         const mode = String(rawMode || '').trim().toLowerCase();
@@ -2544,49 +2604,31 @@
     }
 
     function _inpaintResolveCropInputDefault(inputName, spec) {
-        const key = String(inputName || '').toLowerCase();
-        const preset = {
-            context_from_mask_extend_factor: 1.2,
-            extend_left_factor: 1.2,
-            extend_right_factor: 1.2,
-            extend_top_factor: 1.2,
-            extend_bottom_factor: 1.2,
-            mask_fill_holes: true,
-            fill_mask_holes: true,
-            mask_blend_pixels: 32,
-            blend_pixels: 32,
-            output_resize_to_target_size: true,
-            output_target_width: 1536,
-            output_target_height: 1536,
-            preresize_max_width: 1536,
-            preresize_max_height: 1536,
-        };
-        if (Object.prototype.hasOwnProperty.call(preset, key)) return preset[key];
-
-        const typeRaw = Array.isArray(spec) ? spec[0] : null;
+        if (Object.prototype.hasOwnProperty.call(INPAINT_ANIMA_CROP_DEFAULTS, inputName)) {
+            return INPAINT_ANIMA_CROP_DEFAULTS[inputName];
+        }
         const meta = Array.isArray(spec) ? (spec[1] || {}) : {};
         if (meta && Object.prototype.hasOwnProperty.call(meta, 'default')) {
             return meta.default;
         }
-        if (Array.isArray(typeRaw) && typeRaw.length) {
-            return typeRaw[0];
-        }
+        const typeRaw = Array.isArray(spec) ? spec[0] : null;
+        if (Array.isArray(typeRaw) && typeRaw.length) return typeRaw[0];
+        return undefined;
+    }
 
-        const type = String(typeRaw || '').toUpperCase();
-        if (type.includes('BOOLEAN')) return true;
-        if (type.includes('FLOAT') || key.includes('factor')) return 1.2;
-        if (type.includes('INT') || type.includes('NUMBER')) {
-            if (key.includes('pixel') || key.includes('blend') || key.includes('padding') || key.includes('radius')) return 32;
-            if (key.includes('width') || key.includes('height') || key.includes('size')) return 1536;
-            return 0;
-        }
-        if (type.includes('STRING')) return '';
+    function _inpaintComboMeta(spec) {
+        return Array.isArray(spec) ? (spec[1] || {}) : {};
+    }
 
-        if (key.includes('factor')) return 1.2;
-        if (key.includes('width') || key.includes('height') || key.includes('size')) return 1536;
-        if (key.includes('pixel') || key.includes('blend')) return 32;
-        if (key.includes('mask_fill') || key.includes('fill_holes') || key.includes('resize')) return true;
-        return 0;
+    function _inpaintResolveFlsScheduler(preferred, nodes) {
+        const want = String(preferred || '');
+        const allowed = nodes.flsSchedulers || [];
+        if (!allowed.length) return nodes.flsSchedulerDefault || want || 'simple';
+        if (want && allowed.includes(want)) return want;
+        if (nodes.flsSchedulerDefault && allowed.includes(nodes.flsSchedulerDefault)) {
+            return nodes.flsSchedulerDefault;
+        }
+        return allowed[0] || 'simple';
     }
 
     async function _checkInpaintNodes(force) {
@@ -2641,23 +2683,44 @@
                 nodes.inpaintCropRequired = data?.InpaintCropImproved?.input?.required || {};
             } catch { /* ignore */ }
         }
+        nodes.flsSchedulers = [];
+        nodes.flsSchedulerDefault = 'simple';
+        if (nodes.flsSampler) {
+            try {
+                const data = await apiGet('/object_info/FLS_SamplerV4');
+                const inputs = data?.FLS_SamplerV4?.input || {};
+                const req = inputs.required || {};
+                const opt = inputs.optional || {};
+                const schedSpec = req.scheduler || opt.scheduler;
+                nodes.flsSchedulers = _inpaintListFromObjectInfo(schedSpec);
+                const schedMeta = _inpaintComboMeta(schedSpec);
+                if (schedMeta.default !== undefined && schedMeta.default !== null) {
+                    nodes.flsSchedulerDefault = String(schedMeta.default);
+                } else if (nodes.flsSchedulers.length) {
+                    nodes.flsSchedulerDefault = nodes.flsSchedulers[0];
+                }
+            } catch { /* ignore */ }
+        }
         _inpaintNodes = nodes;
         return nodes;
     }
 
     function _inpaintResolveAnimaEngine(nodes, inpaintMode) {
         if (!nodes.animaLLLite || !nodes.inpaintPreprocessor) return null;
-        // Keep Anima inpaint aligned with proven v22 full-image workflow.
-        return 'lllite-full';
+        const mode = INPAINT_ANIMA_V22_MODES[_normalizeInpaintMode(inpaintMode, true)] || INPAINT_ANIMA_V22_MODES.small;
+        if (mode.engine === 'lllite-full') return 'lllite-full';
+        if (nodes.inpaintCrop && nodes.inpaintStitch) return 'lllite-crop';
+        return null;
     }
 
-    function _inpaintResolveAnimaDenoise(inpaintMode, userDenoise) {
-        return INPAINT_ANIMA_V22.defaultDenoise;
+    function _inpaintResolveAnimaDenoise(inpaintMode, _userDenoise) {
+        const mode = INPAINT_ANIMA_V22_MODES[_normalizeInpaintMode(inpaintMode, true)] || INPAINT_ANIMA_V22_MODES.small;
+        return mode.denoise;
     }
 
-    function _inpaintResolveAnimaCfg(_inpaintMode, userCfg) {
-        const cfg = parseFloat(userCfg);
-        return Number.isFinite(cfg) ? cfg : ANIMA_DEFAULTS.cfg;
+    function _inpaintResolveAnimaCfg(inpaintMode, _userCfg) {
+        const mode = INPAINT_ANIMA_V22_MODES[_normalizeInpaintMode(inpaintMode, true)] || INPAINT_ANIMA_V22_MODES.small;
+        return mode.cfg;
     }
 
     function _inpaintUpdateArchPanels() {
@@ -2673,9 +2736,6 @@
         if (dom.selInpaintScheduler) dom.selInpaintScheduler.disabled = false;
         if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.disabled = true;
         if (dom.selInpaintSampler) dom.selInpaintSampler.disabled = false;
-        if (anima) {
-            _applyAnimaInpaintModeToUI(_normalizeInpaintMode(dom.selInpaintMode?.value, true));
-        }
     }
 
     function _inpaintPreferCheckpoint(selectEl) {
@@ -2690,17 +2750,24 @@
     async function updateInpaintEngineUI() {
         const nodes = await _checkInpaintNodes();
         _inpaintUpdateArchPanels();
+        await updateInpaintYoloStatus();
+        await updateInpaintSamStatus();
 
         if (isAnimaMode()) {
             const modeKey = _normalizeInpaintMode(dom.selInpaintMode?.value, true);
             const engine = _inpaintResolveAnimaEngine(nodes, modeKey);
             const labels = {
-                'lllite-crop': 'Anima LLLite · 裁剪拼接（推荐）',
-                'lllite-full': 'Anima LLLite · 全图重绘',
+                'lllite-crop': '强化小范围 · 裁剪拼接',
+                'lllite-full': '大范围重绘 · 全图',
             };
             if (dom.inpaintEngineStatus) {
                 if (!engine) {
-                    dom.inpaintEngineStatus.textContent = '引擎：需安装 ComfyUI-Anima-LLLite + controlnet_aux';
+                    const mode = INPAINT_ANIMA_V22_MODES[modeKey] || INPAINT_ANIMA_V22_MODES.small;
+                    if (mode.engine === 'lllite-crop' && (!nodes.inpaintCrop || !nodes.inpaintStitch)) {
+                        dom.inpaintEngineStatus.textContent = '引擎：强化小范围需 InpaintCropImproved + InpaintStitchImproved';
+                    } else {
+                        dom.inpaintEngineStatus.textContent = '引擎：需安装 ComfyUI-Anima-LLLite + controlnet_aux';
+                    }
                 } else {
                     let status = `引擎：${labels[engine] || engine}`;
                     status += nodes.llliteFileReady ? ' · 已就绪' : ' · 需下载 LLLite 权重';
@@ -2720,12 +2787,84 @@
                 }
                 const manual = dom.inpaintDownloadArea.querySelector('.inpaint-download-manual');
                 if (manual) {
-                    manual.innerHTML = '插件：<code>ComfyUI-Anima-LLLite</code>、<code>comfyui_controlnet_aux</code>；小范围可选 <code>comfyui-inpaint-cropandstitch</code>';
+                    manual.innerHTML = '必装插件：<code>ComfyUI-Anima-LLLite</code>、<code>comfyui_controlnet_aux</code>、<code>ComfyUI-BSS_FLSampler</code>、<code>ComfyUI-Inpaint-CropAndStitch</code>（小范围）、<code>ComfyUI_essentials</code>（大范围 MaskFix+）';
                 }
                 const btn = dom.btnInpaintDownload;
                 if (btn) btn.textContent = '📥 下载 Anima LLLite Inpaint';
             }
             return;
+        }
+    }
+
+    async function updateInpaintSamStatus() {
+        const el = dom.inpaintSamStatus;
+        if (!el) return;
+        const txt = el.querySelector('.inpaint-sam-text');
+        el.classList.remove('inpaint-sam-on', 'inpaint-sam-mid');
+        el.classList.add('inpaint-sam-off');
+        if (txt) txt.textContent = 'SAM 模型：检测中…';
+        try {
+            const res = await fetch(`${getServer()}/api/sam-status`);
+            const data = await res.json();
+            if (!res.ok || !data?.ok) {
+                if (txt) txt.textContent = 'SAM 模型：检测失败';
+                return;
+            }
+            if (!data.deps_ok) {
+                if (txt) txt.textContent = 'SAM 模型：依赖缺失（红灯）';
+                return;
+            }
+            if (data.model_ready) {
+                el.classList.remove('inpaint-sam-off');
+                el.classList.add('inpaint-sam-on');
+                if (txt) txt.textContent = `SAM 模型：已就绪（绿灯 · ${data.device || 'cpu'}）`;
+                return;
+            }
+            if (data.model_exists) {
+                el.classList.remove('inpaint-sam-off');
+                el.classList.add('inpaint-sam-mid');
+                if (txt) txt.textContent = 'SAM 模型：文件不完整（黄灯）';
+                return;
+            }
+            if (txt) txt.textContent = 'SAM 模型：未安装（红灯）';
+        } catch {
+            if (txt) txt.textContent = 'SAM 模型：离线/不可用（红灯）';
+        }
+    }
+
+    async function updateInpaintYoloStatus() {
+        const el = dom.inpaintYoloStatus;
+        if (!el) return;
+        const txt = el.querySelector('.inpaint-sam-text');
+        el.classList.remove('inpaint-sam-on', 'inpaint-sam-mid');
+        el.classList.add('inpaint-sam-off');
+        if (txt) txt.textContent = 'YOLO 模型：检测中…';
+        try {
+            const res = await fetch(`${getServer()}/api/yolo-status`);
+            const data = await res.json();
+            if (!res.ok || !data?.ok) {
+                if (txt) txt.textContent = 'YOLO 模型：检测失败';
+                return;
+            }
+            if (!data.deps_ok) {
+                if (txt) txt.textContent = 'YOLO 模型：依赖缺失（红灯）';
+                return;
+            }
+            if (data.model_ready) {
+                el.classList.remove('inpaint-sam-off');
+                el.classList.add('inpaint-sam-on');
+                if (txt) txt.textContent = `YOLO 模型：已就绪（绿灯 · ${data.device || 'cpu'}）`;
+                return;
+            }
+            if (data.model_exists) {
+                el.classList.remove('inpaint-sam-off');
+                el.classList.add('inpaint-sam-mid');
+                if (txt) txt.textContent = 'YOLO 模型：文件不完整（黄灯）';
+                return;
+            }
+            if (txt) txt.textContent = 'YOLO 模型：未安装（红灯）';
+        } catch {
+            if (txt) txt.textContent = 'YOLO 模型：离线/不可用（红灯）';
         }
     }
 
@@ -2887,13 +3026,14 @@
         }
         _inpaintPreferCheckpoint(dom.selInpaintCheckpoint);
         const isAnima = isAnimaMode();
+        const animaMode = INPAINT_ANIMA_V22_MODES.small;
         const defs = isAnima
             ? {
-                steps: INPAINT_ANIMA_V22.defaultSteps,
-                cfg: INPAINT_ANIMA_V22.defaultCfg,
-                sampler: INPAINT_ANIMA_V22.defaultSampler,
-                scheduler: INPAINT_ANIMA_V22.defaultScheduler,
-                denoise: INPAINT_ANIMA_V22.defaultDenoise,
+                steps: animaMode.steps,
+                cfg: animaMode.cfg,
+                sampler: animaMode.sampler,
+                scheduler: animaMode.scheduler,
+                denoise: animaMode.denoise,
             }
             : INPAINT_MODEL_DEFAULTS;
         if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(defs.steps);
@@ -3011,6 +3151,10 @@
         const nodes = _inpaintNodes || {};
         const animaEngine = _inpaintResolveAnimaEngine(nodes, inpaintMode);
         if (!animaEngine) {
+            const mode = INPAINT_ANIMA_V22_MODES[inpaintMode] || INPAINT_ANIMA_V22_MODES.small;
+            if (mode.engine === 'lllite-crop') {
+                throw new Error('强化小范围需要安装 ComfyUI-Inpaint-CropAndStitch（InpaintCropImproved + InpaintStitchImproved）');
+            }
             throw new Error('Anima 重绘需要 ComfyUI-Anima-LLLite 与 InpaintPreprocessor 节点');
         }
         if (!nodes.llliteFileReady) {
@@ -3020,16 +3164,16 @@
         const positive = inpaintOpts.positive || '';
         const negative = INPAINT_ANIMA_NEGATIVE_FIXED;
 
-        const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
         const useFlsSampler = !!nodes.flsSampler;
         const effectiveDenoise = _inpaintResolveAnimaDenoise(inpaintMode, denoise);
-        const cfgBase = useFlsSampler ? modePreset.cfg : modelCfg.cfg;
-        const effectiveCfg = _inpaintResolveAnimaCfg(inpaintMode, cfgBase);
-        const steps = useFlsSampler ? modePreset.steps : (parseInt(modelCfg.steps, 10) || ANIMA_DEFAULTS.steps);
-        const samplerName = (useFlsSampler ? modePreset.sampler : (modelCfg.sampler || ANIMA_DEFAULTS.sampler || 'euler')).toLowerCase();
+        const effectiveCfg = _inpaintResolveAnimaCfg(inpaintMode);
+        const inpaintUi = captureInpaintSettings();
+        const steps = modePreset.steps;
+        const samplerName = inpaintUi.sampler || modePreset.sampler;
+        const schedulerRaw = inpaintUi.scheduler || modePreset.scheduler;
         const scheduler = useFlsSampler
-            ? INPAINT_ANIMA_V22.defaultScheduler
-            : (modelCfg.scheduler || ANIMA_DEFAULTS.scheduler || 'simple');
+            ? _inpaintResolveFlsScheduler(schedulerRaw, nodes)
+            : schedulerRaw;
 
         const seed = parseInt(dom.inpSeed.value);
         let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
@@ -3082,17 +3226,14 @@
         }
 
         let maskProcessed = maskSource;
-        if (nodes.maskFix) {
+        const useMaskFix = inpaintMode === 'large' && nodes.maskFix;
+        if (useMaskFix) {
             const fixId = id();
             wf[fixId] = {
                 class_type: 'MaskFix+',
                 inputs: {
                     mask: maskSource,
-                    erode_dilate: 0,
-                    fill_holes: 0,
-                    remove_isolated_pixels: 0,
-                    smooth: 0,
-                    blur: 0,
+                    ...INPAINT_ANIMA_MASK_FIX,
                 },
             };
             maskProcessed = [fixId, 0];
@@ -3108,18 +3249,14 @@
             const cropInputs = {
                 image: [baseLoadId, 0],
                 mask: maskProcessed,
-                context_from_mask_extend_factor: 1.2,
-                mask_fill_holes: true,
-                mask_blend_pixels: 32,
-                output_resize_to_target_size: true,
-                output_target_width: 1536,
-                output_target_height: 1536,
+                ...INPAINT_ANIMA_CROP_DEFAULTS,
             };
             const required = nodes.inpaintCropRequired || {};
             for (const [inputName, spec] of Object.entries(required)) {
                 if (inputName === 'image' || inputName === 'mask') continue;
                 if (Object.prototype.hasOwnProperty.call(cropInputs, inputName)) continue;
-                cropInputs[inputName] = _inpaintResolveCropInputDefault(inputName, spec);
+                const resolved = _inpaintResolveCropInputDefault(inputName, spec);
+                if (resolved !== undefined) cropInputs[inputName] = resolved;
             }
             wf[cropId] = {
                 class_type: 'InpaintCropImproved',
@@ -3166,7 +3303,6 @@
 
         const samplerId = id();
         if (useFlsSampler) {
-            // Match proven anima_v22 pipeline to improve repaint effectiveness.
             wf[samplerId] = {
                 class_type: 'FLS_SamplerV4',
                 inputs: {
@@ -3174,11 +3310,11 @@
                     steps,
                     cfg: effectiveCfg,
                     sampler_name: samplerName,
-                    scheduler: 'simple',
-                    denoise: INPAINT_ANIMA_V22.defaultDenoise,
-                    fovea_strength: INPAINT_ANIMA_V22.foveaStrength,
-                    sharpness: INPAINT_ANIMA_V22.sharpness,
-                    mask_inertia: INPAINT_ANIMA_V22.maskInertia,
+                    scheduler,
+                    denoise: modePreset.denoise,
+                    fovea_strength: modePreset.foveaStrength,
+                    sharpness: modePreset.sharpness,
+                    mask_inertia: modePreset.maskInertia,
                     model: modelOut,
                     positive: [posId, 0],
                     negative: [negId, 0],
@@ -3217,20 +3353,6 @@
                 },
             };
             finalImage = [stitchId, 0];
-        } else if (nodes.composite) {
-            const compositeId = id();
-            wf[compositeId] = {
-                class_type: 'ImageCompositeMasked',
-                inputs: {
-                    destination: [baseLoadId, 0],
-                    source: [decodeId, 0],
-                    mask: maskProcessed,
-                    x: 0,
-                    y: 0,
-                    resize_source: false,
-                },
-            };
-            finalImage = [compositeId, 0];
         }
 
         const saveId = id();
@@ -3274,6 +3396,8 @@
         _maskNative: null,
         _maskCtx: null,
         _imgData: null,
+        autoPickArmed: false,
+        autoPickMode: 'sam',
     };
 
     function applyInpaintPreset(key) {
@@ -3470,6 +3594,7 @@
     }
 
     function _inpaintSetTool(tool) {
+        _inpaintDisarmAutoPick();
         _inpaint.tool = tool;
         const tools = ['brush', 'eraser', 'wand', 'pan'];
         const btnMap = {
@@ -3490,6 +3615,173 @@
         } else if (_inpaint.lastClientX || _inpaint.lastClientY) {
             _inpaintUpdateBrushRing(_inpaint.lastClientX, _inpaint.lastClientY);
         }
+    }
+
+    function _inpaintGetSamRangeScale() {
+        const raw = parseInt(dom.inpInpaintSamRange?.value || '110', 10);
+        const pct = Number.isFinite(raw) ? raw : 110;
+        return Math.max(0.7, Math.min(1.6, pct / 100));
+    }
+
+    function _inpaintUpdateSamRangeLabel() {
+        if (dom.inpaintSamRangeValue) {
+            dom.inpaintSamRangeValue.textContent = `${parseInt(dom.inpInpaintSamRange?.value || '110', 10)}%`;
+        }
+    }
+
+    function _inpaintArmAutoPick() {
+        _inpaintArmAutoPickMode('sam');
+    }
+
+    function _inpaintArmAutoPickMode(mode) {
+        _inpaint.autoPickArmed = true;
+        _inpaint.autoPickMode = mode || 'sam';
+        if (dom.inpaintHint) {
+            dom.inpaintHint.textContent = _inpaint.autoPickMode === 'yolo-sam'
+                ? 'YOLO + SAM 自动分割已启用：请在目标区域点一下。'
+                : 'SAM 自动分割已启用：请在目标区域点一下。首次使用会自动下载模型。';
+        }
+        dom.btnInpaintAuto?.classList.toggle('active', _inpaint.autoPickMode === 'sam');
+        dom.btnInpaintAutoYolo?.classList.toggle('active', _inpaint.autoPickMode === 'yolo-sam');
+    }
+
+    function _inpaintDisarmAutoPick() {
+        _inpaint.autoPickArmed = false;
+        _inpaint.autoPickMode = 'sam';
+        dom.btnInpaintAuto?.classList.remove('active');
+        dom.btnInpaintAutoYolo?.classList.remove('active');
+    }
+
+    function _inpaintAutoMaskFromPoint(clientX, clientY) {
+        return _inpaint.autoPickMode === 'yolo-sam'
+            ? _inpaintAutoMaskFromPointWithYoloSam(clientX, clientY)
+            : _inpaintAutoMaskFromPointWithSam(clientX, clientY);
+    }
+
+    async function _inpaintExportBaseDataUrl() {
+        if (!_inpaint.naturalW || !dom.inpaintImage) {
+            throw new Error('底图未就绪');
+        }
+        try {
+            const c = document.createElement('canvas');
+            c.width = _inpaint.naturalW;
+            c.height = _inpaint.naturalH;
+            c.getContext('2d').drawImage(dom.inpaintImage, 0, 0, _inpaint.naturalW, _inpaint.naturalH);
+            const dataUrl = c.toDataURL('image/png');
+            if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+                throw new Error('invalid image data');
+            }
+            return dataUrl;
+        } catch (e) {
+            throw new Error('底图像素导出失败，请确认当前图片可被浏览器读取（建议用本地服务地址打开）');
+        }
+    }
+
+    function _inpaintApplyMaskDataUrl(maskDataUrl) {
+        return new Promise((resolve, reject) => {
+            _inpaintEnsureMask();
+            if (!_inpaint._maskCtx || !_inpaint.naturalW) {
+                reject(new Error('蒙版画布未就绪'));
+                return;
+            }
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const w = _inpaint.naturalW;
+                    const h = _inpaint.naturalH;
+                    const c = document.createElement('canvas');
+                    c.width = w;
+                    c.height = h;
+                    const ctx = c.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const m = ctx.getImageData(0, 0, w, h).data;
+                    const out = _inpaint._maskCtx.createImageData(w, h);
+                    for (let i = 0; i < m.length; i += 4) {
+                        const v = m[i];
+                        out.data[i] = v;
+                        out.data[i + 1] = v;
+                        out.data[i + 2] = v;
+                        out.data[i + 3] = 255;
+                    }
+                    _inpaint._maskCtx.putImageData(out, 0, 0);
+                    _inpaintRedrawOverlay();
+                    resolve();
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            img.onerror = () => reject(new Error('SAM 蒙版加载失败'));
+            img.src = maskDataUrl;
+        });
+    }
+
+    async function _inpaintAutoMaskFromPointWithSam(clientX, clientY) {
+        if (!_inpaintIsOverStage(clientX, clientY)) return false;
+        const { nx, ny } = _inpaintPointerToNative(clientX, clientY);
+        const samScale = _inpaintGetSamRangeScale();
+        const shortEdge = Math.max(1, Math.min(_inpaint.naturalW, _inpaint.naturalH));
+        const brushRadius = Math.max(24, parseFloat(dom.inpaintBrush?.value || 28) / Math.max(_inpaint.scale, 0.2));
+        const focusRadius = Math.max(56, Math.min(shortEdge * 0.28, brushRadius * 4.6)) * samScale;
+        const focusBox = [
+            Math.max(0, nx - focusRadius),
+            Math.max(0, ny - focusRadius),
+            Math.min(_inpaint.naturalW - 1, nx + focusRadius),
+            Math.min(_inpaint.naturalH - 1, ny + focusRadius),
+        ];
+        const ring = Math.max(40, focusRadius * (1.18 - (samScale - 1) * 0.35));
+        const negativePoints = [
+            [nx - ring, ny],
+            [nx + ring, ny],
+            [nx, ny - ring],
+            [nx, ny + ring],
+            [nx - ring * 0.72, ny - ring * 0.72],
+            [nx + ring * 0.72, ny - ring * 0.72],
+            [nx - ring * 0.72, ny + ring * 0.72],
+            [nx + ring * 0.72, ny + ring * 0.72],
+        ].map(([x, y]) => [
+            Math.max(0, Math.min(_inpaint.naturalW - 1, x)),
+            Math.max(0, Math.min(_inpaint.naturalH - 1, y)),
+        ]);
+        const imageDataUrl = await _inpaintExportBaseDataUrl();
+        const res = await fetch(`${getServer()}/api/auto-mask-sam`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_data_url: imageDataUrl,
+                point_x: nx,
+                point_y: ny,
+                negative_points: negativePoints,
+                focus_box: focusBox,
+            }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok || !data?.mask_data_url) {
+            throw new Error(data?.error || 'SAM 自动分割失败');
+        }
+        await _inpaintApplyMaskDataUrl(data.mask_data_url);
+        return true;
+    }
+
+    async function _inpaintAutoMaskFromPointWithYoloSam(clientX, clientY) {
+        if (!_inpaintIsOverStage(clientX, clientY)) return false;
+        const { nx, ny } = _inpaintPointerToNative(clientX, clientY);
+        const imageDataUrl = await _inpaintExportBaseDataUrl();
+        const res = await fetch(`${getServer()}/api/auto-mask-yolo-sam`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_data_url: imageDataUrl,
+                point_x: nx,
+                point_y: ny,
+                range_scale: _inpaintGetSamRangeScale(),
+            }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok || !data?.mask_data_url) {
+            throw new Error(data?.error || 'YOLO + SAM 自动分割失败');
+        }
+        await _inpaintApplyMaskDataUrl(data.mask_data_url);
+        return true;
     }
 
     function _inpaintPointerToNative(clientX, clientY) {
@@ -3674,6 +3966,7 @@
         _inpaint._maskNative = null;
         _inpaint._maskCtx = null;
         _inpaint._imgData = null;
+        _inpaintDisarmAutoPick();
         _inpaint.lastClientX = 0;
         _inpaint.lastClientY = 0;
         _inpaintSetTool('brush');
@@ -3832,6 +4125,7 @@
             updateInpaintEngineUI();
         });
         dom.btnInpaintDownload?.addEventListener('click', downloadInpaintAssets);
+        dom.inpInpaintSamRange?.addEventListener('input', _inpaintUpdateSamRangeLabel);
         ['sel-inpaint-checkpoint', 'sel-inpaint-vae', 'inp-inpaint-steps', 'inp-inpaint-cfg',
             'sel-inpaint-sampler', 'sel-inpaint-scheduler', 'inp-inpaint-denoise'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', saveInpaintSettings);
@@ -3840,6 +4134,8 @@
         dom.btnInpaintBrush?.addEventListener('click', () => _inpaintSetTool('brush'));
         dom.btnInpaintEraser?.addEventListener('click', () => _inpaintSetTool('eraser'));
         dom.btnInpaintWand?.addEventListener('click', () => _inpaintSetTool('wand'));
+        dom.btnInpaintAuto?.addEventListener('click', () => _inpaintArmAutoPick());
+        dom.btnInpaintAutoYolo?.addEventListener('click', () => _inpaintArmAutoPickMode('yolo-sam'));
         dom.btnInpaintPan?.addEventListener('click', () => _inpaintSetTool('pan'));
         dom.btnInpaintInvert?.addEventListener('click', () => _inpaintInvertMask());
         dom.btnInpaintFit?.addEventListener('click', () => _inpaintFitToView());
@@ -3874,7 +4170,7 @@
             }
         });
 
-        const onPointerDown = (e) => {
+        const onPointerDown = async (e) => {
             if (dom.modalInpaint?.classList.contains('hidden')) return;
             if (e.touches && e.touches.length === 2) {
                 _inpaint.pinchDist = Math.hypot(
@@ -3892,6 +4188,36 @@
                 _inpaint.panStartY = pt.clientY;
                 _inpaint.panOriginX = _inpaint.panX;
                 _inpaint.panOriginY = _inpaint.panY;
+                e.preventDefault();
+                return;
+            }
+            if (_inpaint.autoPickArmed) {
+                let ok = false;
+                const autoMode = _inpaint.autoPickMode;
+                dom.btnInpaintAuto && (dom.btnInpaintAuto.disabled = true);
+                dom.btnInpaintAutoYolo && (dom.btnInpaintAutoYolo.disabled = true);
+                if (dom.inpaintHint) {
+                    dom.inpaintHint.textContent = autoMode === 'yolo-sam'
+                        ? 'YOLO + SAM 分割中，请稍候...'
+                        : 'SAM 分割中，请稍候...';
+                }
+                try {
+                    ok = await _inpaintAutoMaskFromPoint(pt.clientX, pt.clientY);
+                } catch (err) {
+                    const label = autoMode === 'yolo-sam' ? 'YOLO + SAM' : 'SAM';
+                    alert(`${label} 自动分割失败: ${err.message}`);
+                } finally {
+                    dom.btnInpaintAuto && (dom.btnInpaintAuto.disabled = false);
+                    dom.btnInpaintAutoYolo && (dom.btnInpaintAutoYolo.disabled = false);
+                }
+                _inpaintDisarmAutoPick();
+                if (ok) {
+                    if (dom.inpaintHint) {
+                        dom.inpaintHint.textContent = autoMode === 'yolo-sam'
+                            ? 'YOLO + SAM 自动分割完成，可继续修补后开始重绘。'
+                            : 'SAM 自动分割完成，可继续修补后开始重绘。';
+                    }
+                }
                 e.preventDefault();
                 return;
             }
@@ -3971,6 +4297,7 @@
         });
 
         _inpaintSetTool('brush');
+        _inpaintUpdateSamRangeLabel();
     }
 
     // ==================== 生图流程 ====================

@@ -1836,6 +1836,34 @@ body.inpaint-open {
     line-height: 1.45;
 }
 
+.inpaint-sam-status {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    color: var(--text-muted, #aaa);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.35;
+}
+
+.inpaint-sam-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.inpaint-sam-status.inpaint-sam-on .inpaint-sam-dot {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.inpaint-sam-status.inpaint-sam-mid .inpaint-sam-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
 .inpaint-anima-model-info {
     margin: 0 0 6px;
     font-size: 0.78rem;
@@ -2023,6 +2051,19 @@ body.inpaint-open {
 
 .inpaint-brush-label input[type="range"] {
     width: 90px;
+}
+
+.inpaint-sam-range-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    margin-top: 8px;
+}
+
+.inpaint-sam-range-label input[type="range"] {
+    flex: 1;
+    min-width: 120px;
 }
 
 .inpaint-pixel-label input {

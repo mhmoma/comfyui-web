@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v4.01</title>
+<title>ComfyUI Web v4.07</title>
     <link rel="stylesheet" href="style.css?v=393">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.01</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.07</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -970,6 +970,14 @@
                     <section class="panel">
                         <h2>重绘引擎</h2>
                         <p id="inpaint-engine-status" class="inpaint-engine-status">检测中…</p>
+                        <p id="inpaint-yolo-status" class="inpaint-sam-status inpaint-sam-off">
+                            <span class="inpaint-sam-dot" aria-hidden="true"></span>
+                            <span class="inpaint-sam-text">YOLO 模型：检测中…</span>
+                        </p>
+                        <p id="inpaint-sam-status" class="inpaint-sam-status inpaint-sam-off">
+                            <span class="inpaint-sam-dot" aria-hidden="true"></span>
+                            <span class="inpaint-sam-text">SAM 模型：检测中…</span>
+                        </p>
                         <div id="inpaint-download-area" class="inpaint-download-area hidden">
                             <p class="inpaint-download-hint">推荐安装 Fooocus Inpaint 组件</p>
                             <button type="button" id="btn-inpaint-download" class="btn-secondary btn-inpaint-download">📥 一键下载 Inpaint 补丁</button>
@@ -1010,6 +1018,10 @@
                                 <option value="large">大范围重绘</option>
                             </select>
                         </label>
+                        <label class="inpaint-sam-range-label">SAM 选区范围
+                            <input type="range" id="inp-inpaint-sam-range" min="70" max="160" step="5" value="110">
+                            <span id="inpaint-sam-range-value">110%</span>
+                        </label>
                     </section>
                     <section class="panel">
                         <h2>提示词</h2>
@@ -1037,6 +1049,8 @@
                         <button type="button" id="btn-inpaint-brush" class="btn-secondary inpaint-tool active">画笔</button>
                         <button type="button" id="btn-inpaint-eraser" class="btn-secondary inpaint-tool">橡皮</button>
                         <button type="button" id="btn-inpaint-wand" class="btn-secondary inpaint-tool">魔棒</button>
+                        <button type="button" id="btn-inpaint-auto" class="btn-secondary inpaint-tool" title="点击后在图上点一下目标区域">SAM选区</button>
+                        <button type="button" id="btn-inpaint-auto-yolo" class="btn-secondary inpaint-tool" title="先用 YOLO 粗定位，再用 SAM 精修">YOLO+SAM</button>
                         <button type="button" id="btn-inpaint-pan" class="btn-secondary inpaint-tool" title="拖动画布">平移</button>
                         <label class="inpaint-brush-label">笔刷
                             <input type="range" id="inpaint-brush" min="4" max="120" value="28">
@@ -1262,6 +1276,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=397"></script>
+    <script src="script.js?v=403"></script>
 </body>
 </html>
