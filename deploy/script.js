@@ -2679,8 +2679,8 @@
 
     function _inpaintUpdateArchPanels() {
         const anima = isAnimaMode();
-        dom.inpaintSdxlPanel?.classList.toggle('hidden', anima);
-        dom.inpaintAnimaPanel?.classList.toggle('hidden', !anima);
+        dom.inpaintSdxlPanel?.classList.add('hidden');
+        dom.inpaintAnimaPanel?.classList.remove('hidden');
         if (dom.inpInpaintSteps) dom.inpInpaintSteps.disabled = anima;
         if (dom.inpInpaintCfg) dom.inpInpaintCfg.disabled = anima;
         if (dom.selInpaintScheduler) dom.selInpaintScheduler.disabled = anima;
@@ -2691,7 +2691,7 @@
             if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_ANIMA_V22.defaultScheduler;
             if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(INPAINT_ANIMA_V22.defaultDenoise);
         }
-        if (anima && dom.inpaintAnimaModelInfo) {
+        if (dom.inpaintAnimaModelInfo) {
             const unet = dom.selUnet?.selectedOptions?.[0]?.textContent || dom.selUnet?.value || '—';
             const clip = dom.selClip?.selectedOptions?.[0]?.textContent || dom.selClip?.value || '—';
             const vae = dom.selAnimaVae?.selectedOptions?.[0]?.textContent || dom.selAnimaVae?.value || '—';
@@ -2970,13 +2970,8 @@
 
     function updateInpaintModelNote() {
         if (!dom.inpaintModelNote) return;
-        if (isAnimaMode()) {
-            dom.inpaintModelNote.textContent = 'Anima 模式：使用主界面 UNET / CLIP / VAE 与 LLLite Inpaint 引擎；不继承 LoRA、Turbo 等模块。';
-            dom.inpaintModelNote.classList.remove('hidden');
-        } else {
-            dom.inpaintModelNote.textContent = '局部重绘使用独立 SDXL 模型与采样参数，不继承主界面的 LoRA / FreeU 等模块。';
-            dom.inpaintModelNote.classList.remove('hidden');
-        }
+        dom.inpaintModelNote.textContent = '局部重绘仅支持 Anima 工作流：使用主界面 UNET / CLIP / VAE 与 LLLite Inpaint 引擎。';
+        dom.inpaintModelNote.classList.remove('hidden');
     }
 
     const INPAINT_PRESETS = {
@@ -3317,9 +3312,11 @@
     }
 
     function buildInpaintWorkflow(inpaintOpts) {
-        if (isAnimaMode()) {
-            return buildAnimaInpaintWorkflow(inpaintOpts);
-        }
+        return buildAnimaInpaintWorkflow(inpaintOpts);
+        /*
+         * Legacy SDXL inpaint workflow retained below for reference only.
+         * It is intentionally unreachable because inpaint is now Anima-only.
+         */
         const { baseImageName, maskImageName, denoise } = inpaintOpts;
         const inpaintMode = _normalizeInpaintMode(inpaintOpts.inpaintMode, false);
         const nodes = _inpaintNodes || {};
@@ -4012,13 +4009,12 @@
             alert('请填写蒙版内正向提示词');
             return;
         }
-        if (isAnimaMode()) {
-            if (!dom.selUnet?.value || !dom.selClip?.value || !dom.selAnimaVae?.value) {
-                alert('请先在主界面选择 Anima UNET / CLIP / VAE 模型');
-                return;
-            }
-        } else if (!dom.selInpaintCheckpoint?.value) {
-            alert('请先选择局部重绘用的 SDXL 模型');
+        if (!isAnimaMode()) {
+            alert('局部重绘现仅支持 Anima 架构，请先切换到 Anima 后再重试。');
+            return;
+        }
+        if (!dom.selUnet?.value || !dom.selClip?.value || !dom.selAnimaVae?.value) {
+            alert('请先在主界面选择 Anima UNET / CLIP / VAE 模型');
             return;
         }
 
@@ -4051,7 +4047,7 @@
                 inpaintMode,
                 modelCfg,
             });
-            const modeLabels = { small: '强化小范围', large: '大范围重绘', standard: '标准', replace: '强力' };
+            const modeLabels = { small: '强化小范围', large: '大范围重绘' };
             console.info('[Inpaint]', {
                 engine: workflow.engine,
                 inpaintMode: workflow.inpaintMode,
@@ -6664,7 +6660,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.95');
+        console.log('[ComfyUI Web] v3.96');
         await loadTags();
         renderHistory();
         setupTagPickers();
