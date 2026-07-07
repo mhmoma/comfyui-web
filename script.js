@@ -206,6 +206,9 @@
         inpaintSdxlPanel: $('#inpaint-sdxl-panel'),
         inpaintAnimaPanel: $('#inpaint-anima-panel'),
         inpaintAnimaModelInfo: $('#inpaint-anima-model-info'),
+        inpaintRowSampler: $('#inpaint-row-sampler'),
+        inpaintRowFixed: $('#inpaint-row-fixed'),
+        inpaintDenoiseWrap: $('#inpaint-denoise-wrap'),
         // Config profiles
         selProfileQuick: $('#sel-profile-quick'),
         selProfile: $('#sel-profile'),
@@ -2661,19 +2664,17 @@
         const anima = isAnimaMode();
         dom.inpaintSdxlPanel?.classList.add('hidden');
         dom.inpaintAnimaPanel?.classList.remove('hidden');
-        if (dom.inpInpaintSteps) dom.inpInpaintSteps.disabled = anima;
-        if (dom.inpInpaintCfg) dom.inpInpaintCfg.disabled = anima;
-        if (dom.selInpaintScheduler) dom.selInpaintScheduler.disabled = anima;
-        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.disabled = anima;
-        if (dom.selInpaintSampler) dom.selInpaintSampler.disabled = anima;
+        dom.inpaintAnimaPanel?.classList.add('hidden');
+        dom.inpaintModelNote?.classList.add('hidden');
+        dom.inpaintRowFixed?.classList.add('hidden');
+        dom.inpaintDenoiseWrap?.classList.add('hidden');
+        if (dom.inpInpaintSteps) dom.inpInpaintSteps.disabled = true;
+        if (dom.inpInpaintCfg) dom.inpInpaintCfg.disabled = true;
+        if (dom.selInpaintScheduler) dom.selInpaintScheduler.disabled = false;
+        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.disabled = true;
+        if (dom.selInpaintSampler) dom.selInpaintSampler.disabled = false;
         if (anima) {
             _applyAnimaInpaintModeToUI(_normalizeInpaintMode(dom.selInpaintMode?.value, true));
-        }
-        if (dom.inpaintAnimaModelInfo) {
-            const unet = dom.selUnet?.selectedOptions?.[0]?.textContent || dom.selUnet?.value || '—';
-            const clip = dom.selClip?.selectedOptions?.[0]?.textContent || dom.selClip?.value || '—';
-            const vae = dom.selAnimaVae?.selectedOptions?.[0]?.textContent || dom.selAnimaVae?.value || '—';
-            dom.inpaintAnimaModelInfo.textContent = `UNET: ${unet} · CLIP: ${clip} · VAE: ${vae}`;
         }
     }
 
@@ -6393,7 +6394,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.00');
+        console.log('[ComfyUI Web] v4.01');
         await loadTags();
         renderHistory();
         setupTagPickers();

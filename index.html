@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v4.00</title>
-    <link rel="stylesheet" href="style.css?v=392">
+<title>ComfyUI Web v4.01</title>
+    <link rel="stylesheet" href="style.css?v=393">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.00</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.01</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -995,15 +995,15 @@
                     </section>
                     <section class="panel">
                         <h2>采样参数</h2>
-                        <div class="compact-row">
+                        <div class="compact-row" id="inpaint-row-sampler">
                             <label>采样器 <select id="sel-inpaint-sampler"></select></label>
                             <label>调度器 <select id="sel-inpaint-scheduler"></select></label>
                         </div>
-                        <div class="compact-row">
+                        <div class="compact-row hidden" id="inpaint-row-fixed">
                             <label>步数 <input type="number" id="inp-inpaint-steps" value="30" min="1" max="150"></label>
                             <label>CFG <input type="number" id="inp-inpaint-cfg" value="5.0" min="1" max="30" step="0.5"></label>
                         </div>
-                        <label>强度 <input type="number" id="inp-inpaint-denoise" value="0.55" min="0.1" max="1" step="0.01" title="实际强度会按模式自动限制"></label>
+                        <label id="inpaint-denoise-wrap" class="hidden">强度 <input type="number" id="inp-inpaint-denoise" value="0.55" min="0.1" max="1" step="0.01" title="实际强度会按模式自动限制"></label>
                         <label>重绘方案
                             <select id="sel-inpaint-mode" title="Anima 工作流两套方案：强化小范围 / 大范围重绘">
                                 <option value="small" selected>强化小范围</option>
@@ -1262,6 +1262,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=396"></script>
+    <script src="script.js?v=397"></script>
 </body>
 </html>
