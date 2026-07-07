@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI Web v3.78</title>
+<title>ComfyUI Web v3.90</title>
     <link rel="stylesheet" href="style.css?v=383">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.83</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v3.90</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -968,12 +968,30 @@
                         <p id="inpaint-model-note" class="inpaint-model-note hidden"></p>
                     </section>
                     <section class="panel">
+                        <h2>重绘引擎</h2>
+                        <p id="inpaint-engine-status" class="inpaint-engine-status">检测中…</p>
+                        <div id="inpaint-download-area" class="inpaint-download-area hidden">
+                            <p class="inpaint-download-hint">推荐安装 Fooocus Inpaint 组件</p>
+                            <button type="button" id="btn-inpaint-download" class="btn-secondary btn-inpaint-download">📥 一键下载 Inpaint 补丁</button>
+                            <p class="inpaint-download-manual">插件：ComfyUI Manager 搜索 <code>comfyui-inpaint-nodes</code>（作者 Acly）</p>
+                            <div id="inpaint-download-progress" class="inpaint-download-progress hidden">
+                                <div id="inpaint-progress-bar" class="inpaint-progress-bar"></div>
+                                <span id="inpaint-progress-text">准备下载…</span>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="inpaint-sdxl-panel" class="panel">
                         <h2>重绘模型</h2>
                         <label>SDXL 模型 <select id="sel-inpaint-checkpoint" title="局部重绘专用模型"></select></label>
                         <label class="inpaint-vae-row">
                             <input type="checkbox" id="chk-inpaint-vae"> 外挂 VAE
                             <select id="sel-inpaint-vae" disabled></select>
                         </label>
+                    </section>
+                    <section id="inpaint-anima-panel" class="panel hidden">
+                        <h2>Anima 模型</h2>
+                        <p id="inpaint-anima-model-info" class="inpaint-anima-model-info">跟随主界面 UNET / CLIP / VAE</p>
+                        <p class="inpaint-anima-hint">需安装 <code>ComfyUI-Anima-LLLite</code>；小范围修改推荐裁剪拼接引擎。</p>
                     </section>
                     <section class="panel">
                         <h2>采样参数</h2>
@@ -983,9 +1001,16 @@
                         </div>
                         <div class="compact-row">
                             <label>步数 <input type="number" id="inp-inpaint-steps" value="30" min="1" max="150"></label>
-                            <label>CFG <input type="number" id="inp-inpaint-cfg" value="5.5" min="1" max="30" step="0.5"></label>
+                            <label>CFG <input type="number" id="inp-inpaint-cfg" value="5.0" min="1" max="30" step="0.5"></label>
                         </div>
-                        <label>强度 <input type="number" id="inp-inpaint-denoise" value="0.55" min="0.1" max="0.95" step="0.01"></label>
+                        <label>强度 <input type="number" id="inp-inpaint-denoise" value="0.55" min="0.1" max="1" step="0.01" title="实际强度会按模式自动限制"></label>
+                        <label>重绘模式
+                            <select id="sel-inpaint-mode" title="微调保留原图；标准日常；强力大改">
+                                <option value="blend">微调 — 修细节、小改</option>
+                                <option value="standard" selected>标准 — 换衣服/去衣</option>
+                                <option value="replace">强力 — 蒙版内大改</option>
+                            </select>
+                        </label>
                     </section>
                     <section class="panel">
                         <h2>提示词</h2>
@@ -1239,6 +1264,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=383"></script>
+    <script src="script.js?v=386"></script>
 </body>
 </html>

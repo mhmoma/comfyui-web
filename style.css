@@ -1751,6 +1751,19 @@ body.inpaint-open {
     opacity: 0.5;
 }
 
+.inpaint-preserve-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 0.9em;
+}
+
+.inpaint-preserve-hint {
+    color: var(--text-muted, #888);
+    font-size: 0.85em;
+}
+
 .inpaint-run-btn {
     width: 100%;
     margin-top: 4px;
@@ -1814,6 +1827,71 @@ body.inpaint-open {
     font-size: 0.75rem;
     color: var(--accent);
     line-height: 1.45;
+}
+
+.inpaint-engine-status {
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin: 0 0 8px;
+    line-height: 1.45;
+}
+
+.inpaint-anima-model-info {
+    margin: 0 0 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted, #aaa);
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.inpaint-anima-hint {
+    margin: 0;
+    font-size: 0.72rem;
+    color: var(--text-muted, #888);
+    line-height: 1.4;
+}
+
+.inpaint-anima-hint code {
+    font-size: 0.7rem;
+}
+
+.inpaint-download-area {
+    margin-top: 6px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.inpaint-download-hint {
+    font-size: 0.75rem;
+    margin: 0 0 8px;
+    color: var(--text-muted, #aaa);
+    line-height: 1.4;
+}
+
+.inpaint-download-manual {
+    font-size: 0.7rem;
+    margin: 8px 0 0;
+    color: var(--text-muted, #888);
+    line-height: 1.4;
+}
+
+.btn-inpaint-download {
+    width: 100%;
+}
+
+.inpaint-download-progress {
+    margin-top: 8px;
+}
+
+.inpaint-progress-bar {
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0;
+    transition: width 0.3s;
+    margin-bottom: 4px;
 }
 
 .inpaint-viewport {

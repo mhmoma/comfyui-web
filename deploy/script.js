@@ -191,12 +191,22 @@
         btnInpaintSidebarToggle: $('#btn-inpaint-sidebar-toggle'),
         selInpaintCheckpoint: $('#sel-inpaint-checkpoint'),
         chkInpaintVae: $('#chk-inpaint-vae'),
+        selInpaintMode: $('#sel-inpaint-mode'),
+        inpaintEngineStatus: $('#inpaint-engine-status'),
+        inpaintDownloadArea: $('#inpaint-download-area'),
+        btnInpaintDownload: $('#btn-inpaint-download'),
+        inpaintDownloadProgress: $('#inpaint-download-progress'),
+        inpaintProgressText: $('#inpaint-progress-text'),
+        inpaintProgressBar: $('#inpaint-progress-bar'),
         selInpaintVae: $('#sel-inpaint-vae'),
         inpInpaintSteps: $('#inp-inpaint-steps'),
         inpInpaintCfg: $('#inp-inpaint-cfg'),
         selInpaintSampler: $('#sel-inpaint-sampler'),
         selInpaintScheduler: $('#sel-inpaint-scheduler'),
         inpaintModelNote: $('#inpaint-model-note'),
+        inpaintSdxlPanel: $('#inpaint-sdxl-panel'),
+        inpaintAnimaPanel: $('#inpaint-anima-panel'),
+        inpaintAnimaModelInfo: $('#inpaint-anima-model-info'),
         // Config profiles
         selProfileQuick: $('#sel-profile-quick'),
         selProfile: $('#sel-profile'),
@@ -1456,6 +1466,8 @@
                 dom.selCheckpoint.appendChild(opt);
             });
             syncInpaintModelOptions();
+            _inpaintPreferCheckpoint(dom.selInpaintCheckpoint);
+            updateInpaintEngineUI();
         } catch (e) {
             dom.selCheckpoint.innerHTML = '<option>加载失败 - 检查连接</option>';
             console.error('加载模型列表失败:', e);
@@ -1873,6 +1885,7 @@
                 speedupCheckbox.checked = false;
             }
         }
+        _inpaintUpdateArchPanels();
     }
 
     // ==================== 动态工作流构建 ====================
@@ -2406,14 +2419,355 @@
 
     const INPAINT_MODEL_DEFAULTS = {
         steps: 30,
-        cfg: 5.5,
-        sampler: 'dpmpp_2m',
-        scheduler: 'karras',
+        cfg: 5.0,
+        sampler: 'euler',
+        scheduler: 'normal',
         clipSkip: 2,
         useVae: false,
     };
+    const INPAINT_BLEND_POS = 'same character, same pose, seamless blend, consistent skin tone, consistent lighting';
+    const INPAINT_BLEND_NEG = 'different person, different face, style change, inconsistent lighting, harsh seam, color mismatch';
+    const INPAINT_MODE_DENOISE = {
+        blend: { max: 0.52, min: 0.35, cfgMax: 4.5 },
+        standard: { min: 0.55, max: 0.72, cfgMax: 5.5 },
+        replace: { min: 0.82, max: 1.0, cfgMax: 6.0 },
+    };
+    const INPAINT_ANIMA_MODE_DENOISE = {
+        blend: { max: 0.52, min: 0.4, cfgMax: 3.5 },
+        standard: { min: 0.5, max: 0.58, cfgMax: 4.5 },
+        replace: { min: 0.65, max: 0.78, cfgMax: 5.0 },
+    };
+    const INPAINT_ANIMA_LLLITE = {
+        filename: 'anima-lllite-inpainting-v2.safetensors',
+        url: 'https://huggingface.co/kohya-ss/Anima-LLLite/resolve/main/anima-lllite-inpainting-v2.safetensors',
+        save_path: 'controlnet',
+        strength: 0.8,
+        startPercent: 0,
+        endPercent: 0.8,
+    };
+    const INPAINT_FOOOCUS_DOWNLOADS = [
+        {
+            url: 'https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/inpaint_v26.fooocus.patch',
+            filename: 'inpaint_v26.fooocus.patch',
+            save_path: 'inpaint',
+            size: '~350MB',
+        },
+        {
+            url: 'https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/fooocus_inpaint_head.pth',
+            filename: 'fooocus_inpaint_head.pth',
+            save_path: 'inpaint',
+            size: '~50MB',
+        },
+    ];
+
+    function _inpaintWithBlend(positive, negative, inpaintMode) {
+        if (inpaintMode === 'replace') return { positive: positive || '', negative: negative || '' };
+        const p = positive ? `${positive}, ${INPAINT_BLEND_POS}` : INPAINT_BLEND_POS;
+        const n = negative ? `${negative}, ${INPAINT_BLEND_NEG}` : INPAINT_BLEND_NEG;
+        return { positive: p, negative: n };
+    }
+
+    function _inpaintResolveDenoise(inpaintMode, userDenoise, engine) {
+        const d = parseFloat(userDenoise);
+        const base = Number.isFinite(d) ? d : 0.55;
+        const rules = INPAINT_MODE_DENOISE[inpaintMode] || INPAINT_MODE_DENOISE.standard;
+        let out = base;
+        if (rules.min !== undefined) out = Math.max(out, rules.min);
+        if (rules.max !== undefined) out = Math.min(out, rules.max);
+        if (inpaintMode === 'replace' && engine === 'fooocus') out = Math.max(out, 0.88);
+        return Math.round(out * 100) / 100;
+    }
+
+    function _inpaintResolveCfg(inpaintMode, userCfg) {
+        const cfg = parseFloat(userCfg);
+        const base = Number.isFinite(cfg) ? cfg : INPAINT_MODEL_DEFAULTS.cfg;
+        const cap = (INPAINT_MODE_DENOISE[inpaintMode] || INPAINT_MODE_DENOISE.standard).cfgMax;
+        return cap ? Math.min(base, cap) : base;
+    }
+
     const INPAINT_SETTINGS_KEY = 'comfyui_inpaint_settings';
     const INPAINT_SIDEBAR_KEY = 'comfyui_inpaint_sidebar_collapsed';
+    let _inpaintNodes = null;
+
+    function _inpaintListFromObjectInfo(entry) {
+        if (!entry) return [];
+        const raw = Array.isArray(entry) ? entry[0] : entry;
+        return Array.isArray(raw) ? raw.map(String) : [];
+    }
+
+    async function _checkInpaintNodes(force) {
+        if (_inpaintNodes && !force) return _inpaintNodes;
+        const nodes = {
+            conditioning: false,
+            loadImageMask: false,
+            differential: false,
+            vaeEncodeForInpaint: false,
+            composite: false,
+            fooocus: false,
+            fooocusRefine: false,
+            fooocusFiles: false,
+            fooocusHead: 'fooocus_inpaint_head.pth',
+            fooocusPatch: 'inpaint_v26.fooocus.patch',
+            fooocusHeadKey: 'head',
+            fooocusPatchKey: 'patch',
+        };
+        const checks = [
+            ['conditioning', 'InpaintModelConditioning'],
+            ['loadImageMask', 'LoadImageMask'],
+            ['differential', 'DifferentialDiffusion'],
+            ['vaeEncodeForInpaint', 'VAEEncodeForInpaint'],
+            ['composite', 'ImageCompositeMasked'],
+            ['fooocus', 'INPAINT_LoadFooocusInpaint'],
+            ['fooocusRefine', 'INPAINT_VAEEncodeInpaintConditioning'],
+            ['animaLLLite', 'AnimaLLLiteApply'],
+            ['inpaintPreprocessor', 'InpaintPreprocessor'],
+            ['inpaintCrop', 'InpaintCropImproved'],
+            ['inpaintStitch', 'InpaintStitchImproved'],
+            ['maskFix', 'MaskFix+'],
+            ['flsSampler', 'FLS_SamplerV4'],
+        ];
+        await Promise.all(checks.map(async ([key, nodeName]) => {
+            try {
+                const data = await apiGet('/object_info/' + nodeName);
+                nodes[key] = !!data?.[nodeName];
+            } catch {
+                nodes[key] = false;
+            }
+        }));
+        if (nodes.fooocus) {
+            try {
+                const data = await apiGet('/object_info/INPAINT_LoadFooocusInpaint');
+                const req = data?.INPAINT_LoadFooocusInpaint?.input?.required || {};
+                const keys = Object.keys(req);
+                if (keys[0]) nodes.fooocusHeadKey = keys[0];
+                if (keys[1]) nodes.fooocusPatchKey = keys[1];
+                const all = keys.flatMap(k => _inpaintListFromObjectInfo(req[k]));
+                const head = all.find(f => /fooocus_inpaint_head/i.test(f));
+                const patch = all.find(f => /inpaint_v26\.fooocus\.patch/i.test(f));
+                if (head) nodes.fooocusHead = head;
+                if (patch) nodes.fooocusPatch = patch;
+                nodes.fooocusFiles = !!(head && patch);
+            } catch { /* ignore */ }
+        }
+        nodes.llliteInpaintFile = INPAINT_ANIMA_LLLITE.filename;
+        nodes.llliteFileReady = false;
+        if (nodes.animaLLLite) {
+            try {
+                const data = await apiGet('/object_info/AnimaLLLiteApply');
+                const req = data?.AnimaLLLiteApply?.input?.required || {};
+                const opt = data?.AnimaLLLiteApply?.input?.optional || {};
+                const llliteKey = Object.keys(req).find(k => /lllite/i.test(k)) || 'lllite_name';
+                const all = [
+                    ..._inpaintListFromObjectInfo(req[llliteKey]),
+                    ..._inpaintListFromObjectInfo(opt[llliteKey]),
+                    ..._inpaintListFromObjectInfo(req.lllite_name),
+                    ..._inpaintListFromObjectInfo(opt.lllite_name),
+                ];
+                const file = all.find(f => /lllite-inpainting-v2/i.test(f))
+                    || all.find(f => /lllite-inpainting/i.test(f))
+                    || all.find(f => /inpainting/i.test(f));
+                if (file) nodes.llliteInpaintFile = file;
+                nodes.llliteFileReady = all.some(f => /lllite-inpainting/i.test(f));
+            } catch { /* ignore */ }
+        }
+        _inpaintNodes = nodes;
+        return nodes;
+    }
+
+    function _inpaintResolveAnimaEngine(nodes, inpaintMode) {
+        if (!nodes.animaLLLite || !nodes.inpaintPreprocessor) return null;
+        if (nodes.inpaintCrop && nodes.inpaintStitch && inpaintMode !== 'replace') return 'lllite-crop';
+        return 'lllite-full';
+    }
+
+    function _inpaintResolveAnimaDenoise(inpaintMode, userDenoise) {
+        const d = parseFloat(userDenoise);
+        const base = Number.isFinite(d) ? d : 0.55;
+        const rules = INPAINT_ANIMA_MODE_DENOISE[inpaintMode] || INPAINT_ANIMA_MODE_DENOISE.standard;
+        let out = base;
+        if (rules.min !== undefined) out = Math.max(out, rules.min);
+        if (rules.max !== undefined) out = Math.min(out, rules.max);
+        return Math.round(out * 100) / 100;
+    }
+
+    function _inpaintResolveAnimaCfg(inpaintMode, userCfg) {
+        const cfg = parseFloat(userCfg);
+        const base = Number.isFinite(cfg) ? cfg : ANIMA_DEFAULTS.cfg;
+        const cap = (INPAINT_ANIMA_MODE_DENOISE[inpaintMode] || INPAINT_ANIMA_MODE_DENOISE.standard).cfgMax;
+        return Math.min(base, cap);
+    }
+
+    function _inpaintUpdateArchPanels() {
+        const anima = isAnimaMode();
+        dom.inpaintSdxlPanel?.classList.toggle('hidden', anima);
+        dom.inpaintAnimaPanel?.classList.toggle('hidden', !anima);
+        if (anima && dom.inpaintAnimaModelInfo) {
+            const unet = dom.selUnet?.selectedOptions?.[0]?.textContent || dom.selUnet?.value || '—';
+            const clip = dom.selClip?.selectedOptions?.[0]?.textContent || dom.selClip?.value || '—';
+            const vae = dom.selAnimaVae?.selectedOptions?.[0]?.textContent || dom.selAnimaVae?.value || '—';
+            dom.inpaintAnimaModelInfo.textContent = `UNET: ${unet} · CLIP: ${clip} · VAE: ${vae}`;
+        }
+    }
+
+    function _inpaintResolveEngine(nodes) {
+        if (nodes.fooocus && nodes.fooocusFiles && nodes.vaeEncodeForInpaint) return 'fooocus';
+        if (nodes.differential && nodes.conditioning) return 'differential';
+        if (nodes.conditioning) return 'native';
+        return 'latent-mask';
+    }
+
+    function _inpaintPreferCheckpoint(selectEl) {
+        if (!selectEl || selectEl.options.length < 1) return;
+        const opts = [...selectEl.options].map(o => o.value);
+        const prefer = opts.find(n => /inpaint/i.test(n))
+            || opts.find(n => /juggernaut|pony|illustrious|noob|xl/i.test(n))
+            || opts[0];
+        if (prefer && selectEl.value !== prefer) selectEl.value = prefer;
+    }
+
+    async function updateInpaintEngineUI() {
+        const nodes = await _checkInpaintNodes();
+        _inpaintUpdateArchPanels();
+
+        if (isAnimaMode()) {
+            const engine = _inpaintResolveAnimaEngine(nodes, dom.selInpaintMode?.value || 'standard');
+            const labels = {
+                'lllite-crop': 'Anima LLLite · 裁剪拼接（推荐）',
+                'lllite-full': 'Anima LLLite · 全图重绘',
+            };
+            if (dom.inpaintEngineStatus) {
+                if (!engine) {
+                    dom.inpaintEngineStatus.textContent = '引擎：需安装 ComfyUI-Anima-LLLite + controlnet_aux';
+                } else {
+                    let status = `引擎：${labels[engine] || engine}`;
+                    status += nodes.llliteFileReady ? ' · 已就绪' : ' · 需下载 LLLite 权重';
+                    dom.inpaintEngineStatus.textContent = status;
+                }
+            }
+            const needSetup = !nodes.animaLLLite || !nodes.llliteFileReady;
+            dom.inpaintDownloadArea?.classList.toggle('hidden', !needSetup);
+            if (needSetup && dom.inpaintDownloadArea) {
+                const hint = dom.inpaintDownloadArea.querySelector('.inpaint-download-hint');
+                if (hint) {
+                    if (!nodes.animaLLLite) {
+                        hint.textContent = '在 Manager 安装 ComfyUI-Anima-LLLite 与 comfyui_controlnet_aux';
+                    } else {
+                        hint.textContent = '点击下载 anima-lllite-inpainting-v2 到 models/controlnet/';
+                    }
+                }
+                const manual = dom.inpaintDownloadArea.querySelector('.inpaint-download-manual');
+                if (manual) {
+                    manual.innerHTML = '插件：<code>ComfyUI-Anima-LLLite</code>、<code>comfyui_controlnet_aux</code>；小范围可选 <code>comfyui-inpaint-cropandstitch</code>';
+                }
+                const btn = dom.btnInpaintDownload;
+                if (btn) btn.textContent = '📥 下载 Anima LLLite Inpaint';
+            }
+            return;
+        }
+
+        const engine = _inpaintResolveEngine(nodes);
+        const labels = {
+            fooocus: 'Fooocus Inpaint（推荐）',
+            differential: 'Differential Diffusion',
+            native: '基础 Inpaint',
+            'latent-mask': '兼容模式',
+        };
+        if (dom.inpaintEngineStatus) {
+            let status = `引擎：${labels[engine] || engine}`;
+            if (engine === 'fooocus') status += ' · 已就绪';
+            else if (engine === 'latent-mask') status += ' · 效果有限';
+            else status += ' · 建议安装 Fooocus 组件';
+            dom.inpaintEngineStatus.textContent = status;
+        }
+        const needSetup = !nodes.fooocus || !nodes.fooocusFiles;
+        dom.inpaintDownloadArea?.classList.toggle('hidden', !needSetup);
+        if (needSetup && dom.inpaintDownloadArea) {
+            const hint = dom.inpaintDownloadArea.querySelector('.inpaint-download-hint');
+            if (hint) {
+                if (!nodes.fooocus) {
+                    hint.textContent = '推荐：在 ComfyUI Manager 安装 comfyui-inpaint-nodes，再一键下载补丁';
+                } else {
+                    hint.textContent = '已检测到插件，点击下载 Fooocus Inpaint 补丁文件';
+                }
+            }
+            const manual = dom.inpaintDownloadArea.querySelector('.inpaint-download-manual');
+            if (manual) {
+                manual.innerHTML = '插件：ComfyUI Manager 搜索 <code>comfyui-inpaint-nodes</code>（作者 Acly）';
+            }
+            const btn = dom.btnInpaintDownload;
+            if (btn) btn.textContent = '📥 一键下载 Inpaint 补丁';
+        }
+    }
+
+    async function downloadInpaintAssets() {
+        if (!dom.btnInpaintDownload) return;
+        dom.btnInpaintDownload.disabled = true;
+        dom.inpaintDownloadProgress?.classList.remove('hidden');
+        const anima = isAnimaMode();
+        if (dom.inpaintProgressText) {
+            dom.inpaintProgressText.textContent = anima
+                ? '正在下载 Anima LLLite Inpaint 权重...'
+                : '正在下载 Fooocus Inpaint 补丁...';
+        }
+        if (dom.inpaintProgressBar) dom.inpaintProgressBar.style.width = '8%';
+        try {
+            const downloads = anima
+                ? [{
+                    url: INPAINT_ANIMA_LLLITE.url,
+                    filename: INPAINT_ANIMA_LLLITE.filename,
+                    save_path: INPAINT_ANIMA_LLLITE.save_path,
+                }]
+                : INPAINT_FOOOCUS_DOWNLOADS;
+            for (const dl of downloads) {
+                const res = await fetch(`${getServer()}/api/install-model`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: dl.url, filename: dl.filename, save_path: dl.save_path }),
+                });
+                if (!res.ok) throw new Error(`下载失败: ${dl.filename}`);
+            }
+            if (dom.inpaintProgressBar) dom.inpaintProgressBar.style.width = '35%';
+            let attempts = 0;
+            await new Promise((resolve, reject) => {
+                const timer = setInterval(async () => {
+                    attempts++;
+                    if (dom.inpaintProgressBar) {
+                        dom.inpaintProgressBar.style.width = `${Math.min(92, 35 + attempts * 3)}%`;
+                    }
+                    try {
+                        await _checkInpaintNodes(true);
+                        const ready = anima ? _inpaintNodes?.llliteFileReady : _inpaintNodes?.fooocusFiles;
+                        if (ready) {
+                            clearInterval(timer);
+                            resolve();
+                        }
+                    } catch { /* retry */ }
+                    if (attempts > 120) {
+                        clearInterval(timer);
+                        reject(new Error('下载超时'));
+                    }
+                }, 5000);
+            });
+            if (dom.inpaintProgressBar) dom.inpaintProgressBar.style.width = '100%';
+            if (dom.inpaintProgressText) {
+                dom.inpaintProgressText.textContent = anima
+                    ? 'LLLite 权重就绪！请重启 ComfyUI 后使用'
+                    : '补丁就绪！请重启 ComfyUI 后使用';
+            }
+            await updateInpaintEngineUI();
+            setTimeout(() => dom.inpaintDownloadProgress?.classList.add('hidden'), 2500);
+        } catch (e) {
+            console.warn('[Inpaint] download failed:', e);
+            if (dom.inpaintProgressText) {
+                dom.inpaintProgressText.textContent = anima
+                    ? '下载失败：请安装 ComfyUI-Anima-LLLite，并手动将权重放到 models/controlnet/'
+                    : '自动下载失败：请在 Manager 安装 comfyui-inpaint-nodes，并手动下载补丁到 models/inpaint/';
+            }
+            setTimeout(() => dom.inpaintDownloadProgress?.classList.add('hidden'), 5000);
+        } finally {
+            dom.btnInpaintDownload.disabled = false;
+        }
+    }
 
     function _inpaintSetSidebarCollapsed(collapsed) {
         if (!dom.inpaintSidebar) return;
@@ -2470,6 +2824,7 @@
             sampler: dom.selInpaintSampler?.value || INPAINT_MODEL_DEFAULTS.sampler,
             scheduler: dom.selInpaintScheduler?.value || INPAINT_MODEL_DEFAULTS.scheduler,
             denoise: parseFloat(dom.inpInpaintDenoise?.value || '0.45'),
+            inpaintMode: dom.selInpaintMode?.value || 'standard',
         };
     }
 
@@ -2490,6 +2845,11 @@
         if (data.sampler && dom.selInpaintSampler) dom.selInpaintSampler.value = data.sampler;
         if (data.scheduler && dom.selInpaintScheduler) dom.selInpaintScheduler.value = data.scheduler;
         if (data.denoise && dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(data.denoise);
+        if (dom.selInpaintMode) {
+            if (data.inpaintMode) dom.selInpaintMode.value = data.inpaintMode;
+            else if (data.preserveBlend === false) dom.selInpaintMode.value = 'replace';
+            else if (data.preserveBlend === true) dom.selInpaintMode.value = 'blend';
+        }
     }
 
     function saveInpaintSettings() {
@@ -2510,16 +2870,18 @@
         if (dom.selCheckpoint?.value && dom.selInpaintCheckpoint) {
             dom.selInpaintCheckpoint.value = dom.selCheckpoint.value;
         }
-        if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(INPAINT_MODEL_DEFAULTS.steps);
-        if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(INPAINT_MODEL_DEFAULTS.cfg);
-        if (dom.selInpaintSampler) dom.selInpaintSampler.value = INPAINT_MODEL_DEFAULTS.sampler;
-        if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_MODEL_DEFAULTS.scheduler;
+        _inpaintPreferCheckpoint(dom.selInpaintCheckpoint);
+        const defs = isAnimaMode() ? ANIMA_DEFAULTS : INPAINT_MODEL_DEFAULTS;
+        if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(defs.steps);
+        if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(defs.cfg);
+        if (dom.selInpaintSampler) dom.selInpaintSampler.value = defs.sampler;
+        if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = defs.scheduler;
     }
 
     function updateInpaintModelNote() {
         if (!dom.inpaintModelNote) return;
         if (isAnimaMode()) {
-            dom.inpaintModelNote.textContent = '当前主界面为 Anima 架构；局部重绘固定使用下方 SDXL 模型，不继承 Anima / LoRA / 加速设置。';
+            dom.inpaintModelNote.textContent = 'Anima 模式：使用主界面 UNET / CLIP / VAE 与 LLLite Inpaint 引擎；不继承 LoRA、Turbo 等模块。';
             dom.inpaintModelNote.classList.remove('hidden');
         } else {
             dom.inpaintModelNote.textContent = '局部重绘使用独立 SDXL 模型与采样参数，不继承主界面的 LoRA / FreeU 等模块。';
@@ -2559,10 +2921,10 @@
             denoise: 0.50,
         },
         nude: {
-            hint: '涂抹衣物区域（比基尼、内衣、裙子等）。只涂要露出的皮肤范围，避开脸和背景。',
-            positive: 'nude, naked, bare skin, detailed skin, smooth skin, natural body, anatomically correct, high detail',
-            negative: 'clothes, clothing, underwear, bra, panties, bikini, swimsuit, fabric, strap, deformed, bad anatomy, blurry, censored',
-            denoise: 0.65,
+            hint: '只涂衣物。模式选「标准」或「强力」；Fooocus 引擎就绪后效果最好。',
+            positive: 'bare skin, nude, natural skin texture, nipples, anatomically correct, seamless skin',
+            negative: 'clothes, clothing, underwear, bra, panties, bikini, swimsuit, fabric, strap, censored, mosaic, deformed',
+            denoise: 0.62,
         },
         pubic_hairless: {
             hint: '只涂耻骨/下体毛发区域。用于去阴毛、修整体毛，范围尽量贴毛发边缘。',
@@ -2620,87 +2982,166 @@
         },
     };
 
-    function buildInpaintWorkflow(inpaintOpts) {
-        const { baseImageName, maskImageName, positive, negative, denoise } = inpaintOpts;
+    function buildAnimaInpaintWorkflow(inpaintOpts) {
+        const { baseImageName, maskImageName, denoise } = inpaintOpts;
+        const inpaintMode = inpaintOpts.inpaintMode || 'standard';
+        const nodes = _inpaintNodes || {};
+        const animaEngine = _inpaintResolveAnimaEngine(nodes, inpaintMode);
+        if (!animaEngine) {
+            throw new Error('Anima 重绘需要 ComfyUI-Anima-LLLite 与 InpaintPreprocessor 节点');
+        }
+        if (!nodes.llliteFileReady) {
+            throw new Error('请下载 anima-lllite-inpainting-v2 到 models/controlnet/');
+        }
+
+        const blended = _inpaintWithBlend(inpaintOpts.positive, inpaintOpts.negative, inpaintMode);
+        const positive = blended.positive;
+        let negative = blended.negative;
+        if (!negative.trim()) negative = ANIMA_DEFAULTS.negative;
+
         const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
+        const effectiveDenoise = _inpaintResolveAnimaDenoise(inpaintMode, denoise);
+        const effectiveCfg = _inpaintResolveAnimaCfg(inpaintMode, modelCfg.cfg);
+        const steps = modelCfg.steps || ANIMA_DEFAULTS.steps;
+        const samplerName = modelCfg.sampler || 'euler_ancestral';
+        const scheduler = modelCfg.scheduler || 'beta57';
+
         const seed = parseInt(dom.inpSeed.value);
         let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
         if (inpaintOpts.seedOverride !== undefined && inpaintOpts.seedOverride !== null) {
             actualSeed = inpaintOpts.seedOverride;
         }
-        const nodes = {};
+
+        const unetName = dom.selUnet?.value;
+        const clipName = dom.selClip?.value;
+        const vaeName = dom.selAnimaVae?.value;
+        if (!unetName) throw new Error('请先选择 Anima UNET 模型');
+        if (!clipName) throw new Error('请先选择 Anima CLIP 模型');
+        if (!vaeName) throw new Error('请先选择 Anima VAE');
+
+        const wf = {};
         let nextId = 10;
         const id = () => String(nextId++);
 
-        const ckptName = modelCfg.checkpoint || dom.selInpaintCheckpoint?.value || dom.selCheckpoint?.value;
-        if (!ckptName) throw new Error('请先选择局部重绘用的 SDXL 模型');
+        const unetId = id();
+        wf[unetId] = { class_type: 'UNETLoader', inputs: { unet_name: unetName, weight_dtype: 'default' } };
+        let modelOut = [unetId, 0];
 
-        const ckptId = id();
-        nodes[ckptId] = { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckptName } };
-        let modelOut = [ckptId, 0];
-        let clipOut = [ckptId, 1];
-        let vaeOut = [ckptId, 2];
+        const clipId = id();
+        wf[clipId] = { class_type: 'CLIPLoader', inputs: { clip_name: clipName, type: 'qwen_image' } };
+        const clipOut = [clipId, 0];
 
-        if (modelCfg.useVae && modelCfg.vae) {
-            const vaeId = id();
-            nodes[vaeId] = { class_type: "VAELoader", inputs: { vae_name: modelCfg.vae } };
-            vaeOut = [vaeId, 0];
-        }
-
-        const clipSkip = INPAINT_MODEL_DEFAULTS.clipSkip;
-        if (clipSkip > 1) {
-            const csId = id();
-            nodes[csId] = { class_type: "CLIPSetLastLayer", inputs: { clip: clipOut, stop_at_clip_layer: -clipSkip } };
-            clipOut = [csId, 0];
-        }
+        const vaeId = id();
+        wf[vaeId] = { class_type: 'VAELoader', inputs: { vae_name: vaeName } };
+        const vaeOut = [vaeId, 0];
 
         const posId = id();
-        nodes[posId] = {
-            class_type: "CLIPTextEncode",
-            inputs: { text: resolveWildcards(positive || ''), clip: clipOut },
-        };
+        wf[posId] = { class_type: 'CLIPTextEncode', inputs: { text: resolveWildcards(positive || ''), clip: clipOut } };
         const negId = id();
-        nodes[negId] = {
-            class_type: "CLIPTextEncode",
-            inputs: { text: resolveWildcards(negative || ''), clip: clipOut },
-        };
+        wf[negId] = { class_type: 'CLIPTextEncode', inputs: { text: resolveWildcards(negative || ''), clip: clipOut } };
 
         const baseLoadId = id();
-        nodes[baseLoadId] = { class_type: "LoadImage", inputs: { image: baseImageName } };
-        const maskLoadId = id();
-        nodes[maskLoadId] = { class_type: "LoadImage", inputs: { image: maskImageName } };
-        const maskConvertId = id();
-        nodes[maskConvertId] = {
-            class_type: "ImageToMask",
-            inputs: { image: [maskLoadId, 0], channel: "red" },
-        };
+        wf[baseLoadId] = { class_type: 'LoadImage', inputs: { image: baseImageName } };
+
+        let maskSource;
+        if (nodes.loadImageMask) {
+            const maskLoadId = id();
+            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName } };
+            maskSource = [maskLoadId, 0];
+        } else {
+            const maskLoadId = id();
+            wf[maskLoadId] = { class_type: 'LoadImage', inputs: { image: maskImageName } };
+            const maskConvertId = id();
+            wf[maskConvertId] = { class_type: 'ImageToMask', inputs: { image: [maskLoadId, 0], channel: 'red' } };
+            maskSource = [maskConvertId, 0];
+        }
+
+        let maskProcessed = maskSource;
+        if (nodes.maskFix) {
+            const fixId = id();
+            wf[fixId] = {
+                class_type: 'MaskFix+',
+                inputs: {
+                    mask: maskSource,
+                    erode_dilate: 0,
+                    fill_holes: 0,
+                    remove_isolated_pixels: 0,
+                    smooth: 0,
+                    blur: 0,
+                },
+            };
+            maskProcessed = [fixId, 0];
+        }
+
+        const useCrop = animaEngine === 'lllite-crop';
+        let workImage;
+        let workMask;
+        let stitcherRef = null;
+
+        if (useCrop) {
+            const cropId = id();
+            wf[cropId] = {
+                class_type: 'InpaintCropImproved',
+                inputs: {
+                    image: [baseLoadId, 0],
+                    mask: maskProcessed,
+                    context_from_mask_extend_factor: 1.2,
+                    mask_fill_holes: true,
+                    mask_blend_pixels: 32,
+                    output_resize_to_target_size: true,
+                    output_target_width: 1536,
+                    output_target_height: 1536,
+                },
+            };
+            workImage = [cropId, 1];
+            workMask = [cropId, 2];
+            stitcherRef = [cropId, 0];
+        } else {
+            workImage = [baseLoadId, 0];
+            workMask = maskProcessed;
+        }
 
         const vaeEncId = id();
-        nodes[vaeEncId] = {
-            class_type: "VAEEncode",
-            inputs: { pixels: [baseLoadId, 0], vae: vaeOut },
-        };
-        const maskGrowId = id();
-        nodes[maskGrowId] = {
-            class_type: "GrowMask",
-            inputs: { mask: [maskConvertId, 0], expand: 6, tapered_corners: true },
-        };
+        wf[vaeEncId] = { class_type: 'VAEEncode', inputs: { pixels: workImage, vae: vaeOut } };
         const latentMaskId = id();
-        nodes[latentMaskId] = {
-            class_type: "SetLatentNoiseMask",
-            inputs: { samples: [vaeEncId, 0], mask: [maskGrowId, 0] },
+        wf[latentMaskId] = { class_type: 'SetLatentNoiseMask', inputs: { samples: [vaeEncId, 0], mask: workMask } };
+
+        const preprocId = id();
+        wf[preprocId] = {
+            class_type: 'InpaintPreprocessor',
+            inputs: {
+                image: workImage,
+                mask: workMask,
+                black_pixel_for_xinsir_cn: true,
+            },
         };
 
+        const llliteId = id();
+        wf[llliteId] = {
+            class_type: 'AnimaLLLiteApply',
+            inputs: {
+                model: modelOut,
+                lllite_name: nodes.llliteInpaintFile,
+                image: [preprocId, 0],
+                strength: INPAINT_ANIMA_LLLITE.strength,
+                start_percent: INPAINT_ANIMA_LLLITE.startPercent,
+                end_percent: INPAINT_ANIMA_LLLITE.endPercent,
+                preserve_wrapper: true,
+                mask: workMask,
+            },
+        };
+        modelOut = [llliteId, 0];
+
         const samplerId = id();
-        nodes[samplerId] = {
-            class_type: "KSampler",
+        wf[samplerId] = {
+            class_type: 'KSampler',
             inputs: {
                 seed: actualSeed,
-                steps: modelCfg.steps || INPAINT_MODEL_DEFAULTS.steps,
-                cfg: modelCfg.cfg || INPAINT_MODEL_DEFAULTS.cfg,
-                sampler_name: modelCfg.sampler || INPAINT_MODEL_DEFAULTS.sampler,
-                scheduler: modelCfg.scheduler || INPAINT_MODEL_DEFAULTS.scheduler,
-                denoise: denoise,
+                steps,
+                cfg: effectiveCfg,
+                sampler_name: samplerName,
+                scheduler,
+                denoise: effectiveDenoise,
                 model: modelOut,
                 positive: [posId, 0],
                 negative: [negId, 0],
@@ -2709,14 +3150,249 @@
         };
 
         const decodeId = id();
-        nodes[decodeId] = { class_type: "VAEDecode", inputs: { samples: [samplerId, 0], vae: vaeOut } };
+        wf[decodeId] = { class_type: 'VAEDecode', inputs: { samples: [samplerId, 0], vae: vaeOut } };
+
+        let finalImage = [decodeId, 0];
+        if (useCrop && stitcherRef) {
+            const stitchId = id();
+            wf[stitchId] = {
+                class_type: 'InpaintStitchImproved',
+                inputs: {
+                    stitcher: stitcherRef,
+                    inpainted_image: [decodeId, 0],
+                },
+            };
+            finalImage = [stitchId, 0];
+        } else if (nodes.composite) {
+            const compositeId = id();
+            wf[compositeId] = {
+                class_type: 'ImageCompositeMasked',
+                inputs: {
+                    destination: [baseLoadId, 0],
+                    source: [decodeId, 0],
+                    mask: maskProcessed,
+                    x: 0,
+                    y: 0,
+                    resize_source: false,
+                },
+            };
+            finalImage = [compositeId, 0];
+        }
+
         const saveId = id();
-        nodes[saveId] = {
-            class_type: "SaveImage",
-            inputs: { filename_prefix: "ComfyUI_Web", images: [decodeId, 0] },
+        wf[saveId] = { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI_Web', images: finalImage } };
+
+        return {
+            prompt: wf,
+            actualSeed,
+            effectiveDenoise,
+            effectiveCfg,
+            engine: animaEngine,
+            inpaintMode,
+        };
+    }
+
+    function buildInpaintWorkflow(inpaintOpts) {
+        if (isAnimaMode()) {
+            return buildAnimaInpaintWorkflow(inpaintOpts);
+        }
+        const { baseImageName, maskImageName, denoise } = inpaintOpts;
+        const inpaintMode = inpaintOpts.inpaintMode || 'standard';
+        const nodes = _inpaintNodes || {};
+        const engine = _inpaintResolveEngine(nodes);
+        const blended = _inpaintWithBlend(inpaintOpts.positive, inpaintOpts.negative, inpaintMode);
+        const positive = blended.positive;
+        const negative = blended.negative;
+        const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
+        const effectiveDenoise = _inpaintResolveDenoise(inpaintMode, denoise, engine);
+        const effectiveCfg = _inpaintResolveCfg(inpaintMode, modelCfg.cfg);
+        const seed = parseInt(dom.inpSeed.value);
+        let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
+        if (inpaintOpts.seedOverride !== undefined && inpaintOpts.seedOverride !== null) {
+            actualSeed = inpaintOpts.seedOverride;
+        }
+        const wf = {};
+        let nextId = 10;
+        const id = () => String(nextId++);
+
+        const ckptName = modelCfg.checkpoint || dom.selInpaintCheckpoint?.value || dom.selCheckpoint?.value;
+        if (!ckptName) throw new Error('请先选择局部重绘用的 SDXL 模型');
+
+        const ckptId = id();
+        wf[ckptId] = { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: ckptName } };
+        let modelOut = [ckptId, 0];
+        let clipOut = [ckptId, 1];
+        let vaeOut = [ckptId, 2];
+
+        if (modelCfg.useVae && modelCfg.vae) {
+            const vaeId = id();
+            wf[vaeId] = { class_type: 'VAELoader', inputs: { vae_name: modelCfg.vae } };
+            vaeOut = [vaeId, 0];
+        }
+
+        if (INPAINT_MODEL_DEFAULTS.clipSkip > 1) {
+            const csId = id();
+            wf[csId] = { class_type: 'CLIPSetLastLayer', inputs: { clip: clipOut, stop_at_clip_layer: -INPAINT_MODEL_DEFAULTS.clipSkip } };
+            clipOut = [csId, 0];
+        }
+
+        const posId = id();
+        wf[posId] = { class_type: 'CLIPTextEncode', inputs: { text: resolveWildcards(positive || ''), clip: clipOut } };
+        const negId = id();
+        wf[negId] = { class_type: 'CLIPTextEncode', inputs: { text: resolveWildcards(negative || ''), clip: clipOut } };
+
+        const baseLoadId = id();
+        wf[baseLoadId] = { class_type: 'LoadImage', inputs: { image: baseImageName } };
+
+        let maskSource;
+        if (nodes.loadImageMask) {
+            const maskLoadId = id();
+            wf[maskLoadId] = { class_type: 'LoadImageMask', inputs: { image: maskImageName } };
+            maskSource = [maskLoadId, 0];
+        } else {
+            const maskLoadId = id();
+            wf[maskLoadId] = { class_type: 'LoadImage', inputs: { image: maskImageName } };
+            const maskConvertId = id();
+            wf[maskConvertId] = { class_type: 'ImageToMask', inputs: { image: [maskLoadId, 0], channel: 'red' } };
+            maskSource = [maskConvertId, 0];
+        }
+
+        const maskGrowId = id();
+        wf[maskGrowId] = {
+            class_type: 'GrowMask',
+            inputs: { mask: maskSource, expand: inpaintMode === 'replace' ? 10 : 8, tapered_corners: true },
         };
 
-        return { prompt: nodes, actualSeed };
+        let samplerPos = [posId, 0];
+        let samplerNeg = [negId, 0];
+        let samplerLatent;
+        let fooocusLatentForPatch = null;
+
+        if (engine === 'fooocus') {
+            const patchLoadId = id();
+            const patchInputs = {};
+            patchInputs[nodes.fooocusHeadKey] = nodes.fooocusHead;
+            patchInputs[nodes.fooocusPatchKey] = nodes.fooocusPatch;
+            wf[patchLoadId] = { class_type: 'INPAINT_LoadFooocusInpaint', inputs: patchInputs };
+
+            if (inpaintMode !== 'replace' && nodes.fooocusRefine) {
+                const condId = id();
+                wf[condId] = {
+                    class_type: 'INPAINT_VAEEncodeInpaintConditioning',
+                    inputs: {
+                        positive: [posId, 0],
+                        negative: [negId, 0],
+                        vae: vaeOut,
+                        pixels: [baseLoadId, 0],
+                        mask: [maskGrowId, 0],
+                    },
+                };
+                samplerPos = [condId, 0];
+                samplerNeg = [condId, 1];
+                samplerLatent = [condId, 3];
+                fooocusLatentForPatch = [condId, 2];
+            } else {
+                const vaeEncId = id();
+                wf[vaeEncId] = {
+                    class_type: 'VAEEncodeForInpaint',
+                    inputs: {
+                        pixels: [baseLoadId, 0],
+                        vae: vaeOut,
+                        mask: [maskGrowId, 0],
+                        grow_mask_by: 8,
+                    },
+                };
+                samplerLatent = [vaeEncId, 0];
+                fooocusLatentForPatch = [vaeEncId, 0];
+            }
+
+            const applyId = id();
+            wf[applyId] = {
+                class_type: 'INPAINT_ApplyFooocusInpaint',
+                inputs: {
+                    model: modelOut,
+                    patch: [patchLoadId, 0],
+                    latent: fooocusLatentForPatch,
+                },
+            };
+            modelOut = [applyId, 0];
+        } else if (engine === 'differential' || engine === 'native') {
+            const condId = id();
+            wf[condId] = {
+                class_type: 'InpaintModelConditioning',
+                inputs: {
+                    positive: [posId, 0],
+                    negative: [negId, 0],
+                    vae: vaeOut,
+                    pixels: [baseLoadId, 0],
+                    mask: [maskGrowId, 0],
+                    noise_mask: true,
+                },
+            };
+            samplerPos = [condId, 0];
+            samplerNeg = [condId, 1];
+            samplerLatent = [condId, 2];
+            if (engine === 'differential') {
+                const diffId = id();
+                wf[diffId] = { class_type: 'DifferentialDiffusion', inputs: { model: modelOut } };
+                modelOut = [diffId, 0];
+            }
+        } else {
+            const vaeEncId = id();
+            wf[vaeEncId] = { class_type: 'VAEEncode', inputs: { pixels: [baseLoadId, 0], vae: vaeOut } };
+            const latentMaskId = id();
+            wf[latentMaskId] = { class_type: 'SetLatentNoiseMask', inputs: { samples: [vaeEncId, 0], mask: [maskGrowId, 0] } };
+            samplerLatent = [latentMaskId, 0];
+        }
+
+        const samplerId = id();
+        wf[samplerId] = {
+            class_type: 'KSampler',
+            inputs: {
+                seed: actualSeed,
+                steps: modelCfg.steps || INPAINT_MODEL_DEFAULTS.steps,
+                cfg: effectiveCfg,
+                sampler_name: modelCfg.sampler || INPAINT_MODEL_DEFAULTS.sampler,
+                scheduler: modelCfg.scheduler || INPAINT_MODEL_DEFAULTS.scheduler,
+                denoise: effectiveDenoise,
+                model: modelOut,
+                positive: samplerPos,
+                negative: samplerNeg,
+                latent_image: samplerLatent,
+            },
+        };
+
+        const decodeId = id();
+        wf[decodeId] = { class_type: 'VAEDecode', inputs: { samples: [samplerId, 0], vae: vaeOut } };
+
+        let finalImage = [decodeId, 0];
+        if (nodes.composite !== false) {
+            const compositeId = id();
+            wf[compositeId] = {
+                class_type: 'ImageCompositeMasked',
+                inputs: {
+                    destination: [baseLoadId, 0],
+                    source: [decodeId, 0],
+                    mask: [maskGrowId, 0],
+                    x: 0,
+                    y: 0,
+                    resize_source: false,
+                },
+            };
+            finalImage = [compositeId, 0];
+        }
+
+        const saveId = id();
+        wf[saveId] = { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI_Web', images: finalImage } };
+
+        return {
+            prompt: wf,
+            actualSeed,
+            effectiveDenoise,
+            effectiveCfg,
+            engine,
+            inpaintMode,
+        };
     }
 
     const _inpaint = {
@@ -3060,9 +3736,60 @@
         return false;
     }
 
+    function _inpaintCountMaskPixels() {
+        if (!_inpaint._maskCtx || !_inpaint.naturalW) return 0;
+        const data = _inpaint._maskCtx.getImageData(0, 0, _inpaint.naturalW, _inpaint.naturalH).data;
+        let count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 127) count++;
+        }
+        return count;
+    }
+
+    function _inpaintExportBaseFile() {
+        return new Promise((resolve, reject) => {
+            if (!_inpaint.naturalW || !dom.inpaintImage) {
+                reject(new Error('底图未就绪'));
+                return;
+            }
+            try {
+                const c = document.createElement('canvas');
+                c.width = _inpaint.naturalW;
+                c.height = _inpaint.naturalH;
+                c.getContext('2d').drawImage(dom.inpaintImage, 0, 0, _inpaint.naturalW, _inpaint.naturalH);
+                c.toBlob(blob => {
+                    if (!blob) reject(new Error('底图导出失败'));
+                    else resolve(new File([blob], `cw_inpaint_base_${Date.now()}.png`, { type: 'image/png' }));
+                }, 'image/png');
+            } catch (e) {
+                reject(new Error('底图导出失败，请确认 ComfyUI 已加 --enable-cors-header'));
+            }
+        });
+    }
+
     function _inpaintExportMaskFile() {
         return new Promise((resolve, reject) => {
-            _inpaint._maskNative.toBlob(blob => {
+            const w = _inpaint.naturalW;
+            const h = _inpaint.naturalH;
+            if (!w || !_inpaint._maskCtx) {
+                reject(new Error('蒙版未就绪'));
+                return;
+            }
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            const ctx = c.getContext('2d');
+            const src = _inpaint._maskCtx.getImageData(0, 0, w, h);
+            const out = ctx.createImageData(w, h);
+            for (let i = 0; i < src.data.length; i += 4) {
+                const v = src.data[i] > 127 ? 255 : 0;
+                out.data[i] = v;
+                out.data[i + 1] = v;
+                out.data[i + 2] = v;
+                out.data[i + 3] = 255;
+            }
+            ctx.putImageData(out, 0, 0);
+            c.toBlob(blob => {
                 if (!blob) reject(new Error('蒙版导出失败'));
                 else resolve(new File([blob], `cw_mask_${Date.now()}.png`, { type: 'image/png' }));
             }, 'image/png');
@@ -3098,6 +3825,7 @@
         applyInpaintPreset(dom.selInpaintPreset?.value || 'clothes');
         loadInpaintSettings();
         updateInpaintModelNote();
+        updateInpaintEngineUI();
         _inpaintRestoreSidebar();
         dom.modalInpaint.classList.remove('hidden');
         document.body.classList.add('inpaint-open');
@@ -3155,11 +3883,17 @@
         const positive = dom.txtInpaintPos?.value.trim() || '';
         const negative = dom.txtInpaintNeg?.value.trim() || '';
         const denoise = parseFloat(dom.inpInpaintDenoise?.value || '0.45');
+        const inpaintMode = dom.selInpaintMode?.value || 'standard';
         if (!positive) {
             alert('请填写蒙版内正向提示词');
             return;
         }
-        if (!dom.selInpaintCheckpoint?.value) {
+        if (isAnimaMode()) {
+            if (!dom.selUnet?.value || !dom.selClip?.value || !dom.selAnimaVae?.value) {
+                alert('请先在主界面选择 Anima UNET / CLIP / VAE 模型');
+                return;
+            }
+        } else if (!dom.selInpaintCheckpoint?.value) {
             alert('请先选择局部重绘用的 SDXL 模型');
             return;
         }
@@ -3167,13 +3901,21 @@
         saveInpaintSettings();
         const modelCfg = captureInpaintSettings();
 
-        closeInpaintModal();
+        const maskPixels = _inpaintCountMaskPixels();
+        if (maskPixels < 16) {
+            alert('蒙版区域过小，请重新涂抹要重绘的区域');
+            return;
+        }
+
         beginGenerationUI();
         dom.btnGenerate.textContent = '局部重绘中...';
 
         try {
-            const baseUpload = await uploadImageFromUrl(_inpaint.sourceUrl, `cw_inpaint_base_${Date.now()}.png`);
+            await _checkInpaintNodes();
+            const baseFile = await _inpaintExportBaseFile();
             const maskFile = await _inpaintExportMaskFile();
+            closeInpaintModal();
+            const baseUpload = await uploadImage(baseFile);
             const maskUpload = await uploadImage(maskFile);
 
             const workflow = buildInpaintWorkflow({
@@ -3182,8 +3924,18 @@
                 positive,
                 negative,
                 denoise,
+                inpaintMode,
                 modelCfg,
             });
+            const modeLabels = { blend: '微调', standard: '标准', replace: '强力' };
+            console.info('[Inpaint]', {
+                engine: workflow.engine,
+                inpaintMode: workflow.inpaintMode,
+                maskPixels,
+                denoise: workflow.effectiveDenoise,
+                cfg: workflow.effectiveCfg,
+            });
+            dom.btnGenerate.textContent = `局部重绘中…(${workflow.engine} · ${modeLabels[workflow.inpaintMode] || workflow.inpaintMode} · ${workflow.effectiveDenoise})`;
             await runPromptWorkflow(workflow);
         } catch (e) {
             alert('局部重绘失败: ' + e.message);
@@ -3221,6 +3973,11 @@
             if (dom.selInpaintVae) dom.selInpaintVae.disabled = !dom.chkInpaintVae.checked;
             saveInpaintSettings();
         });
+        dom.selInpaintMode?.addEventListener('change', () => {
+            saveInpaintSettings();
+            updateInpaintEngineUI();
+        });
+        dom.btnInpaintDownload?.addEventListener('click', downloadInpaintAssets);
         ['sel-inpaint-checkpoint', 'sel-inpaint-vae', 'inp-inpaint-steps', 'inp-inpaint-cfg',
             'sel-inpaint-sampler', 'sel-inpaint-scheduler', 'inp-inpaint-denoise'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', saveInpaintSettings);
@@ -5783,7 +6540,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.83');
+        console.log('[ComfyUI Web] v3.85');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -5800,8 +6557,10 @@
             loadControlNets(),
             loadIPAdapterModels(),
             loadAnimaModels(),
+            _checkInpaintNodes(),
         ]).then(async () => {
             loadInpaintSettings();
+            updateInpaintEngineUI();
             updateArchAwarePanels();
             await ProfileManager.restoreActiveProfile();
         });
