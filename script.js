@@ -2455,6 +2455,15 @@
         small: { key: 'small', label: '强化小范围', steps: 12, cfg: 1, sampler: 'euler' },
         large: { key: 'large', label: '大范围重绘', steps: 30, cfg: 4, sampler: 'er_sde' },
     };
+
+    function _applyAnimaInpaintModeToUI(modeKey) {
+        const mode = INPAINT_ANIMA_V22_MODES[String(modeKey || 'small')] || INPAINT_ANIMA_V22_MODES.small;
+        if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(mode.steps);
+        if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(mode.cfg);
+        if (dom.selInpaintSampler) dom.selInpaintSampler.value = mode.sampler;
+        if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_ANIMA_V22.defaultScheduler;
+        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(INPAINT_ANIMA_V22.defaultDenoise);
+    }
     function _normalizeInpaintMode(rawMode, anima) {
         const mode = String(rawMode || '').trim().toLowerCase();
         if (anima) {
@@ -2599,11 +2608,9 @@
         if (dom.inpInpaintCfg) dom.inpInpaintCfg.disabled = anima;
         if (dom.selInpaintScheduler) dom.selInpaintScheduler.disabled = anima;
         if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.disabled = anima;
+        if (dom.selInpaintSampler) dom.selInpaintSampler.disabled = anima;
         if (anima) {
-            if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(INPAINT_ANIMA_V22.defaultSteps);
-            if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(INPAINT_ANIMA_V22.defaultCfg);
-            if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_ANIMA_V22.defaultScheduler;
-            if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(INPAINT_ANIMA_V22.defaultDenoise);
+            _applyAnimaInpaintModeToUI(_normalizeInpaintMode(dom.selInpaintMode?.value, true));
         }
         if (dom.inpaintAnimaModelInfo) {
             const unet = dom.selUnet?.selectedOptions?.[0]?.textContent || dom.selUnet?.value || '—';
@@ -2836,7 +2843,7 @@
         if (dom.selInpaintSampler) dom.selInpaintSampler.value = defs.sampler;
         if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = defs.scheduler;
         if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(defs.denoise ?? 0.55);
-        if (dom.selInpaintMode) dom.selInpaintMode.value = isAnima ? 'small' : 'standard';
+        if (dom.selInpaintMode) dom.selInpaintMode.value = 'small';
         _inpaintUpdateArchPanels();
     }
 
@@ -3765,7 +3772,9 @@
             saveInpaintSettings();
         });
         dom.selInpaintMode?.addEventListener('change', () => {
-            saveInpaintSettings();
+            if (isAnimaMode()) {
+                _applyAnimaInpaintModeToUI(_normalizeInpaintMode(dom.selInpaintMode?.value, true));
+            }
             updateInpaintEngineUI();
         });
         dom.btnInpaintDownload?.addEventListener('click', downloadInpaintAssets);
@@ -6331,7 +6340,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.97');
+        console.log('[ComfyUI Web] v3.98');
         await loadTags();
         renderHistory();
         setupTagPickers();
