@@ -2458,6 +2458,7 @@
         defaultCfg: 1,
         defaultSampler: 'euler',
         defaultScheduler: 'simple',
+        defaultDenoise: 1,
         foveaStrength: 3,
         sharpness: 0.5,
         maskInertia: 0.55,
@@ -2646,18 +2647,12 @@
 
     function _inpaintResolveAnimaEngine(nodes, inpaintMode) {
         if (!nodes.animaLLLite || !nodes.inpaintPreprocessor) return null;
-        if (nodes.inpaintCrop && nodes.inpaintStitch && inpaintMode !== 'replace') return 'lllite-crop';
+        // Keep Anima inpaint aligned with proven v22 full-image workflow.
         return 'lllite-full';
     }
 
     function _inpaintResolveAnimaDenoise(inpaintMode, userDenoise) {
-        const d = parseFloat(userDenoise);
-        const base = Number.isFinite(d) ? d : 0.55;
-        const rules = INPAINT_ANIMA_MODE_DENOISE[inpaintMode] || INPAINT_ANIMA_MODE_DENOISE.standard;
-        let out = base;
-        if (rules.min !== undefined) out = Math.max(out, rules.min);
-        if (rules.max !== undefined) out = Math.min(out, rules.max);
-        return Math.round(out * 100) / 100;
+        return INPAINT_ANIMA_V22.defaultDenoise;
     }
 
     function _inpaintResolveAnimaCfg(inpaintMode, userCfg) {
@@ -2671,6 +2666,16 @@
         const anima = isAnimaMode();
         dom.inpaintSdxlPanel?.classList.toggle('hidden', anima);
         dom.inpaintAnimaPanel?.classList.toggle('hidden', !anima);
+        if (dom.inpInpaintSteps) dom.inpInpaintSteps.disabled = anima;
+        if (dom.inpInpaintCfg) dom.inpInpaintCfg.disabled = anima;
+        if (dom.selInpaintScheduler) dom.selInpaintScheduler.disabled = anima;
+        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.disabled = anima;
+        if (anima) {
+            if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(INPAINT_ANIMA_V22.defaultSteps);
+            if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(INPAINT_ANIMA_V22.defaultCfg);
+            if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = INPAINT_ANIMA_V22.defaultScheduler;
+            if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(INPAINT_ANIMA_V22.defaultDenoise);
+        }
         if (anima && dom.inpaintAnimaModelInfo) {
             const unet = dom.selUnet?.selectedOptions?.[0]?.textContent || dom.selUnet?.value || '—';
             const clip = dom.selClip?.selectedOptions?.[0]?.textContent || dom.selClip?.value || '—';
@@ -2923,19 +2928,10 @@
     }
 
     function saveInpaintSettings() {
-        try {
-            localStorage.setItem(INPAINT_SETTINGS_KEY, JSON.stringify(captureInpaintSettings()));
-        } catch { /* ignore */ }
+        // Disabled by design: inpaint UI should always boot with workflow defaults.
     }
 
     function loadInpaintSettings() {
-        try {
-            const raw = localStorage.getItem(INPAINT_SETTINGS_KEY);
-            if (raw) {
-                applyInpaintSettings(JSON.parse(raw));
-                return;
-            }
-        } catch { /* ignore */ }
         syncInpaintModelOptions();
         if (dom.selCheckpoint?.value && dom.selInpaintCheckpoint) {
             dom.selInpaintCheckpoint.value = dom.selCheckpoint.value;
@@ -2948,12 +2944,15 @@
                 cfg: INPAINT_ANIMA_V22.defaultCfg,
                 sampler: INPAINT_ANIMA_V22.defaultSampler,
                 scheduler: INPAINT_ANIMA_V22.defaultScheduler,
+                denoise: INPAINT_ANIMA_V22.defaultDenoise,
             }
             : INPAINT_MODEL_DEFAULTS;
         if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(defs.steps);
         if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(defs.cfg);
         if (dom.selInpaintSampler) dom.selInpaintSampler.value = defs.sampler;
         if (dom.selInpaintScheduler) dom.selInpaintScheduler.value = defs.scheduler;
+        if (dom.inpInpaintDenoise) dom.inpInpaintDenoise.value = String(defs.denoise ?? 0.55);
+        _inpaintUpdateArchPanels();
     }
 
     function updateInpaintModelNote() {
@@ -3115,7 +3114,7 @@
         let modelOut = [unetId, 0];
 
         const clipId = id();
-        wf[clipId] = { class_type: 'CLIPLoader', inputs: { clip_name: clipName, type: 'qwen_image' } };
+        wf[clipId] = { class_type: 'CLIPLoader', inputs: { clip_name: clipName, type: 'stable_diffusion', device: 'default' } };
         const clipOut = [clipId, 0];
 
         const vaeId = id();
@@ -3237,7 +3236,7 @@
                     cfg: effectiveCfg,
                     sampler_name: samplerName,
                     scheduler: 'simple',
-                    denoise: inpaintMode === 'blend' ? Math.max(0.75, effectiveDenoise) : 1,
+                    denoise: INPAINT_ANIMA_V22.defaultDenoise,
                     fovea_strength: INPAINT_ANIMA_V22.foveaStrength,
                     sharpness: INPAINT_ANIMA_V22.sharpness,
                     mask_inertia: INPAINT_ANIMA_V22.maskInertia,
@@ -6657,7 +6656,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.93');
+        console.log('[ComfyUI Web] v3.94');
         await loadTags();
         renderHistory();
         setupTagPickers();
