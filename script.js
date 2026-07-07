@@ -2454,6 +2454,10 @@
         endPercent: 0.8,
     };
     const INPAINT_ANIMA_V22 = {
+        defaultSteps: 12,
+        defaultCfg: 1,
+        defaultSampler: 'euler',
+        defaultScheduler: 'simple',
         foveaStrength: 3,
         sharpness: 0.5,
         maskInertia: 0.55,
@@ -2937,7 +2941,15 @@
             dom.selInpaintCheckpoint.value = dom.selCheckpoint.value;
         }
         _inpaintPreferCheckpoint(dom.selInpaintCheckpoint);
-        const defs = isAnimaMode() ? ANIMA_DEFAULTS : INPAINT_MODEL_DEFAULTS;
+        const isAnima = isAnimaMode();
+        const defs = isAnima
+            ? {
+                steps: INPAINT_ANIMA_V22.defaultSteps,
+                cfg: INPAINT_ANIMA_V22.defaultCfg,
+                sampler: INPAINT_ANIMA_V22.defaultSampler,
+                scheduler: INPAINT_ANIMA_V22.defaultScheduler,
+            }
+            : INPAINT_MODEL_DEFAULTS;
         if (dom.inpInpaintSteps) dom.inpInpaintSteps.value = String(defs.steps);
         if (dom.inpInpaintCfg) dom.inpInpaintCfg.value = String(defs.cfg);
         if (dom.selInpaintSampler) dom.selInpaintSampler.value = defs.sampler;
@@ -3066,12 +3078,20 @@
         if (!negative.trim()) negative = ANIMA_DEFAULTS.negative;
 
         const modelCfg = inpaintOpts.modelCfg || captureInpaintSettings();
-        const effectiveDenoise = _inpaintResolveAnimaDenoise(inpaintMode, denoise);
-        const effectiveCfg = _inpaintResolveAnimaCfg(inpaintMode, modelCfg.cfg);
-        const steps = modelCfg.steps || ANIMA_DEFAULTS.steps;
-        const samplerName = modelCfg.sampler || 'euler_ancestral';
-        const scheduler = modelCfg.scheduler || 'beta57';
         const useFlsSampler = !!nodes.flsSampler;
+        const effectiveDenoise = _inpaintResolveAnimaDenoise(inpaintMode, denoise);
+        const cfgBase = useFlsSampler
+            ? (Number.isFinite(parseFloat(modelCfg.cfg)) ? parseFloat(modelCfg.cfg) : INPAINT_ANIMA_V22.defaultCfg)
+            : modelCfg.cfg;
+        const effectiveCfg = _inpaintResolveAnimaCfg(inpaintMode, cfgBase);
+        const stepsRaw = parseInt(modelCfg.steps, 10);
+        const steps = Number.isFinite(stepsRaw)
+            ? stepsRaw
+            : (useFlsSampler ? INPAINT_ANIMA_V22.defaultSteps : ANIMA_DEFAULTS.steps);
+        const samplerName = (modelCfg.sampler || (useFlsSampler ? INPAINT_ANIMA_V22.defaultSampler : ANIMA_DEFAULTS.sampler) || 'euler').toLowerCase();
+        const scheduler = useFlsSampler
+            ? INPAINT_ANIMA_V22.defaultScheduler
+            : (modelCfg.scheduler || ANIMA_DEFAULTS.scheduler || 'simple');
 
         const seed = parseInt(dom.inpSeed.value);
         let actualSeed = seed === -1 ? Math.floor(Math.random() * 2 ** 32) : seed;
@@ -6637,7 +6657,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.92');
+        console.log('[ComfyUI Web] v3.93');
         await loadTags();
         renderHistory();
         setupTagPickers();
