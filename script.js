@@ -2455,6 +2455,63 @@
         large: { key: 'large', label: '大范围重绘', steps: 30, cfg: 4, sampler: 'er_sde' },
     };
     const INPAINT_ANIMA_NEGATIVE_FIXED = 'worst quality, low quality, score_1, score_2, score_3, bad quality, worst detail, sketch, censor, extra limbs, deformed fingers, bad anatomy, mutated body, lowres, low score, bad score, blurry, text, ugly, hooded eyes, watermark, pale, bad hands, bad proportions, poorly drawn face, poorly drawn hand, missing finger, pixelated, distorted, jpeg artifacts, signature, (deformed:1.5), (bad hand:1.3), overexposed, underexposed, censored, mutated, extra finger, cloned face, bad eyes, red sleeves, red sleeve cuffs';
+    const INPAINT_PRESETS_SIMPLE = {
+        detail: {
+            hint: '修复细节：建议小范围涂抹眼睛/手部/边缘崩坏处。',
+            positive: 'detailed skin, detailed eyes, detailed hands, sharp details',
+            denoise: 0.55,
+        },
+        clothes: {
+            hint: '换衣服：填写想要的服装效果。',
+            positive: 'detailed clothing, fabric texture, clean outfit',
+            denoise: 0.55,
+        },
+        background: {
+            hint: '换背景：建议只涂背景区域。',
+            positive: 'detailed background, clean scene, depth',
+            denoise: 0.55,
+        },
+        hair: {
+            hint: '改头发：建议只涂头发区域。',
+            positive: 'detailed hair, natural hair strands, clean hairline',
+            denoise: 0.55,
+        },
+        breasts: {
+            hint: '重画胸部：建议只涂目标区域。',
+            positive: 'natural breasts, detailed skin, anatomically correct',
+            denoise: 0.55,
+        },
+        pussy: {
+            hint: '重画私处：建议小范围精确涂抹。',
+            positive: 'detailed skin, natural anatomy, realistic texture',
+            denoise: 0.55,
+        },
+        panties: {
+            hint: '重画内裤：建议只涂内裤区域。',
+            positive: 'panties, detailed fabric, clean folds',
+            denoise: 0.55,
+        },
+        bra: {
+            hint: '重画胸罩：建议只涂胸罩区域。',
+            positive: 'bra, detailed fabric, clean straps',
+            denoise: 0.55,
+        },
+        bikini: {
+            hint: '重画比基尼：建议只涂泳装区域。',
+            positive: 'bikini, detailed fabric, clean stitching',
+            denoise: 0.55,
+        },
+        erase: {
+            hint: '擦除重填：用于移除杂物/水印等。',
+            positive: 'clean background, seamless, high quality',
+            denoise: 0.55,
+        },
+        custom: {
+            hint: '自定义：只写蒙版内你想出现的内容。',
+            positive: '',
+            denoise: 0.55,
+        },
+    };
 
     function _applyAnimaInpaintModeToUI(modeKey) {
         const mode = INPAINT_ANIMA_V22_MODES[String(modeKey || 'small')] || INPAINT_ANIMA_V22_MODES.small;
@@ -3219,7 +3276,7 @@
     };
 
     function applyInpaintPreset(key) {
-        const preset = INPAINT_PRESETS[key] || INPAINT_PRESETS.custom;
+        const preset = INPAINT_PRESETS_SIMPLE[key] || INPAINT_PRESETS[key] || INPAINT_PRESETS_SIMPLE.custom;
         if (dom.inpaintHint) {
             dom.inpaintHint.textContent = preset.hint + '  空格+拖动平移，滚轮缩放，魔棒点选相似区域。';
         }
@@ -6336,7 +6393,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v3.99');
+        console.log('[ComfyUI Web] v4.00');
         await loadTags();
         renderHistory();
         setupTagPickers();
