@@ -5672,7 +5672,8 @@
         dom.resultPlaceholder.classList.add('hidden');
         dom.resultImage.classList.add('hidden');
         dom.resultActions.classList.add('hidden');
-        updateMobileResultUI(false);
+        // 点击生成后立即进入“结果界面”大小，方便在预览过程中也能看到同样的区域
+        updateMobileResultUI(true);
         setProgress(0);
     }
 
@@ -5906,13 +5907,18 @@
 
         const doNow = () => {
             if (wrapper) {
-                // wrapper 自身可滚动时，强制到底
+                // wrapper 自身可滚动时，强制到底（预览在 wrapper 内滚动时也有效）
                 wrapper.scrollTop = wrapper.scrollHeight;
-                // 保险：若是外层在滚，则把 wrapper 底部对齐可视区底部
-                wrapper.scrollIntoView({ block: 'end', behavior: 'auto' });
             }
-            if (content) {
+            if (content && wrapper) {
+                // content 是主要滚动容器：把 wrapper 底部对齐到 content 可视区底部
+                const target = wrapper.offsetTop + wrapper.offsetHeight;
+                const next = Math.max(0, target - content.clientHeight);
+                content.scrollTop = next;
+            } else if (content) {
                 content.scrollTop = content.scrollHeight;
+            } else if (wrapper) {
+                wrapper.scrollIntoView({ block: 'end', behavior: 'auto' });
             }
         };
 
@@ -8111,7 +8117,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.14');
+        console.log('[ComfyUI Web] v4.15');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9628,7 +9634,8 @@
         dom.resultPlaceholder.classList.add('hidden');
         dom.resultImage.classList.add('hidden');
         dom.resultActions.classList.add('hidden');
-        updateMobileResultUI(false);
+        // 工作流模式同样：点击生成后立刻进入固定结果界面
+        updateMobileResultUI(true);
         setProgress(0);
 
         try {

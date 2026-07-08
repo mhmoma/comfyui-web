@@ -1431,7 +1431,8 @@ textarea {
     pointer-events: none;
     overflow: hidden;
     transition: width 0.25s ease, opacity 0.2s ease, transform 0.25s ease;
-    transform: translateX(-16px);
+    // 向屏幕外（右侧）隐藏，避免看起来“向内部收缩”
+    transform: translateX(16px);
 }
 
 .history-panel:not(.collapsed) {
@@ -4125,7 +4126,7 @@ body.inpaint-open {
 
     /* Result area expand/collapse */
     .result-expand-toggle {
-        display: block;
+        display: none !important;
         width: 100%;
         padding: 10px;
         margin-bottom: 4px;
@@ -4143,7 +4144,8 @@ body.inpaint-open {
     }
 
     .result-wrapper {
-        max-height: 260px;
+        max-height: 85vh;
+        min-height: 85vh;
         overflow-y: auto;
         overflow-x: hidden;
         transition: max-height 0.3s ease;
@@ -4151,6 +4153,7 @@ body.inpaint-open {
 
     .result-wrapper.expanded {
         max-height: 85vh;
+        min-height: 85vh;
     }
 
     .result-wrapper .result-image {
