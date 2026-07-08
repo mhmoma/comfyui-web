@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>ComfyUI Web v4.13</title>
-    <link rel="stylesheet" href="style.css?v=399">
+    <title>ComfyUI Web v4.14</title>
+    <link rel="stylesheet" href="style.css?v=400">
 </head>
 <body>
     <div class="app">
         <header class="header">
-<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.13</span></h1>
+<h1>ComfyUI Web <span id="app-version" class="version-badge">v4.14</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -773,10 +773,10 @@
             </div>
 
             <div class="history-resizer" id="history-resizer" title="拖拽调整历史面板宽度"></div>
+            <button type="button" id="btn-history-toggle" class="history-toggle-rail" aria-label="收起/展开历史面板" title="收起/展开">◀</button>
             <aside class="history-panel" id="history-panel">
                 <div class="history-panel-header">
                     <h2 class="history-title">历史记录</h2>
-                    <button type="button" id="btn-history-toggle" class="history-toggle-btn" aria-label="收起/展开历史面板" title="收起/展开">◀</button>
                 </div>
                 <div id="history-grid" class="history-grid"></div>
                 <button id="btn-clear-history" class="btn-danger">清空历史</button>
@@ -1415,6 +1415,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=409"></script>
+    <script src="script.js?v=410"></script>
 </body>
 </html>

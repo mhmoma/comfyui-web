@@ -5900,13 +5900,25 @@
     }
 
     function scrollToResultBottom() {
-        // 结果区（result-wrapper）与整体滚动（content）都尝试：不同布局下谁在滚动就滚谁。
-        if (dom.resultWrapper) {
-            dom.resultWrapper.scrollTop = dom.resultWrapper.scrollHeight;
-        }
-        if (dom.content) {
-            dom.content.scrollTo({ top: dom.content.scrollHeight, behavior: 'smooth' });
-        }
+        // “点击生成立刻滚到底”：避免 showResult 时机导致滚动未覆盖新内容。
+        const wrapper = dom.resultWrapper;
+        const content = dom.content;
+
+        const doNow = () => {
+            if (wrapper) {
+                // wrapper 自身可滚动时，强制到底
+                wrapper.scrollTop = wrapper.scrollHeight;
+                // 保险：若是外层在滚，则把 wrapper 底部对齐可视区底部
+                wrapper.scrollIntoView({ block: 'end', behavior: 'auto' });
+            }
+            if (content) {
+                content.scrollTop = content.scrollHeight;
+            }
+        };
+
+        doNow();
+        requestAnimationFrame(doNow);
+        setTimeout(doNow, 180);
     }
 
     function showResult(url, hasCompare) {
@@ -5916,11 +5928,6 @@
         dom.resultActions.classList.remove('hidden');
         dom.btnCompare.classList.toggle('hidden', !hasCompare);
         updateMobileResultUI(true);
-
-        // 生成完成后自动滚动到结果底部，方便查看。
-        requestAnimationFrame(() => {
-            try { scrollToResultBottom(); } catch { /* ignore */ }
-        });
     }
 
     // ==================== 图片对比滑块 ====================
@@ -8104,7 +8111,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.13');
+        console.log('[ComfyUI Web] v4.14');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -8790,7 +8797,8 @@
             document.body.style.userSelect = 'none';
 
             const onMove = (ev) => {
-                const w = Math.max(140, Math.min(420, startW + (ev.clientX - startX)));
+                // 拖拽方向：向右拖拽应增大宽度（避免与拖拽手势相反）
+                const w = Math.max(140, Math.min(420, startW - (ev.clientX - startX)));
                 panel.style.width = `${w}px`;
             };
 
@@ -9661,6 +9669,8 @@
     // Override generate to check mode
     const originalGenerate = generate;
     async function generateDispatch() {
+        // 点击生成立刻滚到底：让用户可在预览区等待新图出现
+        try { scrollToResultBottom(); } catch { /* ignore */ }
         const activeMode = document.querySelector('.mode-tab.active');
         if (activeMode && activeMode.dataset.mode === 'workflow') {
             await generateFromWorkflow();
