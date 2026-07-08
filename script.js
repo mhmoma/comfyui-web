@@ -5674,6 +5674,8 @@
         dom.resultActions.classList.add('hidden');
         // 点击生成后立即进入“结果界面”大小，方便在预览过程中也能看到同样的区域
         updateMobileResultUI(true);
+        // 在已切换结果界面尺寸/expanded 状态之后，再次滚动到目标位置，确保“点生成立刻到底”
+        try { scrollToResultBottom(); } catch { /* ignore */ }
         setProgress(0);
     }
 
@@ -8117,7 +8119,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.15');
+        console.log('[ComfyUI Web] v4.16');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9636,6 +9638,8 @@
         dom.resultActions.classList.add('hidden');
         // 工作流模式同样：点击生成后立刻进入固定结果界面
         updateMobileResultUI(true);
+        // 尺寸/expanded 状态已切换：再滚一次，确保滚到底
+        try { scrollToResultBottom(); } catch { /* ignore */ }
         setProgress(0);
 
         try {
