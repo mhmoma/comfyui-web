@@ -1291,12 +1291,18 @@ textarea {
 .placeholder {
     color: var(--text-secondary);
     font-size: 0.9rem;
-    padding: 60px;
-    border: 2px dashed rgba(74, 158, 255, 0.3);
-    border-radius: var(--radius);
+    padding: 0;
+    border: none;
     text-align: center;
-    width: 100%;
-    background: rgba(74, 158, 255, 0.03);
+    width: auto;
+    background: transparent;
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    pointer-events: none;
+    white-space: nowrap;
 }
 
 .result-image {
@@ -2790,6 +2796,7 @@ body.inpaint-open {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 12px;
     width: 100%;
     flex: 1;
@@ -2801,6 +2808,7 @@ body.inpaint-open {
     border-radius: var(--radius);
     padding: 10px;
     background: rgba(10, 14, 34, 0.45);
+    position: relative;
 }
 
 /* Responsive - Tablet */
