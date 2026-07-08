@@ -50,13 +50,18 @@
         progressContainer: $('#progress-container'),
         progressBar: $('#progress-bar'),
         progressText: $('#progress-text'),
+        content: $('.content'),
         resultPlaceholder: $('#result-placeholder'),
         resultImage: $('#result-image'),
         resultActions: $('#result-actions'),
+        resultWrapper: $('#result-wrapper'),
         btnDownload: $('#btn-download'),
         btnSendToHistory: $('#btn-send-to-history'),
         historyGrid: $('#history-grid'),
         btnClearHistory: $('#btn-clear-history'),
+        historyPanel: $('#history-panel'),
+        historyResizer: $('#history-resizer'),
+        btnHistoryToggle: $('#btn-history-toggle'),
         btnTutorial: $('#btn-tutorial'),
         modalTutorial: $('#modal-tutorial'),
         btnCloseTutorial: $('#btn-close-tutorial'),
@@ -724,6 +729,24 @@
             await new Promise(r => setTimeout(r, 350 * (i + 1)));
         }
         throw lastErr || new Error('无法读取底图');
+    }
+
+    async function downloadComfyImageAsFile(viewUrl, filenameBase = `comfyui_${Date.now()}`) {
+        // 通过 fetch->Blob->ObjectURL 强制触发下载，避免浏览器因 CORS/Content-Disposition 导致“打开新窗口/新标签”。
+        const blob = await fetchComfyImageBlob(viewUrl, 3);
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+            const mime = blob.type || '';
+            const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') ? 'jpg' : (mime.includes('webp') ? 'webp' : 'png'));
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = `${filenameBase}.${ext}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 3000);
+        }
     }
 
     async function blobFromImageElement(viewUrl) {
@@ -5162,12 +5185,163 @@
         if (_cutout.resultUrl) {
             URL.revokeObjectURL(_cutout.resultUrl);
         }
+        _cutout.rawResultBlob = null;
         _cutout.resultBlob = null;
         _cutout.resultUrl = '';
         dom.cutoutResultPreview?.classList.add('hidden');
         dom.cutoutResultEmpty?.classList.remove('hidden');
         if (dom.cutoutResultPreview) dom.cutoutResultPreview.removeAttribute('src');
+        dom.cutoutAdjustPanel?.classList.add('hidden');
         _cutoutSetResultEnabled(false);
+    }
+
+    function _cutoutGetSettings() {
+        return {
+            shrink: Number(dom.cutoutShrink?.value || 0),
+            threshold: Number(dom.cutoutThreshold?.value || CUTOUT_ADJUST_DEFAULTS.threshold),
+            feather: Number(dom.cutoutFeather?.value || 0),
+        };
+    }
+
+    function _cutoutSyncAdjustLabels() {
+        const s = _cutoutGetSettings();
+        if (dom.cutoutShrinkVal) dom.cutoutShrinkVal.textContent = `${s.shrink}px`;
+        if (dom.cutoutThresholdVal) dom.cutoutThresholdVal.textContent = String(s.threshold);
+        if (dom.cutoutFeatherVal) dom.cutoutFeatherVal.textContent = `${s.feather}px`;
+    }
+
+    function _cutoutResetAdjustSliders() {
+        if (dom.cutoutShrink) dom.cutoutShrink.value = String(CUTOUT_ADJUST_DEFAULTS.shrink);
+        if (dom.cutoutThreshold) dom.cutoutThreshold.value = String(CUTOUT_ADJUST_DEFAULTS.threshold);
+        if (dom.cutoutFeather) dom.cutoutFeather.value = String(CUTOUT_ADJUST_DEFAULTS.feather);
+        _cutoutSyncAdjustLabels();
+    }
+
+    function _cutoutErodeAlpha(alpha, w, h, radius) {
+        if (radius <= 0) return alpha;
+        let src = alpha;
+        for (let iter = 0; iter < radius; iter++) {
+            const dst = new Uint8ClampedArray(src.length);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let minA = 255;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                minA = Math.min(minA, src[ny * w + nx]);
+                            }
+                        }
+                    }
+                    dst[y * w + x] = minA;
+                }
+            }
+            src = dst;
+        }
+        return src;
+    }
+
+    function _cutoutBlurAlpha(alpha, w, h, radius) {
+        if (radius <= 0) return alpha;
+        let src = alpha;
+        for (let pass = 0; pass < 2; pass++) {
+            const dst = new Uint8ClampedArray(src.length);
+            const r = Math.max(1, radius);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let dx = -r; dx <= r; dx++) {
+                        const nx = x + dx;
+                        if (nx >= 0 && nx < w) {
+                            sum += src[y * w + nx];
+                            count++;
+                        }
+                    }
+                    dst[y * w + x] = Math.round(sum / count);
+                }
+            }
+            src = dst;
+            const dst2 = new Uint8ClampedArray(src.length);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let dy = -r; dy <= r; dy++) {
+                        const ny = y + dy;
+                        if (ny >= 0 && ny < h) {
+                            sum += src[ny * w + x];
+                            count++;
+                        }
+                    }
+                    dst2[y * w + x] = Math.round(sum / count);
+                }
+            }
+            src = dst2;
+        }
+        return src;
+    }
+
+    async function _cutoutRefineBlob(blob, settings = _cutoutGetSettings()) {
+        const bitmap = await createImageBitmap(blob);
+        const w = bitmap.width;
+        const h = bitmap.height;
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close?.();
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+        const alpha = new Uint8ClampedArray(w * h);
+        for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+
+        const cutoff = Math.round((settings.threshold / 80) * 255);
+        for (let i = 0; i < alpha.length; i++) {
+            if (alpha[i] < cutoff) alpha[i] = 0;
+        }
+
+        let refined = _cutoutErodeAlpha(alpha, w, h, settings.shrink);
+        refined = _cutoutBlurAlpha(refined, w, h, settings.feather);
+
+        for (let i = 0; i < alpha.length; i++) {
+            data[i * 4 + 3] = refined[i];
+        }
+        ctx.putImageData(imageData, 0, 0);
+        return new Promise((resolve, reject) => {
+            c.toBlob((b) => (b ? resolve(b) : reject(new Error('边缘调节失败'))), 'image/png');
+        });
+    }
+
+    async function _cutoutApplyAdjustments() {
+        if (!_cutout.rawResultBlob) return;
+        const refined = await _cutoutRefineBlob(_cutout.rawResultBlob);
+        if (_cutout.resultUrl) URL.revokeObjectURL(_cutout.resultUrl);
+        _cutout.resultBlob = refined;
+        _cutout.resultUrl = URL.createObjectURL(refined);
+        if (dom.cutoutResultPreview) {
+            dom.cutoutResultPreview.src = _cutout.resultUrl;
+            dom.cutoutResultPreview.classList.remove('hidden');
+        }
+        dom.cutoutResultEmpty?.classList.add('hidden');
+        dom.cutoutAdjustPanel?.classList.remove('hidden');
+        _cutoutSetResultEnabled(true);
+    }
+
+    function _cutoutScheduleAdjust() {
+        if (!_cutout.rawResultBlob) return;
+        clearTimeout(_cutout._adjustTimer);
+        _cutout._adjustTimer = setTimeout(() => {
+            _cutoutApplyAdjustments().catch((e) => console.warn('[Cutout] adjust failed', e));
+        }, 60);
+    }
+
+    async function _cutoutFinalizeResult(rawBlob) {
+        _cutout.rawResultBlob = rawBlob;
+        await _cutoutApplyAdjustments();
+        return _cutout.resultBlob;
     }
 
     function _cutoutShowProgress(show, text, pct) {
@@ -5275,16 +5449,9 @@
         }
         try {
             const result = await _cutoutProcessBlob(_cutout.srcBlob);
-            _cutout.resultBlob = result;
-            _cutout.resultUrl = URL.createObjectURL(result);
-            if (dom.cutoutResultPreview) {
-                dom.cutoutResultPreview.src = _cutout.resultUrl;
-                dom.cutoutResultPreview.classList.remove('hidden');
-            }
-            dom.cutoutResultEmpty?.classList.add('hidden');
-            _cutoutSetResultEnabled(true);
+            await _cutoutFinalizeResult(result);
             _cutoutShowProgress(false);
-            showToast('抠图完成');
+            showToast('抠图完成，可拖动滑块微调边缘');
         } catch (e) {
             console.error('[Cutout]', e);
             _cutoutShowProgress(false);
@@ -5340,7 +5507,8 @@
                 c.toBlob((b) => (b ? resolve(b) : reject(new Error('读取叠加图失败'))), 'image/png');
             });
             showToast('正在抠图，请稍候…');
-            const result = await _cutoutProcessBlob(blob);
+            const raw = await _cutoutProcessBlob(blob);
+            const result = await _cutoutRefineBlob(raw, _cutoutGetSettings());
             const objUrl = URL.createObjectURL(result);
             _composite._objectUrls.push(objUrl);
             const img = await _compositeImageFromSrc(objUrl);
@@ -5416,6 +5584,20 @@
         });
 
         dom.btnCutoutRun?.addEventListener('click', () => _cutoutRun());
+
+        ['cutout-shrink', 'cutout-threshold', 'cutout-feather'].forEach((id) => {
+            document.getElementById(id)?.addEventListener('input', () => {
+                _cutoutSyncAdjustLabels();
+                _cutoutScheduleAdjust();
+            });
+        });
+
+        dom.btnCutoutResetAdjust?.addEventListener('click', () => {
+            _cutoutResetAdjustSliders();
+            _cutoutScheduleAdjust();
+        });
+
+        _cutoutSyncAdjustLabels();
 
         dom.btnCutoutDownload?.addEventListener('click', () => {
             if (!_cutout.resultUrl) return;
@@ -5717,6 +5899,16 @@
         }
     }
 
+    function scrollToResultBottom() {
+        // 结果区（result-wrapper）与整体滚动（content）都尝试：不同布局下谁在滚动就滚谁。
+        if (dom.resultWrapper) {
+            dom.resultWrapper.scrollTop = dom.resultWrapper.scrollHeight;
+        }
+        if (dom.content) {
+            dom.content.scrollTo({ top: dom.content.scrollHeight, behavior: 'smooth' });
+        }
+    }
+
     function showResult(url, hasCompare) {
         dom.resultImage.src = url;
         dom.resultImage.classList.remove('hidden');
@@ -5724,6 +5916,11 @@
         dom.resultActions.classList.remove('hidden');
         dom.btnCompare.classList.toggle('hidden', !hasCompare);
         updateMobileResultUI(true);
+
+        // 生成完成后自动滚动到结果底部，方便查看。
+        requestAnimationFrame(() => {
+            try { scrollToResultBottom(); } catch { /* ignore */ }
+        });
     }
 
     // ==================== 图片对比滑块 ====================
@@ -5916,13 +6113,29 @@
             dom.inpSeed.value = Math.floor(Math.random() * 2 ** 32);
         });
 
-        dom.btnDownload.addEventListener('click', () => {
-            const url = dom.resultImage.src;
+        dom.btnDownload.addEventListener('click', async () => {
+            const url = dom.resultImage?.src;
             if (!url) return;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `comfyui_${Date.now()}.png`;
-            a.click();
+            try {
+                dom.btnDownload.disabled = true;
+                dom.btnDownload.textContent = '下载中...';
+                await downloadComfyImageAsFile(url, `comfyui_${Date.now()}`);
+            } catch (e) {
+                console.warn('[Download] failed:', e);
+                showToast('下载失败，请稍后重试或右键另存为。');
+                // 兜底：尝试使用 <a download> 直链下载（若浏览器不支持 download，则可能在当前页打开）
+                try {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `comfyui_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } catch { /* ignore */ }
+            } finally {
+                dom.btnDownload.disabled = false;
+                dom.btnDownload.textContent = '下载图片';
+            }
         });
 
         dom.btnSendToHistory.addEventListener('click', () => {
@@ -6023,13 +6236,28 @@
             if (url) useImageAsRef(url);
         });
 
-        dom.btnPreviewDownload.addEventListener('click', () => {
-            const url = dom.previewImage.src;
+        dom.btnPreviewDownload.addEventListener('click', async () => {
+            const url = dom.previewImage?.src;
             if (!url) return;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `comfyui_${Date.now()}.png`;
-            a.click();
+            try {
+                dom.btnPreviewDownload.disabled = true;
+                dom.btnPreviewDownload.textContent = '下载中...';
+                await downloadComfyImageAsFile(url, `comfyui_${Date.now()}`);
+            } catch (e) {
+                console.warn('[Preview Download] failed:', e);
+                showToast('下载失败，请稍后重试或右键另存为。');
+                try {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `comfyui_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } catch { /* ignore */ }
+            } finally {
+                dom.btnPreviewDownload.disabled = false;
+                dom.btnPreviewDownload.textContent = '下载';
+            }
         });
 
         // Regional prompt
@@ -7876,7 +8104,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.09');
+        console.log('[ComfyUI Web] v4.13');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -8505,6 +8733,78 @@
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    }
+
+    // ==================== 历史面板：折叠 + 可拖拽宽度 ====================
+    function setupHistoryPanel() {
+        const panel = dom.historyPanel;
+        const resizer = dom.historyResizer;
+        const toggleBtn = dom.btnHistoryToggle;
+        if (!panel || !resizer || !toggleBtn) return;
+
+        // 移动端布局已做了独立的“历史Tab”处理，这里不强行接管折叠/拖拽。
+        if (window.matchMedia('(max-width: 1000px)').matches) return;
+
+        const LS_COLLAPSED = 'comfyui_web_history_collapsed';
+        const LS_WIDTH = 'comfyui_web_history_width';
+
+        const savedW = parseInt(localStorage.getItem(LS_WIDTH) || '0', 10);
+        const collapsed = localStorage.getItem(LS_COLLAPSED) === '1';
+
+        if (panel && !Number.isNaN(savedW) && savedW > 0 && !collapsed) {
+            panel.style.width = `${savedW}px`;
+        }
+
+        function applyCollapsed(nextCollapsed) {
+            panel.classList.toggle('collapsed', nextCollapsed);
+            toggleBtn.textContent = nextCollapsed ? '▶' : '◀';
+            resizer.style.display = nextCollapsed ? 'none' : '';
+            localStorage.setItem(LS_COLLAPSED, nextCollapsed ? '1' : '0');
+        }
+
+        applyCollapsed(collapsed);
+
+        toggleBtn.addEventListener('click', () => {
+            const next = !panel.classList.contains('collapsed');
+            // 展开时恢复宽度（如果之前有保存）
+            if (!next) {
+                const w = parseInt(localStorage.getItem(LS_WIDTH) || '0', 10);
+                if (w > 0) panel.style.width = `${w}px`;
+            }
+            applyCollapsed(next);
+        });
+
+        let startX = 0;
+        let startW = 0;
+        resizer.addEventListener('mousedown', (e) => {
+            if (panel.classList.contains('collapsed')) return;
+            e.preventDefault();
+
+            startX = e.clientX;
+            startW = panel.getBoundingClientRect().width;
+            resizer.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            const onMove = (ev) => {
+                const w = Math.max(140, Math.min(420, startW + (ev.clientX - startX)));
+                panel.style.width = `${w}px`;
+            };
+
+            const onUp = () => {
+                resizer.classList.remove('active');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+
+                const w = Math.round(panel.getBoundingClientRect().width);
+                if (w > 0) localStorage.setItem(LS_WIDTH, String(w));
+            };
+
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         });
@@ -11020,6 +11320,7 @@
     setupMobileResultExpand();
     setupGenerateFab();
     setupSidebarResize();
+    setupHistoryPanel();
     setupWildcard();
     setupWorkflowMode();
     bindEvents();

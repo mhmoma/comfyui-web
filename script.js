@@ -50,13 +50,18 @@
         progressContainer: $('#progress-container'),
         progressBar: $('#progress-bar'),
         progressText: $('#progress-text'),
+        content: $('.content'),
         resultPlaceholder: $('#result-placeholder'),
         resultImage: $('#result-image'),
         resultActions: $('#result-actions'),
+        resultWrapper: $('#result-wrapper'),
         btnDownload: $('#btn-download'),
         btnSendToHistory: $('#btn-send-to-history'),
         historyGrid: $('#history-grid'),
         btnClearHistory: $('#btn-clear-history'),
+        historyPanel: $('#history-panel'),
+        historyResizer: $('#history-resizer'),
+        btnHistoryToggle: $('#btn-history-toggle'),
         btnTutorial: $('#btn-tutorial'),
         modalTutorial: $('#modal-tutorial'),
         btnCloseTutorial: $('#btn-close-tutorial'),
@@ -724,6 +729,24 @@
             await new Promise(r => setTimeout(r, 350 * (i + 1)));
         }
         throw lastErr || new Error('无法读取底图');
+    }
+
+    async function downloadComfyImageAsFile(viewUrl, filenameBase = `comfyui_${Date.now()}`) {
+        // 通过 fetch->Blob->ObjectURL 强制触发下载，避免浏览器因 CORS/Content-Disposition 导致“打开新窗口/新标签”。
+        const blob = await fetchComfyImageBlob(viewUrl, 3);
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+            const mime = blob.type || '';
+            const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') ? 'jpg' : (mime.includes('webp') ? 'webp' : 'png'));
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = `${filenameBase}.${ext}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 3000);
+        }
     }
 
     async function blobFromImageElement(viewUrl) {
@@ -5876,6 +5899,16 @@
         }
     }
 
+    function scrollToResultBottom() {
+        // 结果区（result-wrapper）与整体滚动（content）都尝试：不同布局下谁在滚动就滚谁。
+        if (dom.resultWrapper) {
+            dom.resultWrapper.scrollTop = dom.resultWrapper.scrollHeight;
+        }
+        if (dom.content) {
+            dom.content.scrollTo({ top: dom.content.scrollHeight, behavior: 'smooth' });
+        }
+    }
+
     function showResult(url, hasCompare) {
         dom.resultImage.src = url;
         dom.resultImage.classList.remove('hidden');
@@ -5883,6 +5916,11 @@
         dom.resultActions.classList.remove('hidden');
         dom.btnCompare.classList.toggle('hidden', !hasCompare);
         updateMobileResultUI(true);
+
+        // 生成完成后自动滚动到结果底部，方便查看。
+        requestAnimationFrame(() => {
+            try { scrollToResultBottom(); } catch { /* ignore */ }
+        });
     }
 
     // ==================== 图片对比滑块 ====================
@@ -6075,13 +6113,29 @@
             dom.inpSeed.value = Math.floor(Math.random() * 2 ** 32);
         });
 
-        dom.btnDownload.addEventListener('click', () => {
-            const url = dom.resultImage.src;
+        dom.btnDownload.addEventListener('click', async () => {
+            const url = dom.resultImage?.src;
             if (!url) return;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `comfyui_${Date.now()}.png`;
-            a.click();
+            try {
+                dom.btnDownload.disabled = true;
+                dom.btnDownload.textContent = '下载中...';
+                await downloadComfyImageAsFile(url, `comfyui_${Date.now()}`);
+            } catch (e) {
+                console.warn('[Download] failed:', e);
+                showToast('下载失败，请稍后重试或右键另存为。');
+                // 兜底：尝试使用 <a download> 直链下载（若浏览器不支持 download，则可能在当前页打开）
+                try {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `comfyui_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } catch { /* ignore */ }
+            } finally {
+                dom.btnDownload.disabled = false;
+                dom.btnDownload.textContent = '下载图片';
+            }
         });
 
         dom.btnSendToHistory.addEventListener('click', () => {
@@ -6182,13 +6236,28 @@
             if (url) useImageAsRef(url);
         });
 
-        dom.btnPreviewDownload.addEventListener('click', () => {
-            const url = dom.previewImage.src;
+        dom.btnPreviewDownload.addEventListener('click', async () => {
+            const url = dom.previewImage?.src;
             if (!url) return;
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `comfyui_${Date.now()}.png`;
-            a.click();
+            try {
+                dom.btnPreviewDownload.disabled = true;
+                dom.btnPreviewDownload.textContent = '下载中...';
+                await downloadComfyImageAsFile(url, `comfyui_${Date.now()}`);
+            } catch (e) {
+                console.warn('[Preview Download] failed:', e);
+                showToast('下载失败，请稍后重试或右键另存为。');
+                try {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `comfyui_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } catch { /* ignore */ }
+            } finally {
+                dom.btnPreviewDownload.disabled = false;
+                dom.btnPreviewDownload.textContent = '下载';
+            }
         });
 
         // Regional prompt
@@ -8035,7 +8104,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.10');
+        console.log('[ComfyUI Web] v4.13');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -8664,6 +8733,78 @@
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    }
+
+    // ==================== 历史面板：折叠 + 可拖拽宽度 ====================
+    function setupHistoryPanel() {
+        const panel = dom.historyPanel;
+        const resizer = dom.historyResizer;
+        const toggleBtn = dom.btnHistoryToggle;
+        if (!panel || !resizer || !toggleBtn) return;
+
+        // 移动端布局已做了独立的“历史Tab”处理，这里不强行接管折叠/拖拽。
+        if (window.matchMedia('(max-width: 1000px)').matches) return;
+
+        const LS_COLLAPSED = 'comfyui_web_history_collapsed';
+        const LS_WIDTH = 'comfyui_web_history_width';
+
+        const savedW = parseInt(localStorage.getItem(LS_WIDTH) || '0', 10);
+        const collapsed = localStorage.getItem(LS_COLLAPSED) === '1';
+
+        if (panel && !Number.isNaN(savedW) && savedW > 0 && !collapsed) {
+            panel.style.width = `${savedW}px`;
+        }
+
+        function applyCollapsed(nextCollapsed) {
+            panel.classList.toggle('collapsed', nextCollapsed);
+            toggleBtn.textContent = nextCollapsed ? '▶' : '◀';
+            resizer.style.display = nextCollapsed ? 'none' : '';
+            localStorage.setItem(LS_COLLAPSED, nextCollapsed ? '1' : '0');
+        }
+
+        applyCollapsed(collapsed);
+
+        toggleBtn.addEventListener('click', () => {
+            const next = !panel.classList.contains('collapsed');
+            // 展开时恢复宽度（如果之前有保存）
+            if (!next) {
+                const w = parseInt(localStorage.getItem(LS_WIDTH) || '0', 10);
+                if (w > 0) panel.style.width = `${w}px`;
+            }
+            applyCollapsed(next);
+        });
+
+        let startX = 0;
+        let startW = 0;
+        resizer.addEventListener('mousedown', (e) => {
+            if (panel.classList.contains('collapsed')) return;
+            e.preventDefault();
+
+            startX = e.clientX;
+            startW = panel.getBoundingClientRect().width;
+            resizer.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            const onMove = (ev) => {
+                const w = Math.max(140, Math.min(420, startW + (ev.clientX - startX)));
+                panel.style.width = `${w}px`;
+            };
+
+            const onUp = () => {
+                resizer.classList.remove('active');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+
+                const w = Math.round(panel.getBoundingClientRect().width);
+                if (w > 0) localStorage.setItem(LS_WIDTH, String(w));
+            };
+
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         });
@@ -11179,6 +11320,7 @@
     setupMobileResultExpand();
     setupGenerateFab();
     setupSidebarResize();
+    setupHistoryPanel();
     setupWildcard();
     setupWorkflowMode();
     bindEvents();
