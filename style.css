@@ -200,6 +200,7 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    position: relative;
 }
 
 /* Sidebar */
@@ -1393,8 +1394,7 @@ textarea {
 .history-toggle-rail {
     width: 22px;
     height: 120px;
-    align-self: stretch;
-    margin: 16px 0;
+    margin: 0;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: var(--bg-panel);
@@ -1407,6 +1407,11 @@ textarea {
     align-items: center;
     justify-content: center;
     padding: 0;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
 }
 
 .history-toggle-rail:hover {
@@ -1414,7 +1419,7 @@ textarea {
 }
 
 .history-toggle-rail:active {
-    transform: translateY(1px);
+    transform: translateY(-50%) scale(0.98);
 }
 
 .history-toggle-rail.hidden {
@@ -1431,8 +1436,7 @@ textarea {
     pointer-events: none;
     overflow: hidden;
     transition: width 0.25s ease, opacity 0.2s ease, transform 0.25s ease;
-    // 向屏幕外（右侧）隐藏，避免看起来“向内部收缩”
-    transform: translateX(16px);
+    transform: translateX(100%);
 }
 
 .history-panel:not(.collapsed) {
@@ -2791,6 +2795,12 @@ body.inpaint-open {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    min-height: 72vh;
+    max-height: 72vh;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 10px;
+    background: rgba(10, 14, 34, 0.45);
 }
 
 /* Responsive - Tablet */
@@ -2825,6 +2835,11 @@ body.inpaint-open {
 
     .history-toggle-rail {
         display: none !important;
+    }
+
+    .result-wrapper {
+        min-height: 60vh;
+        max-height: 60vh;
     }
 }
 

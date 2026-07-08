@@ -51,6 +51,7 @@
         progressBar: $('#progress-bar'),
         progressText: $('#progress-text'),
         content: $('.content'),
+        resultArea: $('#result-area'),
         resultPlaceholder: $('#result-placeholder'),
         resultImage: $('#result-image'),
         resultActions: $('#result-actions'),
@@ -5669,7 +5670,8 @@
         dom.btnGenerate.disabled = true;
         dom.btnGenerate.textContent = '生成中...';
         dom.progressContainer.classList.remove('hidden');
-        dom.resultPlaceholder.classList.add('hidden');
+        dom.resultPlaceholder.classList.remove('hidden');
+        dom.resultPlaceholder.textContent = '正在生成中，预览将显示在这里';
         dom.resultImage.classList.add('hidden');
         dom.resultActions.classList.add('hidden');
         // 点击生成后立即进入“结果界面”大小，方便在预览过程中也能看到同样的区域
@@ -5903,24 +5905,21 @@
     }
 
     function scrollToResultBottom() {
-        // “点击生成立刻滚到底”：避免 showResult 时机导致滚动未覆盖新内容。
+        // “点击生成立刻跳到结果界面”：这里优先定位到结果区本体，而不是等待出图后再滚。
         const wrapper = dom.resultWrapper;
         const content = dom.content;
+        const resultArea = dom.resultArea;
 
         const doNow = () => {
-            if (wrapper) {
-                // wrapper 自身可滚动时，强制到底（预览在 wrapper 内滚动时也有效）
-                wrapper.scrollTop = wrapper.scrollHeight;
-            }
-            if (content && wrapper) {
-                // content 是主要滚动容器：把 wrapper 底部对齐到 content 可视区底部
-                const target = wrapper.offsetTop + wrapper.offsetHeight;
-                const next = Math.max(0, target - content.clientHeight);
+            if (content && resultArea) {
+                const next = Math.max(0, resultArea.offsetTop - 8);
                 content.scrollTop = next;
-            } else if (content) {
-                content.scrollTop = content.scrollHeight;
-            } else if (wrapper) {
-                wrapper.scrollIntoView({ block: 'end', behavior: 'auto' });
+            } else if (resultArea) {
+                resultArea.scrollIntoView({ block: 'start', behavior: 'auto' });
+            }
+
+            if (wrapper) {
+                wrapper.scrollTop = 0;
             }
         };
 
@@ -6006,7 +6005,6 @@
     function saveToHistory(url) {
         const history = getHistory();
         history.unshift({ url, time: Date.now() });
-        if (history.length > 50) history.length = 50;
         localStorage.setItem('comfyui_history', JSON.stringify(history));
         renderHistory();
     }
@@ -8119,7 +8117,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.16');
+        console.log('[ComfyUI Web] v4.17');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9633,7 +9631,8 @@
         dom.btnGenerate.disabled = true;
         dom.btnGenerate.textContent = '生成中...';
         dom.progressContainer.classList.remove('hidden');
-        dom.resultPlaceholder.classList.add('hidden');
+        dom.resultPlaceholder.classList.remove('hidden');
+        dom.resultPlaceholder.textContent = '正在生成中，预览将显示在这里';
         dom.resultImage.classList.add('hidden');
         dom.resultActions.classList.add('hidden');
         // 工作流模式同样：点击生成后立刻进入固定结果界面
