@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://comfyui-web-89u.pages.dev/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/news/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/guides/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/about/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/app/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/news/anima-v22-inpaint-update/</loc><lastmod>2026-07-10</lastmod><changefreq>monthly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/news/site-portal-launch/</loc><lastmod>2026-07-10</lastmod><changefreq>monthly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/news/anima-base-model-guide/</loc><lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq></url>
+  <url><loc>https://comfyui-web-89u.pages.dev/news/comfyui-cors-setup/</loc><lastmod>2026-07-05</lastmod><changefreq>monthly</changefreq></url>
+</urlset>

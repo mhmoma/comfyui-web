@@ -640,7 +640,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _serve_static(self):
         path = self.path.split('?')[0]
-        if path == '/':
+        if path in ('', '/'):
             path = '/index.html'
 
         filepath = os.path.join(STATIC_DIR, path.lstrip('/'))
@@ -649,6 +649,13 @@ class Handler(BaseHTTPRequestHandler):
         if not filepath.startswith(STATIC_DIR):
             self._error(403, "Forbidden")
             return
+
+        if os.path.isdir(filepath):
+            filepath = os.path.join(filepath, 'index.html')
+        elif not os.path.isfile(filepath):
+            alt = os.path.join(filepath, 'index.html')
+            if os.path.isfile(alt):
+                filepath = alt
 
         if not os.path.isfile(filepath):
             self._error(404, "File not found")
@@ -786,6 +793,10 @@ def main():
     print(f"{'='*50}", flush=True)
     print(f"  前端地址: http://127.0.0.1:{PORT}", flush=True)
     print(f"  ComfyUI:  {COMFYUI_URL}", flush=True)
+    print(f"  门户首页: http://127.0.0.1:{PORT}/", flush=True)
+    print(f"  生图工具: http://127.0.0.1:{PORT}/app/", flush=True)
+    print(f"  管理发帖: http://127.0.0.1:{PORT}/admin/", flush=True)
+    print(f"  资讯页面: http://127.0.0.1:{PORT}/news/", flush=True)
     print(f"{'='*50}\n", flush=True)
 
     start_ws_proxy(PORT, host, port)
@@ -793,7 +804,7 @@ def main():
     httpd = ThreadedHTTPServer(('0.0.0.0', PORT), Handler)
     print(f"  HTTP 服务器已启动，按 Ctrl+C 停止\n", flush=True)
 
-    threading.Timer(0.5, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
+    threading.Timer(0.5, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}/")).start()
 
     try:
         httpd.serve_forever()

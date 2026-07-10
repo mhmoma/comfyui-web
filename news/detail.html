@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资讯详情 · ComfyUI Web</title>
+    <link rel="stylesheet" href="/assets/site.css?v=2">
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a href="/" class="site-logo">ComfyUI Web</a>
+            <nav class="site-nav">
+                <a href="/news/" class="active">资讯</a>
+                <a href="/guides/">教程</a>
+                <a href="/app/">工具</a>
+                <a href="/about/">关于</a>
+            </nav>
+            <a href="/app/" class="site-cta">进入生图 →</a>
+        </div>
+    </header>
+
+    <main class="site-main" id="article-root">
+        <p class="empty-state">加载中…</p>
+    </main>
+
+    <footer class="site-footer">
+        <p><a href="/news/">← 返回资讯</a></p>
+    </footer>
+
+    <script>
+    (function () {
+        const params = new URLSearchParams(location.search);
+        const slug = params.get('slug');
+        const root = document.getElementById('article-root');
+        const CATEGORY_LABELS = { model: '模型动态', tutorial: '教程技巧', tool: '工具更新', community: '社区精选' };
+
+        function esc(s) {
+            return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        if (!slug) {
+            root.innerHTML = '<p class="empty-state">缺少文章参数</p>';
+            return;
+        }
+
+        fetch('/api/articles/' + encodeURIComponent(slug))
+            .then(r => r.json().then(d => ({ ok: r.ok, d })))
+            .then(({ ok, d }) => {
+                if (!ok) {
+                    location.replace('/news/' + encodeURIComponent(slug) + '/');
+                    return;
+                }
+                const a = d.article;
+                document.title = a.title + ' · ComfyUI Web';
+                const date = new Date(a.published_at).toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric' });
+                const tags = (a.tags||[]).map(t => `<span class="article-tag"><a href="/app/?tag=${encodeURIComponent(t)}">#${esc(t)}</a></span>`).join('');
+                root.innerHTML = `
+                    <article>
+                        <header class="article-header">
+                            <span class="cat-badge cat-${esc(a.category)}">${CATEGORY_LABELS[a.category]||a.category}</span>
+                            <h1>${esc(a.title)}</h1>
+                            <div class="article-meta"><span>${date}</span></div>
+                        </header>
+                        ${a.cover_url ? `<img class="article-cover" src="${esc(a.cover_url)}" alt="">` : ''}
+                        <div class="article-content">${a.content_html}</div>
+                        ${tags ? `<div class="article-tags">${tags}</div>` : ''}
+                        <div class="article-actions">
+                            <a href="/news/" class="btn-secondary">← 返回资讯</a>
+                        </div>
+                    </article>`;
+            })
+            .catch(() => {
+                location.replace('/news/' + encodeURIComponent(slug) + '/');
+            });
+    })();
+    </script>
+    <script src="/assets/site.js?v=2"></script>
+</body>
+</html>

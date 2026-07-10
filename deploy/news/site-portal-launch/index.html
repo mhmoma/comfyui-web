@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>站点升级：AI 绘画资讯站 + 生图工具 · ComfyUI Web</title>
+    <meta name="description" content="ComfyUI Web 从纯生图工具升级为「资讯 + 教程 + 工具」一站式设计，生图功能迁移至 /app，首页发布模型动态与教程内容。">
+    <link rel="canonical" href="https://comfyui-web-89u.pages.dev/news/site-portal-launch/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="站点升级：AI 绘画资讯站 + 生图工具">
+    <meta property="og:description" content="ComfyUI Web 从纯生图工具升级为「资讯 + 教程 + 工具」一站式设计，生图功能迁移至 /app，首页发布模型动态与教程内容。">
+    <meta property="og:url" content="https://comfyui-web-89u.pages.dev/news/site-portal-launch/">
+    
+    <link rel="stylesheet" href="/assets/site.css?v=1">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"NewsArticle","headline":"站点升级：AI 绘画资讯站 + 生图工具","description":"ComfyUI Web 从纯生图工具升级为「资讯 + 教程 + 工具」一站式设计，生图功能迁移至 /app，首页发布模型动态与教程内容。","datePublished":"2026-07-10T00:00:00.000Z","author":{"@type":"Organization","name":"ComfyUI Web"}}</script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a href="/" class="site-logo">ComfyUI Web</a>
+            <nav class="site-nav">
+                <a href="/news/" class="active">资讯</a>
+                <a href="/guides/">教程</a>
+                <a href="/app/">工具</a>
+                <a href="/about/">关于</a>
+            </nav>
+            <a href="/app/" class="site-cta">进入生图 →</a>
+        </div>
+    </header>
+    <main class="site-main">
+        <article>
+            <header class="article-header">
+                <span class="cat-badge cat-tool">工具更新</span>
+                <h1>站点升级：AI 绘画资讯站 + 生图工具</h1>
+                <div class="article-meta">
+                    <span>2026年7月10日</span>
+                    <span>ComfyUI Web</span>
+                </div>
+            </header>
+            
+            <div class="article-content">
+                <h2>新定位</h2>
+<p><strong>看资讯、学技巧、用工具生图，一站完成。</strong></p>
+<p>本次重构将网站拆分为两个区域：</p>
+<ul>
+<li><strong>门户区</strong>（首页、资讯、教程）— 面向浏览阅读与 SEO</li>
+<li><strong>工具区</strong>（<code>/app</code>）— 保留全部 ComfyUI Web 生图能力</li>
+</ul>
+<h2>页面结构</h2>
+<p>| 路径 | 说明 |</p>
+<p>|------|------|</p>
+<p>| <code>/</code> | 门户首页，最新资讯 + 快速入口 |</p>
+<p>| <code>/news/</code> | 资讯列表与文章详情 |</p>
+<p>| <code>/guides/</code> | 教程与模型下载指南 |</p>
+<p>| <code>/app/</code> | 本地 ComfyUI + 在线 NAI 生图工具 |</p>
+<p>| <code>/about/</code> | 关于本站 |</p>
+<h2>资讯发布流程</h2>
+<p>文章以 Markdown 管理，存放在 <code>content/news/</code> 目录：</p>
+<pre><code>
+# 写完 md 后构建
+npm run build:news
+
+# 构建 + 同步 deploy
+npm run build
+</code></pre>
+<p>构建产物包括 <code>news.json</code>、静态详情页、<code>feed.xml</code> 和 <code>sitemap.xml</code>。</p>
+<h2>下一步计划</h2>
+<ul>
+<li>文章与生图工具深链联动（<code>?tag=xxx</code>）</li>
+<li>D1 数据库后台发帖（阶段 B）</li>
+<li>前端模块化拆分（阶段 C）</li>
+</ul>
+            </div>
+            <div class="article-tags"><span class="article-tag"><a href="/app/?tag=%E6%9B%B4%E6%96%B0">#更新</a></span>
+                <span class="article-tag"><a href="/app/?tag=%E9%97%A8%E6%88%B7">#门户</a></span></div>
+            <div class="article-actions">
+                <a href="/app/" class="btn-primary">一键试用此功能 →</a>
+                <a href="/news/" class="btn-secondary">← 返回资讯列表</a>
+            </div>
+        </article>
+    </main>
+    <footer class="site-footer">
+        <p>ComfyUI Web · AI 绘画资讯与工具站</p>
+        <p style="margin-top:8px">
+            <a href="/news/">资讯</a> ·
+            <a href="/guides/">教程</a> ·
+            <a href="/app/">生图工具</a> ·
+            <a href="/feed.xml">RSS 订阅</a>
+        </p>
+    </footer>
+    <script src="/assets/site.js?v=1"></script>
+</body>
+</html>

@@ -6915,7 +6915,7 @@
             _patchSeriesCountsOnTagData();
         }
         try {
-            const res = await fetch('series_char_counts.json');
+            const res = await fetch('/series_char_counts.json');
             if (!res.ok) return false;
             const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
             const cachedVer = (await _bigCacheGet('_series_char_counts_ver')) || '';
@@ -7014,7 +7014,7 @@
     async function _refreshTagsAndSeriesInBackground() {
         let tagsChanged = false;
         try {
-            const res = await fetch('tags.json');
+            const res = await fetch('/tags.json');
             if (res.ok) {
                 const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
                 const cachedVer = (await _bigCacheGet('_tags_ver')) || '';
@@ -7055,7 +7055,7 @@
 
         if (!tagData.length) {
             try {
-                const res = await fetch('tags.json');
+                const res = await fetch('/tags.json');
                 tagData = await res.json();
                 const currentVer = res.headers.get('etag') || res.headers.get('last-modified') || '';
                 await _bigCacheSet('_tags_cache', tagData);
@@ -8579,8 +8579,34 @@
     }
 
     // ==================== 初始化 ====================
+    function applyDeepLinks() {
+        const params = new URLSearchParams(location.search);
+        const hashRaw = location.hash.replace(/^#/, '');
+        const hashParams = new URLSearchParams(hashRaw.includes('=') ? hashRaw : '');
+
+        const tag = params.get('tag');
+        if (tag && dom.inpPos) {
+            const cur = dom.inpPos.value.trim();
+            dom.inpPos.value = cur ? `${cur}, ${tag}` : tag;
+        }
+
+        const arch = params.get('arch');
+        if (arch && dom.selArch) {
+            dom.selArch.value = arch;
+            dom.selArch.dispatchEvent(new Event('change'));
+        }
+
+        const mode = hashParams.get('mode');
+        if (mode === 'nai' || mode === 'simple' || mode === 'workflow') {
+            _profileApplyActiveMode(mode);
+        }
+
+        const tab = hashParams.get('tab') || params.get('tab');
+        if (tab) switchMobileTab(tab);
+    }
+
     async function init() {
-        console.log('[ComfyUI Web] v4.19');
+        console.log('[ComfyUI Web] v4.20');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -8603,6 +8629,7 @@
             updateInpaintEngineUI();
             updateArchAwarePanels();
             await ProfileManager.restoreActiveProfile();
+            applyDeepLinks();
         });
     }
 

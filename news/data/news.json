@@ -1,0 +1,65 @@
+[
+  {
+    "slug": "anima-v22-inpaint-update",
+    "title": "Anima v22 局部重绘工作流更新",
+    "summary": "站点局部重绘引擎已对齐 Anima v22 工作流，提供「强化小范围」与「大范围重绘」两套方案，支持 LLLite + InpaintPreprocessor 裁剪拼接。",
+    "cover_url": "",
+    "category": "tool",
+    "tags": [
+      "anima",
+      "inpaint",
+      "局部重绘"
+    ],
+    "author": "ComfyUI Web",
+    "app_link": "/app/#inpaint",
+    "status": "published",
+    "published_at": 1783641600000
+  },
+  {
+    "slug": "site-portal-launch",
+    "title": "站点升级：AI 绘画资讯站 + 生图工具",
+    "summary": "ComfyUI Web 从纯生图工具升级为「资讯 + 教程 + 工具」一站式设计，生图功能迁移至 /app，首页发布模型动态与教程内容。",
+    "cover_url": "",
+    "category": "tool",
+    "tags": [
+      "更新",
+      "门户"
+    ],
+    "author": "ComfyUI Web",
+    "app_link": "/app/",
+    "status": "published",
+    "published_at": 1783641600000
+  },
+  {
+    "slug": "anima-base-model-guide",
+    "title": "Anima Base v1.0 模型安装与使用指南",
+    "summary": "CircleStone Labs 开源二次元扩散模型 Anima 的安装步骤、文件放置路径，以及在本站选择 Anima 架构后的推荐参数。",
+    "cover_url": "",
+    "category": "tutorial",
+    "tags": [
+      "anima",
+      "模型",
+      "教程"
+    ],
+    "author": "ComfyUI Web",
+    "app_link": "/app/?arch=anima",
+    "status": "published",
+    "published_at": 1783468800000
+  },
+  {
+    "slug": "comfyui-cors-setup",
+    "title": "ComfyUI 跨域启动：让网页工具连上本地",
+    "summary": "启动 ComfyUI 时必须加 --enable-cors-header 参数，否则浏览器会拦截跨域请求。本文提供 Windows bat 修改方法与局域网访问配置。",
+    "cover_url": "",
+    "category": "tutorial",
+    "tags": [
+      "comfyui",
+      "教程",
+      "入门"
+    ],
+    "author": "ComfyUI Web",
+    "app_link": "/app/",
+    "status": "published",
+    "published_at": 1783209600000
+  }
+]

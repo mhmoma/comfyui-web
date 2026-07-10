@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教程 · ComfyUI Web</title>
+    <meta name="description" content="ComfyUI 入门、模型下载、Anima/SDXL 架构使用指南。">
+    <link rel="canonical" href="https://comfyui-web-89u.pages.dev/guides/">
+    <link rel="stylesheet" href="/assets/site.css?v=1">
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a href="/" class="site-logo">ComfyUI Web</a>
+            <nav class="site-nav">
+                <a href="/news/">资讯</a>
+                <a href="/guides/" class="active">教程</a>
+                <a href="/app/">工具</a>
+                <a href="/about/">关于</a>
+            </nav>
+            <a href="/app/" class="site-cta">进入生图 →</a>
+        </div>
+    </header>
+
+    <main class="site-main">
+        <header class="page-header">
+            <h1>使用教程</h1>
+            <p>从启动 ComfyUI 到选择模型架构，快速上手本站生图工具</p>
+        </header>
+
+        <section class="guide-section" id="startup">
+            <h2>1. 启动 ComfyUI</h2>
+            <p>启动时需要加 <code>--enable-cors-header</code> 参数以允许网页跨域访问：</p>
+            <pre>python main.py --enable-cors-header</pre>
+            <p>若需局域网其他设备访问，同时加 <code>--listen</code>：</p>
+            <pre>python main.py --enable-cors-header --listen 0.0.0.0</pre>
+        </section>
+
+        <section class="guide-section" id="server">
+            <h2>2. 设置服务器地址</h2>
+            <p>打开 <a href="/app/">生图工具</a>，点击右上角 ⚙️ 按钮，填入 ComfyUI 地址：</p>
+            <ul>
+                <li>本机：<code>http://127.0.0.1:8188</code></li>
+                <li>局域网：<code>http://你电脑的IP:8188</code></li>
+            </ul>
+        </section>
+
+        <section class="guide-section" id="arch">
+            <h2>3. 选择模型架构</h2>
+            <ul>
+                <li><strong>SDXL (Checkpoint)</strong> — 传统 SDXL 单文件大模型，支持 ControlNet / IP-Adapter</li>
+                <li><strong>Anima (Diffusion Model)</strong> — 新架构，扩散模型 + 文本编码器 + VAE 分开加载</li>
+            </ul>
+        </section>
+
+        <section class="guide-section" id="anima">
+            <h2>4. Anima Base v1.0 模型下载</h2>
+            <p>CircleStone Labs 开源二次元向扩散模型（2B），选 <strong>Anima</strong> 架构后在三个下拉框分别加载：</p>
+            <ul>
+                <li><code>anima-base-v1.0.safetensors</code> → <code>models/diffusion_models/</code>
+                    — <a href="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-base-v1.0.safetensors" target="_blank" rel="noopener">下载</a></li>
+                <li><code>qwen_3_06b_base.safetensors</code> → <code>models/text_encoders/</code>
+                    — <a href="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors" target="_blank" rel="noopener">下载</a></li>
+                <li><code>qwen_image_vae.safetensors</code> → <code>models/vae/</code>
+                    — <a href="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors" target="_blank" rel="noopener">下载</a></li>
+            </ul>
+            <p><a href="https://huggingface.co/circlestone-labs/Anima" target="_blank" rel="noopener">Hugging Face 主页 →</a></p>
+        </section>
+
+        <section class="guide-section" id="sdxl">
+            <h2>5. SDXL Base 1.0 模型下载</h2>
+            <p>Stability AI 官方 SDXL 基础模型，选 <strong>SDXL</strong> 架构后在 Checkpoint 下拉框加载：</p>
+            <ul>
+                <li><code>sd_xl_base_1.0.safetensors</code> → <code>models/checkpoints/</code>
+                    — <a href="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors" target="_blank" rel="noopener">下载</a></li>
+                <li><code>sdxl_vae.safetensors</code> → <code>models/vae/</code>（可选，改善发色）
+                    — <a href="https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors" target="_blank" rel="noopener">下载</a></li>
+            </ul>
+        </section>
+
+        <section class="guide-section" id="inpaint-deps">
+            <h2>6. 局部重绘依赖安装</h2>
+            <p>Anima 局部重绘需要以下 ComfyUI 自定义节点：</p>
+            <ul>
+                <li>FLS_Sampler（含 FLS_SamplerV4）</li>
+                <li>ComfyUI-CropAndStitch</li>
+                <li>ComfyUI_essentials</li>
+                <li>Anima LLLite Inpaint 权重</li>
+            </ul>
+            <p>可运行项目提供的 <code>安装局部重绘依赖.bat</code> 一键检查与安装。安装完成后在 <a href="/app/#inpaint">生图工具</a> 中即可使用局部重绘。</p>
+        </section>
+
+        <section class="guide-section" id="online">
+            <h2>7. 在线生图（无需本地 ComfyUI）</h2>
+            <p>切换到「在线生图」模式，通过 NAI API 云端出图。适合没有 GPU 或不想配置本地环境的用户。</p>
+            <p><a href="/app/#mode=nai" class="btn-primary" style="display:inline-flex;margin-top:8px">进入在线生图 →</a></p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>ComfyUI Web · AI 绘画资讯与工具站</p>
+        <p style="margin-top:8px"><a href="/app/">打开生图工具</a> · <a href="/">返回首页</a></p>
+    </footer>
+
+    <script src="/assets/site.js?v=1"></script>
+</body>
+</html>

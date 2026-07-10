@@ -1,0 +1,9 @@
+{
+  "name": "comfyui-web",
+  "private": true,
+  "scripts": {
+    "build:news": "node scripts/build-news.js",
+    "sync:deploy": "node scripts/sync-deploy.js",
+    "build": "node scripts/build-news.js && node scripts/sync-deploy.js"
+  }
+}

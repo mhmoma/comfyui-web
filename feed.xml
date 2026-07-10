@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>ComfyUI Web 资讯</title>
+    <link>https://comfyui-web-89u.pages.dev/news/</link>
+    <description>AI 绘画模型动态、教程技巧与工具更新</description>
+    <language>zh-CN</language>
+    <atom:link href="https://comfyui-web-89u.pages.dev/feed.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title><![CDATA[Anima v22 局部重绘工作流更新]]></title>
+      <link>https://comfyui-web-89u.pages.dev/news/anima-v22-inpaint-update/</link>
+      <guid isPermaLink="true">https://comfyui-web-89u.pages.dev/news/anima-v22-inpaint-update/</guid>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[站点局部重绘引擎已对齐 Anima v22 工作流，提供「强化小范围」与「大范围重绘」两套方案，支持 LLLite + InpaintPreprocessor 裁剪拼接。]]></description>
+    </item>
+    <item>
+      <title><![CDATA[站点升级：AI 绘画资讯站 + 生图工具]]></title>
+      <link>https://comfyui-web-89u.pages.dev/news/site-portal-launch/</link>
+      <guid isPermaLink="true">https://comfyui-web-89u.pages.dev/news/site-portal-launch/</guid>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[ComfyUI Web 从纯生图工具升级为「资讯 + 教程 + 工具」一站式设计，生图功能迁移至 /app，首页发布模型动态与教程内容。]]></description>
+    </item>
+    <item>
+      <title><![CDATA[Anima Base v1.0 模型安装与使用指南]]></title>
+      <link>https://comfyui-web-89u.pages.dev/news/anima-base-model-guide/</link>
+      <guid isPermaLink="true">https://comfyui-web-89u.pages.dev/news/anima-base-model-guide/</guid>
+      <pubDate>Wed, 08 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[CircleStone Labs 开源二次元扩散模型 Anima 的安装步骤、文件放置路径，以及在本站选择 Anima 架构后的推荐参数。]]></description>
+    </item>
+    <item>
+      <title><![CDATA[ComfyUI 跨域启动：让网页工具连上本地]]></title>
+      <link>https://comfyui-web-89u.pages.dev/news/comfyui-cors-setup/</link>
+      <guid isPermaLink="true">https://comfyui-web-89u.pages.dev/news/comfyui-cors-setup/</guid>
+      <pubDate>Sun, 05 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[启动 ComfyUI 时必须加 --enable-cors-header 参数，否则浏览器会拦截跨域请求。本文提供 Windows bat 修改方法与局域网访问配置。]]></description>
+    </item>
+  </channel>
+</rss>

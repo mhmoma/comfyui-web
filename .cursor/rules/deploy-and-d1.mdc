@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.92
+> **部署版本**: 1.95
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -14,7 +14,7 @@ alwaysApply: true
 
 ## 1. 项目基本信息
 
-- **项目名称**: ComfyUI Web (AI 绘图前端工具)
+- **项目名称**: ComfyUI Web (AI 绘画资讯与工具站)
 - **工作区路径**: `d:\桌宠\comfyui-web`
 - **线上地址**: https://comfyui-web-89u.pages.dev/
 - **部署平台**: Cloudflare Pages
@@ -35,11 +35,16 @@ alwaysApply: true
 
 ### 部署步骤
 
-1.  **同步文件**: 将根目录的最新版核心文件，覆盖到 `deploy/` 目录中。
+1.  **构建与同步**: 写完资讯 Markdown 后构建，并同步门户/工具到 `deploy/`。
     ```powershell
-    Copy-Item -Path "index.html", "script.js", "style.css" -Destination "deploy/" -Force
+    npm run build
     ```
-    *注意：`tags.json` 和 `characters.json` 等数据文件如果过大或不常变动，可以不每次都同步。*
+    等价于 `npm run build:news`（生成资讯 JSON/详情页/RSS/sitemap）+ `npm run sync:deploy`（同步 `index.html`、`assets/`、`news/`、`guides/`、`about/`、`app/` 到 deploy）。
+
+    仅改生图工具时也可手动同步：
+    ```powershell
+    node scripts/sync-deploy.js
+    ```
 
 2.  **提交更改**: 将对 `deploy/` 目录的修改提交到 Git。
     ```powershell
@@ -160,6 +165,11 @@ https://raw.githubusercontent.com/mhmoma/comfyui-Web/main/characters.json
 | `/api/characters/seed?page=N` | POST | 填充数据库（分页） | x-admin-key |
 | `/api/nai/generate` | POST | NAI 生图 | 参见 env.NAI_API_KEY |
 | `/api/nai/status` | GET | 生图状态 | 无 |
+| `/api/articles` | GET | 资讯列表（分页、分类） | 无 |
+| `/api/articles` | POST | 管理员发帖 | x-admin-key |
+| `/api/articles/init` | POST | 初始化 articles 表 | x-admin-key |
+| `/api/articles/{slug}` | GET | 文章详情 | 无 |
+| `/api/articles/{slug}` | PATCH / DELETE | 编辑 / 删除 | x-admin-key |
 
 ---
 
@@ -184,6 +194,12 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 
 | 文件 | 说明 |
 |------|------|
+| `index.html` | 门户首页（资讯入口 + 快速链接） |
+| `app/` | 生图工具（`index.html` / `script.js` / `style.css`） |
+| `content/news/*.md` | 资讯 Markdown 源文件 |
+| `scripts/build-news.js` | 资讯构建脚本（JSON + 详情页 + RSS + sitemap） |
+| `scripts/sync-deploy.js` | 同步门户与工具到 `deploy/` |
+| `assets/site.css` | 门户站公共样式 |
 | `wrangler.toml` | D1 绑定配置（本地开发用） |
 | `schema.sql` | 数据库表结构 |
 | `seed_d1.js` | 生成 seed.sql 的 Node 脚本 |
@@ -292,4 +308,7 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.90 | 2026-07-08 | 固定结果舞台与历史外侧收起 | 未生图前也保持固定结果舞台尺寸；点击生成立即跳到结果舞台；历史记录取消 50 条上限可持续滚动；历史栏收起改为向屏幕外滑出并释放主界面宽度（`v4.17` / `style.css?v=403` / `script.js?v=413`）。 |
 | 1.91 | 2026-07-08 | 生成提示改悬浮不占位 | 将结果区“正在生成中”提示改为绝对定位浮层，不再在顶部占据大块空白并挤压预览图（`v4.18` / `style.css?v=404` / `script.js?v=414`）。 |
 | 1.92 | 2026-07-10 | 画师串自定义栏 | 画师分类新增「画师串」：可自定义画师组合、上传示例图，元数据 localStorage + 图片 IndexedDB 本地持久化（`v4.19` / `style.css?v=405` / `script.js?v=415`）。 |
+| 1.93 | 2026-07-10 | 门户站 + 资讯阶段 A | 站点升级为资讯+工具双区：门户首页、`/app` 生图工具、Markdown 资讯构建（`content/news/` → `news.json`/详情页/RSS/sitemap）、教程/关于页（`v4.20` / `app/style.css?v=406` / `app/script.js?v=416`）。 |
+| 1.94 | 2026-07-10 | 微博式管理发帖（阶段 B） | D1 `articles` 表 + `/api/articles` CRUD；`/admin/` 管理发帖页；资讯页改 API 驱动微博流展示（`assets/site.css?v=2`）。 |
+| 1.95 | 2026-07-10 | 门户站完整上线 + 管理后台 | 门户首页、`/app` 生图工具、`/news` 资讯流、Markdown 构建、完整管理后台（发帖/编辑/删帖/草稿/搜索筛选）、首页资讯卡片优化（`v4.20` / `assets/site.css?v=4` / `app/script.js?v=416`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |

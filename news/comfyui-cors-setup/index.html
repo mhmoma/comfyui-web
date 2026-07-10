@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI 跨域启动：让网页工具连上本地 · ComfyUI Web</title>
+    <meta name="description" content="启动 ComfyUI 时必须加 --enable-cors-header 参数，否则浏览器会拦截跨域请求。本文提供 Windows bat 修改方法与局域网访问配置。">
+    <link rel="canonical" href="https://comfyui-web-89u.pages.dev/news/comfyui-cors-setup/">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="ComfyUI 跨域启动：让网页工具连上本地">
+    <meta property="og:description" content="启动 ComfyUI 时必须加 --enable-cors-header 参数，否则浏览器会拦截跨域请求。本文提供 Windows bat 修改方法与局域网访问配置。">
+    <meta property="og:url" content="https://comfyui-web-89u.pages.dev/news/comfyui-cors-setup/">
+    
+    <link rel="stylesheet" href="/assets/site.css?v=1">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"NewsArticle","headline":"ComfyUI 跨域启动：让网页工具连上本地","description":"启动 ComfyUI 时必须加 --enable-cors-header 参数，否则浏览器会拦截跨域请求。本文提供 Windows bat 修改方法与局域网访问配置。","datePublished":"2026-07-05T00:00:00.000Z","author":{"@type":"Organization","name":"ComfyUI Web"}}</script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a href="/" class="site-logo">ComfyUI Web</a>
+            <nav class="site-nav">
+                <a href="/news/" class="active">资讯</a>
+                <a href="/guides/">教程</a>
+                <a href="/app/">工具</a>
+                <a href="/about/">关于</a>
+            </nav>
+            <a href="/app/" class="site-cta">进入生图 →</a>
+        </div>
+    </header>
+    <main class="site-main">
+        <article>
+            <header class="article-header">
+                <span class="cat-badge cat-tutorial">教程技巧</span>
+                <h1>ComfyUI 跨域启动：让网页工具连上本地</h1>
+                <div class="article-meta">
+                    <span>2026年7月5日</span>
+                    <span>ComfyUI Web</span>
+                </div>
+            </header>
+            
+            <div class="article-content">
+                <h2>问题现象</h2>
+<p>打开 <a href="/app/" target="_blank" rel="noopener">生图工具</a> 后，右上角连接状态显示红色「未连接」，控制台出现 CORS 相关错误。这是因为浏览器安全策略禁止网页直接访问不同源的 ComfyUI API。</p>
+<h2>解决方法</h2>
+<p>启动 ComfyUI 时加上 <code>--enable-cors-header</code> 参数：</p>
+<pre><code>
+python main.py --enable-cors-header
+</code></pre>
+<p>如果使用 bat 启动脚本，找到 <code>python main.py</code> 那一行，在末尾追加该参数。</p>
+<h2>局域网访问</h2>
+<p>若需手机或其他设备通过局域网使用：</p>
+<pre><code>
+python main.py --enable-cors-header --listen 0.0.0.0
+</code></pre>
+<p>然后在网站设置（⚙️）中填入 <code>http://你电脑的IP:8188</code>。</p>
+<h2>验证连接</h2>
+<ol>
+<li>确保 ComfyUI 已启动且终端无报错</li>
+<li>打开 <code>/app/</code>，查看右上角连接灯是否变绿</li>
+<li>若仍失败，检查防火墙是否放行 8188 端口</li>
+</ol>
+<h2>在线生图替代方案</h2>
+<p>不想配置本地环境？切换到 <strong>在线生图</strong> 模式，通过 NAI API 直接出图，无需本地 ComfyUI。</p>
+            </div>
+            <div class="article-tags"><span class="article-tag"><a href="/app/?tag=comfyui">#comfyui</a></span>
+                <span class="article-tag"><a href="/app/?tag=%E6%95%99%E7%A8%8B">#教程</a></span>
+                <span class="article-tag"><a href="/app/?tag=%E5%85%A5%E9%97%A8">#入门</a></span></div>
+            <div class="article-actions">
+                <a href="/app/" class="btn-primary">一键试用此功能 →</a>
+                <a href="/news/" class="btn-secondary">← 返回资讯列表</a>
+            </div>
+        </article>
+    </main>
+    <footer class="site-footer">
+        <p>ComfyUI Web · AI 绘画资讯与工具站</p>
+        <p style="margin-top:8px">
+            <a href="/news/">资讯</a> ·
+            <a href="/guides/">教程</a> ·
+            <a href="/app/">生图工具</a> ·
+            <a href="/feed.xml">RSS 订阅</a>
+        </p>
+    </footer>
+    <script src="/assets/site.js?v=1"></script>
+</body>
+</html>

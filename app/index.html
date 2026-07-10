@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>生图工具 · ComfyUI Web v4.20</title>
+    <link rel="stylesheet" href="style.css?v=406">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+<a href="/" class="site-home-link" title="返回首页">🏠</a>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.20</span></h1>
+            <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
+                <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
+                <span class="conn-text" id="conn-text">检测中</span>
+            </div>
+            <select id="sel-profile-quick" class="profile-quick-select" title="配置方案">
+                <option value="default">默认</option>
+            </select>
+            <a href="https://discord.gg/da9PMeAGGK" target="_blank" rel="noopener noreferrer" class="btn-icon btn-discord" title="加入绘画Discord交流群">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            </a>
+            <button id="btn-tutorial" class="btn-icon" title="教程">📖</button>
+            <button id="btn-composite" class="btn-icon" title="图层合成">🧩</button>
+            <button id="btn-cutout" class="btn-icon" title="抠图">✂️</button>
+            <div class="theme-btn">
+                <button id="btn-theme" class="btn-icon" title="切换主题">🎨</button>
+                <div id="theme-panel" class="theme-panel hidden">
+                    <div class="theme-dot active" data-theme="default" title="暗夜"></div>
+                    <div class="theme-dot" data-theme="cyberpunk" title="赛博朋克"></div>
+                    <div class="theme-dot" data-theme="forest" title="森林"></div>
+                    <div class="theme-dot" data-theme="sunset" title="日落"></div>
+                    <div class="theme-dot" data-theme="lavender" title="薰衣草"></div>
+                    <div class="theme-dot" data-theme="light" title="纯白"></div>
+                </div>
+            </div>
+            <button id="btn-settings" class="btn-icon" title="设置">⚙️</button>
+        </header>
+
+        <main class="main mobile-tab-create">
+            <aside class="sidebar">
+                <!-- 模式切换 -->
+                <div class="mode-switcher">
+                    <button class="mode-tab active" data-mode="simple">简易模式</button>
+                    <button class="mode-tab" data-mode="workflow">工作流模式</button>
+                    <button class="mode-tab" data-mode="nai">在线生图</button>
+                </div>
+
+                <!-- 简易模式内容 -->
+                <div class="mode-content" id="mode-simple">
+                <!-- 分组1：基础设置 -->
+                <div class="panel-group open" data-group="basic">
+                    <div class="panel-group-header">基础设置</div>
+                    <div class="panel-group-body">
+                        <section class="panel">
+                            <h2>模型架构</h2>
+                            <select id="sel-arch">
+                                <option value="sdxl">SDXL (Checkpoint)</option>
+                                <option value="anima">Anima (Diffusion Model)</option>
+                            </select>
+                        </section>
+
+                        <section class="panel" id="panel-sdxl-model">
+                            <h2>Checkpoint</h2>
+                            <select id="sel-checkpoint"></select>
+                        </section>
+
+                        <section class="panel hidden" id="panel-anima-model">
+                            <h2>Anima 模型</h2>
+                            <label>扩散模型 <select id="sel-unet"></select></label>
+                            <label>文本编码器 <select id="sel-clip"></select></label>
+                            <label>VAE <select id="sel-anima-vae"></select></label>
+                        </section>
+
+                        <section class="panel">
+                            <h2>采样参数</h2>
+                            <div class="compact-row">
+                                <label>采样器 <select id="sel-sampler"></select></label>
+                                <label>调度器 <select id="sel-scheduler"></select></label>
+                            </div>
+                            <div class="compact-row">
+                                <label>步数 <input type="number" id="inp-steps" value="20" min="1" max="150"></label>
+                                <label>CFG <input type="number" id="inp-cfg" value="7" min="1" max="30" step="0.5"></label>
+                                <label>Clip Skip <input type="number" id="inp-clip-skip" value="2" min="1" max="12"></label>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="compact-row">
+                                <label>宽 <input type="number" id="inp-width" value="1024" min="64" max="2048" step="64"></label>
+                                <label>高 <input type="number" id="inp-height" value="1536" min="64" max="2048" step="64"></label>
+                            </div>
+                            <div class="seed-row" style="margin-top:8px">
+                                <label style="flex:1;margin:0">种子 <input type="number" id="inp-seed" value="-1"></label>
+                                <button id="btn-random-seed" class="btn-icon" title="随机">🎲</button>
+                            </div>
+                            <label style="margin-top:8px;flex-direction:row;align-items:center;gap:8px">
+                                <input type="checkbox" id="chk-speedup"> <span style="font-size:0.8rem;color:var(--text-primary)">⚡ 加速模式</span>
+                                <small style="color:var(--text-secondary);font-size:0.68rem;margin:0">(速度+30%，质量微降)</small>
+                            </label>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- 分组2：增强功能 -->
+                <div class="panel-group" data-group="enhance">
+                    <div class="panel-group-header">增强功能</div>
+                    <div class="panel-group-body">
+                        <section class="panel optional-panel">
+                            <div class="panel-header">
+                                <h2>VAE 选择</h2>
+                                <label class="toggle"><input type="checkbox" id="chk-vae"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="panel-body" id="panel-vae">
+                                <select id="sel-vae"></select>
+                            </div>
+                        </section>
+
+                        <section class="panel optional-panel">
+                            <div class="panel-header">
+                                <h2>LoRA</h2>
+                                <label class="toggle"><input type="checkbox" id="chk-lora"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="panel-body" id="panel-lora">
+                                <div id="lora-list"></div>
+                                <button id="btn-add-lora" class="btn-secondary" style="width:100%;margin-top:8px">+ 添加 LoRA</button>
+                            </div>
+                        </section>
+
+                        <section class="panel optional-panel">
+                            <div class="panel-header">
+                                <h2>高清放大</h2>
+                                <label class="toggle"><input type="checkbox" id="chk-hires"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="panel-body" id="panel-hires">
+                                <div class="compact-row">
+                                    <label>倍数 <input type="number" id="inp-hires-scale" value="2" min="1" max="4" step="0.5"></label>
+                                    <label>步数 <input type="number" id="inp-hires-steps" value="15" min="1" max="100"></label>
+                                </div>
+                                <div class="compact-row">
+                                    <label>方法 <select id="sel-upscale-method">
+                                        <option value="nearest-exact">nearest-exact</option>
+                                        <option value="bilinear">bilinear</option>
+                                        <option value="area">area</option>
+                                        <option value="bicubic">bicubic</option>
+                                        <option value="lanczos">lanczos</option>
+                                    </select></label>
+                                    <label>强度 <input type="number" id="inp-hires-denoise" value="0.5" min="0" max="1" step="0.05"></label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel optional-panel">
+                            <div class="panel-header">
+                                <h2>质量增强 (FreeU)</h2>
+                                <label class="toggle"><input type="checkbox" id="chk-freeu" checked><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="panel-body" id="panel-freeu">
+                                <div class="compact-row">
+                                    <label>b1 <input type="number" id="inp-freeu-b1" value="1.3" min="0" max="3" step="0.1"></label>
+                                    <label>b2 <input type="number" id="inp-freeu-b2" value="1.4" min="0" max="3" step="0.1"></label>
+                                </div>
+                                <div class="compact-row">
+                                    <label>s1 <input type="number" id="inp-freeu-s1" value="0.9" min="0" max="2" step="0.1"></label>
+                                    <label>s2 <input type="number" id="inp-freeu-s2" value="0.2" min="0" max="2" step="0.1"></label>
+                                </div>
+                                <small>增强细节和清晰度，不增加生成时间</small>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- 分组3：图像控制 -->
+                <div class="panel-group" data-group="control">
+                    <div class="panel-group-header">图像控制</div>
+                    <div class="panel-group-body">
+                        <section class="panel optional-panel">
+                    <div class="panel-header">
+                        <h2>ControlNet</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="chk-controlnet">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="panel-body" id="panel-controlnet">
+                        <label>ControlNet 模型
+                            <select id="sel-controlnet"></select>
+                        </label>
+                        <div class="cn-model-desc" id="cn-model-desc"></div>
+                        <label>强度
+                            <input type="number" id="inp-cn-strength" value="1" min="0" max="2" step="0.05">
+                        </label>
+                        <label>开始 %
+                            <input type="number" id="inp-cn-start" value="0" min="0" max="1" step="0.05">
+                        </label>
+                        <label>结束 %
+                            <input type="number" id="inp-cn-end" value="1" min="0" max="1" step="0.05">
+                        </label>
+                        <label>控制图片
+                            <input type="file" id="inp-cn-image" accept="image/*">
+                        </label>
+                        <div id="cn-upload-preview" class="file-preview hidden">
+                            <img id="cn-upload-img" alt="上传图预览">
+                            <div class="file-preview-actions">
+                                <button type="button" id="btn-cn-inpaint" class="btn-secondary btn-sm">局部重绘</button>
+                            </div>
+                        </div>
+                        <button id="btn-cn-preview" class="btn-secondary" style="width:100%;margin-top:6px">🔍 预览底图</button>
+                        <div id="cn-processed-preview" class="file-preview hidden">
+                            <small>预处理结果：</small>
+                            <img id="cn-processed-img" alt="预处理结果">
+                        </div>
+                        <small class="cn-tip">💡 上传图片后点"预览底图"查看预处理效果</small>
+                    </div>
+                </section>
+
+                <!-- 可选模块：IP-Adapter 风格迁移 -->
+                <section class="panel optional-panel" id="section-ipadapter">
+                    <div class="panel-header">
+                        <h2>风格迁移 (IP-Adapter)</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="chk-ipadapter">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="panel-body" id="panel-ipadapter">
+                        <div id="ipa-status" class="ipa-status hidden"></div>
+                        <label>参考图片
+                            <input type="file" id="inp-ipa-image" accept="image/*">
+                        </label>
+                        <div id="ipa-preview-container" class="file-preview hidden">
+                            <img id="ipa-preview" alt="IPA参考图预览">
+                            <div class="file-preview-actions">
+                                <button type="button" id="btn-ipa-inpaint" class="btn-secondary btn-sm">局部重绘</button>
+                            </div>
+                        </div>
+                        <label>IP-Adapter 模型
+                            <select id="sel-ipadapter-model">
+                                <option value="">扫描中...</option>
+                            </select>
+                        </label>
+                        <div id="ipa-download-area" class="ipa-download-area hidden">
+                            <p class="ipa-download-hint">未检测到 IP-Adapter 模型</p>
+                            <button id="btn-ipa-download" class="btn-secondary btn-ipa-download">📥 一键下载推荐模型</button>
+                            <div id="ipa-download-progress" class="ipa-download-progress hidden">
+                                <div class="ipa-progress-bar" id="ipa-progress-bar"></div>
+                                <span id="ipa-progress-text">下载中...</span>
+                            </div>
+                            <small class="ipa-manual-hint">或手动下载: <a href="https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors" target="_blank" rel="noopener">ip-adapter-plus_sdxl_vit-h</a> → 放入 <code>models/ipadapter/</code></small>
+                        </div>
+                        <div class="compact-row">
+                            <label>混合模式
+                                <select id="sel-ipa-weight-type">
+                                    <option value="standard" selected>标准 — 均衡混合</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="compact-row">
+                            <label>权重 <input type="number" id="inp-ipa-weight" value="0.8" min="0" max="1.5" step="0.05"></label>
+                        </div>
+                        <div class="compact-row">
+                            <label>开始 % <input type="number" id="inp-ipa-start" value="0" min="0" max="1" step="0.05"></label>
+                            <label>结束 % <input type="number" id="inp-ipa-end" value="1" min="0" max="1" step="0.05"></label>
+                        </div>
+                        <small>上传参考图后，生成的图片将保留参考图的风格和角色特征</small>
+                    </div>
+                </section>
+
+                <!-- 可选模块：img2img -->
+                <section class="panel optional-panel">
+                    <div class="panel-header">
+                        <h2>参考图 (img2img)</h2>
+                        <label class="toggle">
+                            <input type="checkbox" id="chk-img2img">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="panel-body" id="panel-img2img">
+                        <label>参考图片
+                            <input type="file" id="inp-ref-image" accept="image/*">
+                        </label>
+                        <div id="ref-preview-container" class="file-preview hidden">
+                            <img id="ref-preview" alt="参考图预览">
+                            <div class="file-preview-actions">
+                                <button type="button" id="btn-ref-inpaint" class="btn-secondary btn-sm">局部重绘</button>
+                            </div>
+                        </div>
+                        <label>重绘强度
+                            <input type="number" id="inp-denoise" value="0.7" min="0" max="1" step="0.05">
+                        </label>
+                    </div>
+                </section>
+
+                <!-- 可选模块：区域提示词 -->
+                <section class="panel optional-panel">
+                    <div class="panel-header">
+                        <h2>区域提示词</h2>
+                        <label class="toggle"><input type="checkbox" id="chk-regional"><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="panel-body" id="panel-regional">
+                        <div class="regional-canvas-wrap">
+                            <canvas id="regional-canvas" width="270" height="180"></canvas>
+                        </div>
+                        <div class="regional-presets">
+                            <button class="btn-preset" data-preset="lr" title="左右分">◫</button>
+                            <button class="btn-preset" data-preset="tb" title="上下分">⬒</button>
+                            <button class="btn-preset" data-preset="quad" title="四宫格">⊞</button>
+                            <button class="btn-preset" data-preset="center" title="中心+背景">◎</button>
+                            <button class="btn-preset" data-preset="clear" title="清空">✕</button>
+                        </div>
+                        <div id="regional-list"></div>
+                        <button id="btn-add-region" class="btn-secondary" style="width:100%;margin-top:8px">+ 添加区域</button>
+                    </div>
+                </section>
+                    </div>
+                </div>
+
+                <!-- 分组4：后处理 -->
+                <div class="panel-group" data-group="post">
+                    <div class="panel-group-header">后处理</div>
+                    <div class="panel-group-body">
+                        <section class="panel">
+                            <h2>后处理前预览</h2>
+                            <label style="display:flex;align-items:center;gap:10px">
+                                <input type="checkbox" id="chk-post-preview">
+                                <span style="font-size:0.85rem;color:var(--text-primary)">启用：先生成底图预览，再决定是否进入放大/修复</span>
+                            </label>
+                            <small style="color:var(--text-secondary);display:block;margin-top:6px">仅在开启「高清放大」或「面部修复」时生效。</small>
+                        </section>
+                        <section class="panel optional-panel">
+                            <div class="panel-header">
+                                <h2>ADetailer 面部修复</h2>
+                                <label class="toggle"><input type="checkbox" id="chk-adetailer"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="panel-body" id="panel-adetailer">
+                                <label>检测模型
+                                    <select id="sel-adetailer-model">
+                                        <option value="bbox/face_yolov8m.pt">face_yolov8m (人脸)</option>
+                                        <option value="bbox/hand_yolov8s.pt">hand_yolov8s (手部)</option>
+                                        <option value="segm/person_yolov8m-seg.pt">person_yolov8m-seg (人体)</option>
+                                        <option value="segm/face_yolov8m-seg_60.pt">face_yolov8m-seg (人脸分割)</option>
+                                    </select>
+                                </label>
+                                <div class="compact-row">
+                                    <label>步数 <input type="number" id="inp-adetailer-steps" value="16" min="1" max="100"></label>
+                                    <label>强度 <input type="number" id="inp-adetailer-denoise" value="0.30" min="0" max="1" step="0.05"></label>
+                                </div>
+                                <div class="compact-row">
+                                    <label>阈值 <input type="number" id="inp-adetailer-threshold" value="0.44" min="0" max="1" step="0.01"></label>
+                                    <label>膨胀 <input type="number" id="inp-adetailer-dilation" value="8" min="0" max="64" step="1"></label>
+                                </div>
+                                <div class="compact-row">
+                                    <label>羽化 <input type="number" id="inp-adetailer-feather" value="16" min="0" max="64" step="1"></label>
+                                    <label>循环 <input type="number" id="inp-adetailer-cycle" value="1" min="1" max="5"></label>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                </div><!-- /mode-simple -->
+
+                <!-- 工作流模式内容 -->
+                <div class="mode-content hidden" id="mode-workflow">
+                    <div class="wf-section">
+                        <div class="wf-header-row">
+                            <h2>工作流</h2>
+                            <div class="wf-actions">
+                                <button id="btn-wf-import" class="btn-secondary btn-sm">导入</button>
+                                <button id="btn-wf-paste" class="btn-secondary btn-sm">粘贴</button>
+                            </div>
+                        </div>
+                        <select id="sel-workflow">
+                            <option value="">-- 选择已保存的工作流 --</option>
+                        </select>
+                        <div id="wf-info" class="wf-info hidden">
+                            <span id="wf-node-count"></span>
+                            <button id="btn-wf-delete" class="btn-icon btn-sm" title="删除此工作流">🗑️</button>
+                        </div>
+                    </div>
+
+                    <div id="wf-params" class="wf-params">
+                        <div class="wf-placeholder">导入或选择一个工作流以开始</div>
+                    </div>
+                </div><!-- /mode-workflow -->
+
+                <!-- 在线生图模式内容 -->
+                <div class="mode-content hidden" id="mode-nai">
+                    <!-- 分组1：API 与模型 -->
+                    <div class="panel-group open" data-group="nai-basic">
+                        <div class="panel-group-header">模型与基础参数</div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <h2>API Key</h2>
+                                <div class="nai-apikey-row">
+                                    <input type="password" id="inp-nai-apikey" placeholder="留空走服务器代理，或输入自己的API Key">
+                                    <button id="btn-nai-apikey-toggle" class="btn-icon" title="显示/隐藏">👁️</button>
+                                </div>
+                            </section>
+
+                            <section class="panel">
+                                <h2>AI 模型</h2>
+                                <select id="sel-nai-model">
+                                    <option value="nai-diffusion-4-5-full">NAI Diffusion V4.5 Full</option>
+                                    <option value="nai-diffusion-4-full">NAI Diffusion V4 Full</option>
+                                    <option value="nai-diffusion-3">NAI Diffusion V3</option>
+                                    <option value="wan2-2">wan2-2 I2V (图像转视频) 💎</option>
+                                </select>
+                            </section>
+
+                            <section class="panel">
+                                <h2>图像尺寸</h2>
+                                <div class="nai-size-presets">
+                                    <button class="nai-size-btn" data-w="1024" data-h="1024">方形 1024x1024</button>
+                                    <button class="nai-size-btn" data-w="1216" data-h="832">横向 1216x832</button>
+                                    <button class="nai-size-btn active" data-w="832" data-h="1216">纵向 832x1216</button>
+                                </div>
+                                <div class="nai-upscale-row">
+                                    <label><input type="checkbox" id="chk-nai-upscale"> 启用大图模式</label>
+                                    <small class="nai-premium-badge">💎 高级</small>
+                                </div>
+                            </section>
+
+                            <section class="panel">
+                                <h2>采样参数</h2>
+                                <div class="seed-row">
+                                    <label style="flex:1;margin:0">种子 <input type="number" id="inp-nai-seed" value="-1"></label>
+                                    <button id="btn-nai-random-seed" class="btn-icon" title="随机">🎲</button>
+                                </div>
+                                <label>采样算法
+                                    <select id="sel-nai-sampler">
+                                        <option value="k_euler" selected>Euler</option>
+                                        <option value="k_euler_ancestral">Euler Ancestral</option>
+                                        <option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option>
+                                        <option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option>
+                                        <option value="k_dpmpp_2m">DPM++ 2M</option>
+                                        <option value="k_dpmpp_sde">DPM++ SDE</option>
+                                        <option value="ddim">DDIM</option>
+                                    </select>
+                                </label>
+                                <div class="nai-slider-row">
+                                    <label>采样步数</label>
+                                    <input type="range" id="rng-nai-steps" min="1" max="28" value="23">
+                                    <span id="nai-steps-val" class="nai-slider-val">23</span>
+                                </div>
+                                <div class="nai-slider-row">
+                                    <label>引导比例 (CFG)</label>
+                                    <input type="range" id="rng-nai-cfg" min="0" max="10" step="0.1" value="5">
+                                    <span id="nai-cfg-val" class="nai-slider-val">5.0</span>
+                                </div>
+                                <div class="nai-slider-row">
+                                    <label>Prompt Guidance Rescale</label>
+                                    <input type="range" id="rng-nai-rescale" min="0" max="1" step="0.01" value="0">
+                                    <span id="nai-rescale-val" class="nai-slider-val">0.00</span>
+                                </div>
+                                <label>噪声调度
+                                    <select id="sel-nai-noise-schedule">
+                                        <option value="karras" selected>Karras</option>
+                                        <option value="native">Native</option>
+                                        <option value="exponential">Exponential</option>
+                                        <option value="polyexponential">Polyexponential</option>
+                                    </select>
+                                </label>
+                            </section>
+
+                            <section class="panel">
+                                <h2>特殊功能</h2>
+                                <div class="nai-toggles">
+                                    <label><input type="checkbox" id="chk-nai-smea"> SMEA</label>
+                                    <label><input type="checkbox" id="chk-nai-dyn"> DYN</label>
+                                    <label><input type="checkbox" id="chk-nai-variety"> Variety</label>
+                                    <label><input type="checkbox" id="chk-nai-decrisp"> Decrisp</label>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- 分组2：图生图 -->
+                    <div class="panel-group" data-group="nai-img2img">
+                        <div class="panel-group-header">图生图</div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <p class="nai-desc">上传一张参考图像作为生成的基础，AI将在保留原图结构的基础上进行创作。</p>
+                                <div class="nai-upload-zone" id="nai-img2img-zone">
+                                    <span>📤</span>
+                                    <span>点击或拖拽图像到此处上传</span>
+                                    <input type="file" id="inp-nai-img2img" accept="image/*" hidden>
+                                </div>
+                                <div id="nai-img2img-preview" class="file-preview hidden">
+                                    <img id="nai-img2img-img" alt="参考图预览">
+                                    <button class="btn-icon nai-remove-img" data-target="nai-img2img">✕</button>
+                                </div>
+                                <div class="compact-row" style="margin-top:8px">
+                                    <label>重绘强度 <input type="number" id="inp-nai-strength" value="0.7" min="0.01" max="0.99" step="0.05"></label>
+                                    <label>噪声 <input type="number" id="inp-nai-noise" value="0.1" min="0" max="0.99" step="0.05"></label>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- 分组3：Vibe Transfer (高级) -->
+                    <div class="panel-group" data-group="nai-vibe">
+                        <div class="panel-group-header">Vibe Transfer <small class="nai-premium-badge">💎 高级</small></div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <p class="nai-desc">V4模型：上传参考图或 .naiv4vibe 文件以转换风格。最多支持4个Vibe。</p>
+                                <div class="nai-upload-zone nai-premium-zone" id="nai-vibe-zone">
+                                    <span>📤</span>
+                                    <span>点击或拖拽图像或V4 Vibe文件至此处</span>
+                                </div>
+                                <div id="nai-vibe-list" class="nai-vibe-list"></div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- 分组4：角色参考 (高级) -->
+                    <div class="panel-group" data-group="nai-director-ref">
+                        <div class="panel-group-header">角色参考 <small class="nai-premium-badge">💎 高级</small></div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <p class="nai-desc">精确定义图像中人物的外观、表情和姿势，最多支持 6 个角色。</p>
+                                <div class="nai-upload-zone nai-premium-zone" id="nai-director-zone">
+                                    <span>📤</span>
+                                    <span>上传角色参考图像</span>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- 分组5：角色控制 (V4) -->
+                    <div class="panel-group" data-group="nai-character">
+                        <div class="panel-group-header">角色控制</div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <p class="nai-desc">精确定义图像中人物的外观、表情和姿势，最多支持 6 个角色。</p>
+                                <div id="nai-character-list"></div>
+                                <div class="nai-character-actions">
+                                    <button id="btn-nai-add-character" class="btn-secondary">+ 添加角色</button>
+                                    <label><input type="checkbox" id="chk-nai-use-coords"> AI决定位置</label>
+                                </div>
+                                <div id="nai-character-info" class="nai-desc">已配置 0/6 个角色，当前启用 0 个。</div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- 分组：视频生成参数 (wan2-2选中时显示) -->
+                    <div class="panel-group hidden" data-group="nai-video" id="nai-video-panel">
+                        <div class="panel-group-header">视频生成参数</div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <div class="nai-video-frames">
+                                    <div class="nai-frame-col">
+                                        <h3>首帧 (Start Frame)</h3>
+                                        <div class="nai-upload-zone nai-frame-zone" id="nai-start-frame-zone">
+                                            <span>📤</span>
+                                            <span>点击或拖拽图像上传</span>
+                                            <input type="file" id="inp-nai-start-frame" accept="image/*" hidden>
+                                        </div>
+                                        <div id="nai-start-frame-preview" class="file-preview hidden">
+                                            <img id="nai-start-frame-img" alt="首帧预览">
+                                            <button class="btn-icon nai-remove-img" data-target="nai-start-frame">✕</button>
+                                        </div>
+                                    </div>
+                                    <div class="nai-frame-col">
+                                        <h3>末尾帧 (End Frame) - 可选</h3>
+                                        <div class="nai-upload-zone nai-frame-zone" id="nai-end-frame-zone">
+                                            <span>🎬</span>
+                                            <span>点击或拖拽图像上传</span>
+                                            <input type="file" id="inp-nai-end-frame" accept="image/*" hidden>
+                                        </div>
+                                        <div id="nai-end-frame-preview" class="file-preview hidden">
+                                            <img id="nai-end-frame-img" alt="末尾帧预览">
+                                            <button class="btn-icon nai-remove-img" data-target="nai-end-frame">✕</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                            <section class="panel">
+                                <div class="nai-slider-row" id="nai-videocode-row">
+                                    <label style="flex:1;margin:0">视频码 <input type="text" id="inp-nai-videocode" placeholder="在Discord频道获取视频码" style="text-transform:uppercase;font-family:monospace;letter-spacing:1px"></label>
+                                </div>
+                                <div class="seed-row">
+                                    <label style="flex:1;margin:0">种子 <input type="number" id="inp-nai-video-seed" value="-1"></label>
+                                    <button id="btn-nai-video-random-seed" class="btn-icon" title="随机">🎲</button>
+                                </div>
+                                <div class="nai-slider-row">
+                                    <label>视频时长(秒)</label>
+                                    <input type="range" id="rng-nai-duration" min="0.5" max="10" step="0.5" value="3.5">
+                                    <span id="nai-duration-val" class="nai-slider-val">3.5</span>
+                                </div>
+                                <label>流畅度(帧率)
+                                    <select id="sel-nai-fps">
+                                        <option value="16" selected>16 (标准)</option>
+                                        <option value="32">32 (流畅)</option>
+                                        <option value="64">64 (高流畅)</option>
+                                        <option value="128">128 (极流畅)</option>
+                                    </select>
+                                </label>
+                                <div class="nai-slider-row">
+                                    <label>推理步数</label>
+                                    <input type="range" id="rng-nai-video-steps" min="1" max="8" value="4">
+                                    <span id="nai-video-steps-val" class="nai-slider-val">4</span>
+                                </div>
+                                <div class="nai-slider-row">
+                                    <label>Guidance Scale</label>
+                                    <input type="range" id="rng-nai-video-guidance" min="0" max="2" step="0.1" value="1.0">
+                                    <span id="nai-video-guidance-val" class="nai-slider-val">1.0</span>
+                                </div>
+                                <p class="nai-desc" style="margin-top:8px">如果生成失败，请尝试降低生成步数、视频时长、每秒帧数和引导强度；如果使用默认参数多次仍无法生成，请再报告问题。</p>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- 分组6：额外参数 -->
+                    <div class="panel-group" data-group="nai-extra">
+                        <div class="panel-group-header">额外参数配置</div>
+                        <div class="panel-group-body">
+                            <section class="panel">
+                                <h2>兼容设置</h2>
+                                <div class="nai-toggles">
+                                    <label><input type="checkbox" id="chk-nai-legacy"> 旧版兼容</label>
+                                    <label><input type="checkbox" id="chk-nai-legacy-uc"> 传统提示词调节模式</label>
+                                    <label><input type="checkbox" id="chk-nai-legacy-v3"> V3传统扩展</label>
+                                </div>
+                            </section>
+                            <section class="panel">
+                                <h2>负面提示预设强度</h2>
+                                <select id="sel-nai-uc-preset">
+                                    <option value="0">Heavy</option>
+                                    <option value="1" selected>Light</option>
+                                    <option value="2">Human Focus</option>
+                                </select>
+                            </section>
+                            <section class="panel">
+                                <h2>特殊功能</h2>
+                                <div class="nai-toggles">
+                                    <label><input type="checkbox" id="chk-nai-auto-smea"> 自动SMEA</label>
+                                    <label><input type="checkbox" id="chk-nai-brownian" checked> 布朗运动</label>
+                                    <label><input type="checkbox" id="chk-nai-euler-bug"> 保留采样器Bug</label>
+                                </div>
+                            </section>
+                            <button id="btn-nai-reset" class="btn-secondary" style="width:100%;margin-top:8px">🔄 重置所有参数为默认值</button>
+                        </div>
+                    </div>
+                </div><!-- /mode-nai -->
+            </aside>
+
+            <div class="sidebar-resizer" id="sidebar-resizer"></div>
+
+            <div class="content">
+                <section class="prompt-area">
+                    <!-- 正向提示词 + 标签选择器 -->
+                    <div class="prompt-block">
+                        <div class="prompt-label-row">
+                            <span>正向提示词</span>
+                            <div class="prompt-tools">
+                                <button id="btn-import-meta" class="btn-copy-prompt" title="从图片导入生成参数">📥 导入参数</button>
+                                <button class="btn-copy-prompt btn-clear-prompt" data-target="txt-positive" title="清空">🗑️ 清空</button>
+                                <button id="btn-wildcard" class="btn-copy-prompt" title="插入通配符">🎲 通配符</button>
+                                <button class="btn-copy-prompt" data-target="txt-positive" title="复制">📋 复制</button>
+                            </div>
+                        </div>
+                        <input type="file" id="inp-import-meta" accept="image/png,image/jpeg,image/webp" hidden>
+                        <textarea id="txt-positive" rows="3" placeholder="描述你想生成的图片... 支持通配符 __类别名__"></textarea>
+                        <div class="prompt-tags-bar">
+                            <div id="prompt-tags-pos" class="prompt-tags" data-for="txt-positive"></div>
+                            <button id="btn-translate-toggle" class="btn-translate-toggle" title="切换原文/中文">译</button>
+                        </div>
+                        <div class="mobile-prompt-shortcuts">
+                            <button type="button" class="mobile-shortcut-btn" data-mobile-tab="characters">👤 选角色</button>
+                            <button type="button" class="mobile-shortcut-btn" data-mobile-tab="tags">🏷 选标签</button>
+                        </div>
+                        <div id="wildcard-hint" class="wildcard-hint hidden"></div>
+                        <div id="wildcard-panel" class="wildcard-panel hidden">
+                            <div class="wildcard-panel-header">
+                                <div class="wildcard-tabs">
+                                    <span class="tab active" data-wc-tab="builtin">内置标签</span>
+                                    <span class="tab" data-wc-tab="custom">自定义</span>
+                                </div>
+                                <input type="text" id="wildcard-search" placeholder="搜索..." class="wildcard-search-input">
+                            </div>
+                            <div id="wildcard-list" class="wildcard-list"></div>
+                            <div id="wildcard-custom" class="wildcard-custom hidden">
+                                <div class="wc-custom-form">
+                                    <input type="text" id="wc-custom-name" placeholder="类别名（如：表情）">
+                                    <textarea id="wc-custom-values" rows="3" placeholder="每行一个选项，如：&#10;smile&#10;blush&#10;wink"></textarea>
+                                    <div class="wc-custom-actions">
+                                        <button id="btn-wc-add" class="btn-secondary">添加</button>
+                                        <label class="btn-secondary wc-import-label">
+                                            导入 txt
+                                            <input type="file" id="inp-wc-import" accept=".txt" hidden>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="wc-custom-list" class="wc-custom-list"></div>
+                            </div>
+                        </div>
+                        <div class="tag-picker-collapse">
+                            <div class="tag-collapse-header expanded" id="pos-collapse-toggle">▼ 收起标签选择器</div>
+                            <div class="tag-picker" id="tag-picker-pos">
+                                <div class="tag-group-row">
+                                    <div class="tag-tabs" data-picker="pos"></div>
+                                    <div class="search-wrap">
+                                        <button class="search-mode-btn" data-picker="pos" title="切换搜索模式">标签</button>
+                                        <input type="text" class="tag-search" data-picker="pos" placeholder="搜索标签...">
+                                    </div>
+                                </div>
+                                <div class="tag-subtabs" data-picker="pos"></div>
+                                <div class="tag-grid" data-picker="pos"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 反向提示词 + 折叠标签选择器 -->
+                    <div class="prompt-block">
+                        <div class="prompt-label-row">
+                            <span>反向提示词</span>
+                            <div class="prompt-tools">
+                                <button class="btn-copy-prompt btn-clear-prompt" data-target="txt-negative" title="清空">🗑️ 清空</button>
+                                <button class="btn-copy-prompt" data-target="txt-negative" title="复制">📋 复制</button>
+                            </div>
+                        </div>
+                        <textarea id="txt-negative" rows="2" placeholder="不想出现的元素..."></textarea>
+                        <div class="prompt-tags-bar">
+                            <div id="prompt-tags-neg" class="prompt-tags" data-for="txt-negative"></div>
+                        </div>
+                        <div class="mobile-prompt-shortcuts mobile-prompt-shortcuts-neg">
+                            <button type="button" class="mobile-shortcut-btn" data-mobile-tab="tags" data-tags-focus="neg">🏷 选标签</button>
+                        </div>
+                        <div class="tag-picker-collapse">
+                            <div class="tag-collapse-header" id="neg-collapse-toggle">▶ 展开标签选择器</div>
+                            <div class="tag-picker hidden" id="tag-picker-neg">
+                                <div class="tag-group-row">
+                                    <div class="tag-tabs" data-picker="neg"></div>
+                                    <div class="search-wrap">
+                                        <button class="search-mode-btn" data-picker="neg" title="切换搜索模式">标签</button>
+                                        <input type="text" class="tag-search" data-picker="neg" placeholder="搜索标签...">
+                                    </div>
+                                </div>
+                                <div class="tag-subtabs" data-picker="neg"></div>
+                                <div class="tag-grid" data-picker="neg"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="action-bar">
+                    <button id="btn-generate" class="btn-primary">生成图片</button>
+                    <button id="btn-nai-generate" class="btn-primary btn-nai hidden">NAI 在线生图</button>
+                    <button id="btn-dzmm" class="btn-dzmm" title="使用 dzmm.ai 在线生图">使用dzmm生图</button>
+                    <div id="progress-container" class="progress-container hidden">
+                        <div id="progress-bar" class="progress-bar"></div>
+                        <span id="progress-text">0%</span>
+                    </div>
+                </div>
+
+                <section class="result-area" id="result-area">
+                    <button type="button" id="btn-result-expand" class="result-expand-toggle hidden" aria-expanded="false">展开结果 ▼</button>
+                    <div id="result-wrapper" class="result-wrapper">
+                        <div id="result-placeholder" class="placeholder">生成的图片将显示在这里</div>
+                        <img id="result-live-preview" class="result-image hidden live-preview" alt="生成中预览">
+                        <img id="result-image" class="result-image hidden" alt="生成结果">
+                        <div id="result-actions" class="result-actions hidden">
+                            <button id="btn-download" class="btn-secondary">下载图片</button>
+                            <button id="btn-send-to-history" class="btn-secondary">保存到历史</button>
+                            <button id="btn-use-as-ref" class="btn-secondary">用作参考图</button>
+                            <button id="btn-inpaint" class="btn-secondary">局部重绘</button>
+                            <button id="btn-composite-result" class="btn-secondary">图层合成</button>
+                            <button id="btn-cutout-result" class="btn-secondary">抠图</button>
+                            <button id="btn-compare" class="btn-secondary hidden">对比效果</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="history-resizer" id="history-resizer" title="拖拽调整历史面板宽度"></div>
+            <button type="button" id="btn-history-toggle" class="history-toggle-rail" aria-label="收起/展开历史面板" title="收起/展开">◀</button>
+            <aside class="history-panel" id="history-panel">
+                <div class="history-panel-header">
+                    <h2 class="history-title">历史记录</h2>
+                </div>
+                <div id="history-grid" class="history-grid"></div>
+                <button id="btn-clear-history" class="btn-danger">清空历史</button>
+            </aside>
+
+            <!-- 手机端：角色 Tab 面板 -->
+            <section class="mobile-panel mobile-panel-characters" id="mobile-panel-characters" aria-label="角色选择">
+                <div class="char-panel-intro">选择作品 → 浏览角色 → 点击插入到正向提示词</div>
+                <div class="char-panel-toolbar">
+                    <input type="text" id="char-series-search" class="char-series-search" placeholder="搜索作品名（如：命运、原神）">
+                </div>
+                <div id="char-series-scroll" class="char-series-scroll"></div>
+                <nav id="char-series-pagination" class="char-series-pagination" aria-label="作品分页"></nav>
+                <p class="char-panel-hint">点击作品，全屏浏览角色</p>
+            </section>
+
+            <!-- 手机端：标签 Tab 面板（由 JS/CSS 接管创作区内的 tag-picker） -->
+            <section class="mobile-panel mobile-panel-tags" id="mobile-panel-tags" aria-label="标签选择">
+                <div class="mobile-tags-switch">
+                    <button type="button" class="mobile-tags-switch-btn active" data-tags-pane="pos">正向标签</button>
+                    <button type="button" class="mobile-tags-switch-btn" data-tags-pane="neg">反向标签</button>
+                </div>
+                <div id="mobile-tags-mount" class="mobile-tags-mount"></div>
+            </section>
+        </main>
+
+        <button type="button" id="btn-generate-fab" class="generate-fab" title="生成图片" aria-label="生成">✨</button>
+
+        <nav class="mobile-artist-nav" id="mobile-artist-nav" aria-label="画师分类">
+            <button type="button" class="mobile-artist-nav-btn active" data-artist-mode="0"><span class="mobile-artist-nav-icon">🏆</span><span class="mobile-artist-nav-label">精选</span></button>
+            <button type="button" class="mobile-artist-nav-btn" data-artist-mode="1"><span class="mobile-artist-nav-icon">🔥</span><span class="mobile-artist-nav-label">热门</span></button>
+            <button type="button" class="mobile-artist-nav-btn" data-artist-mode="2"><span class="mobile-artist-nav-icon">❤️</span><span class="mobile-artist-nav-label">收藏</span></button>
+            <button type="button" class="mobile-artist-nav-btn" data-artist-mode="3"><span class="mobile-artist-nav-icon">🔤</span><span class="mobile-artist-nav-label">字母</span></button>
+            <button type="button" class="mobile-artist-nav-btn" data-artist-mode="4"><span class="mobile-artist-nav-icon">📎</span><span class="mobile-artist-nav-label">画师串</span></button>
+        </nav>
+
+        <nav class="mobile-nav" id="mobile-nav" aria-label="手机主导航">
+            <button type="button" class="mobile-nav-btn active" data-mobile-tab="create" aria-label="创作">
+                <span class="mobile-nav-icon">✏️</span>
+                <span class="mobile-nav-label">创作</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="characters" aria-label="角色">
+                <span class="mobile-nav-icon">👤</span>
+                <span class="mobile-nav-label">角色</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="tags" aria-label="标签">
+                <span class="mobile-nav-icon">🏷</span>
+                <span class="mobile-nav-label">标签</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="artists" aria-label="画师">
+                <span class="mobile-nav-icon">🎨</span>
+                <span class="mobile-nav-label">画师</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="settings" aria-label="设置">
+                <span class="mobile-nav-icon">⚙️</span>
+                <span class="mobile-nav-label">设置</span>
+            </button>
+            <button type="button" class="mobile-nav-btn" data-mobile-tab="history" aria-label="历史">
+                <span class="mobile-nav-icon">🖼</span>
+                <span class="mobile-nav-label">历史</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- 手机端：全屏角色浏览浮层 -->
+    <div id="char-browser-overlay" class="char-browser-overlay hidden" aria-hidden="true">
+        <header class="char-browser-header">
+            <button type="button" id="char-browser-back" class="char-browser-back">← 作品</button>
+            <span id="char-browser-title" class="char-browser-title">作品</span>
+        </header>
+        <div class="char-browser-search-wrap">
+            <input type="text" id="char-browser-search" class="char-browser-search" placeholder="搜索本作品角色...">
+        </div>
+        <div id="char-browser-grid" class="char-browser-grid"></div>
+        <div id="char-browser-pagination" class="char-browser-pagination"></div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="modal-settings" class="modal hidden">
+        <div class="modal-content">
+            <h2>设置</h2>
+            <label>ComfyUI 服务器地址
+                <input type="text" id="inp-server" placeholder="http://127.0.0.1:8188">
+            </label>
+            <label>标签翻译服务
+                <select id="sel-translate-provider">
+                    <option value="local">仅本地（tags.json）</option>
+                    <option value="mymemory">MyMemory 翻译</option>
+                    <option value="google" selected>Google 翻译</option>
+                </select>
+            </label>
+            <label>管理员密钥（可选）
+                <input type="password" id="inp-admin-key" placeholder="留空则以普通用户身份使用">
+            </label>
+            <div id="admin-status" style="font-size:0.75rem;color:var(--accent-green);margin-top:-6px;display:none">✓ 管理员模式已激活</div>
+            <hr class="settings-divider">
+            <h3 class="settings-section-title">配置方案</h3>
+            <label>当前方案
+                <select id="sel-profile"></select>
+            </label>
+            <div class="profile-actions">
+                <button type="button" id="btn-profile-save" class="btn-secondary">保存当前</button>
+                <button type="button" id="btn-profile-saveas" class="btn-secondary">另存为</button>
+                <button type="button" id="btn-profile-rename" class="btn-secondary">重命名</button>
+                <button type="button" id="btn-profile-delete" class="btn-danger">删除</button>
+            </div>
+            <small class="profile-hint">方案仅在点击「保存当前」或「另存为」时更新；SDXL 与 Anima 的 LoRA/后处理等互不影响；切换方案将完整恢复各自保存的状态。</small>
+            <div class="modal-actions">
+                <button id="btn-save-settings" class="btn-primary">保存</button>
+                <button id="btn-cancel-settings" class="btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史图片大图预览 -->
+    <div id="modal-preview" class="modal hidden">
+        <div class="modal-content preview-content">
+            <img id="preview-image" alt="预览">
+            <div class="preview-actions">
+                <button id="btn-preview-ref" class="btn-secondary">用作参考图</button>
+                <button id="btn-preview-inpaint" class="btn-secondary">局部重绘</button>
+                <button id="btn-preview-composite-base" class="btn-secondary">作底图合成</button>
+                <button id="btn-preview-composite-overlay" class="btn-secondary">叠加上去</button>
+                <button id="btn-preview-cutout" class="btn-secondary">抠图</button>
+                <button id="btn-preview-download" class="btn-secondary">下载</button>
+            </div>
+            <button id="btn-close-preview" class="btn-icon close-btn">✕</button>
+        </div>
+    </div>
+
+    <!-- 图片对比弹窗 -->
+    <div id="modal-compare" class="modal hidden">
+        <div class="modal-content compare-content">
+            <h2>效果对比</h2>
+            <div class="compare-container" id="compare-container">
+                <img id="compare-before" class="compare-img" alt="修复前">
+                <img id="compare-after" class="compare-img" alt="修复后">
+                <div class="compare-slider" id="compare-slider">
+                    <div class="compare-handle"></div>
+                </div>
+                <span class="compare-label compare-label-left">修复前</span>
+                <span class="compare-label compare-label-right">修复后</span>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-close-compare" class="btn-primary">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 后处理前：底图预览弹窗 -->
+    <div id="modal-post-preview" class="modal hidden">
+        <div class="modal-content preview-content">
+            <h2>底图预览</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:-4px">满意再进入放大/修复；不满意可结束或重新生成底图。</p>
+            <img id="post-preview-img" class="preview-image" alt="底图预览">
+            <div class="modal-actions">
+                <button id="btn-post-continue" class="btn-primary">满意，进入后处理</button>
+                <button id="btn-post-regenerate" class="btn-secondary">不满意，重抽底图</button>
+                <button id="btn-post-cancel" class="btn-danger">结束生图</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 局部重绘（全屏工作台） -->
+    <div id="modal-inpaint" class="inpaint-fullscreen hidden" aria-label="局部重绘">
+        <header class="inpaint-topbar">
+            <button type="button" id="btn-inpaint-cancel" class="btn-icon inpaint-close" title="退出">✕</button>
+            <h2 class="inpaint-title">局部重绘</h2>
+            <button type="button" id="btn-inpaint-invert" class="btn-secondary btn-sm">反选蒙版</button>
+            <button type="button" id="btn-inpaint-clear" class="btn-secondary btn-sm">清空</button>
+            <button type="button" id="btn-inpaint-fit" class="btn-secondary btn-sm">适应窗口</button>
+            <button type="button" id="btn-inpaint-100" class="btn-secondary btn-sm">1:1</button>
+            <p id="inpaint-hint" class="inpaint-hint-top">涂抹要重绘的区域（红色半透明）。空格+拖动平移，滚轮缩放。</p>
+        </header>
+        <div class="inpaint-body">
+            <aside id="inpaint-sidebar" class="inpaint-sidebar">
+                <div id="inpaint-sidebar-panel" class="inpaint-sidebar-panel">
+                    <section class="panel">
+                        <h2>场景预设</h2>
+                        <select id="sel-inpaint-preset" class="inpaint-preset-select" title="场景预设">
+                            <optgroup label="常规">
+                                <option value="clothes">换衣服 — 涂衣物（自填款式）</option>
+                                <option value="background">换背景 — 涂人物外区域</option>
+                                <option value="erase">擦除重填</option>
+                                <option value="detail">修复细节</option>
+                                <option value="hair">换发型 — 只涂头发</option>
+                            </optgroup>
+                            <optgroup label="成人">
+                                <option value="nude">去衣裸体 — 涂衣物区域</option>
+                                <option value="pubic_hairless">去阴毛 — 涂耻骨区</option>
+                                <option value="nipples">重画乳头 — 涂乳晕</option>
+                                <option value="breasts">重画胸部 — 涂整胸</option>
+                                <option value="pussy">重画阴部 — 涂阴唇</option>
+                                <option value="anus">重画肛门 — 小范围</option>
+                                <option value="panties">重画内裤</option>
+                                <option value="bra">重画胸罩</option>
+                                <option value="bikini">重画比基尼/泳装</option>
+                            </optgroup>
+                            <option value="custom">自定义</option>
+                        </select>
+                        <p id="inpaint-model-note" class="inpaint-model-note hidden"></p>
+                    </section>
+                    <section class="panel">
+                        <h2>重绘引擎</h2>
+                        <p id="inpaint-engine-status" class="inpaint-engine-status">检测中…</p>
+                        <p id="inpaint-yolo-status" class="inpaint-sam-status inpaint-sam-off">
+                            <span class="inpaint-sam-dot" aria-hidden="true"></span>
+                            <span class="inpaint-sam-text">YOLO 模型：检测中…</span>
+                        </p>
+                        <p id="inpaint-sam-status" class="inpaint-sam-status inpaint-sam-off">
+                            <span class="inpaint-sam-dot" aria-hidden="true"></span>
+                            <span class="inpaint-sam-text">SAM 模型：检测中…</span>
+                        </p>
+                        <div id="inpaint-download-area" class="inpaint-download-area hidden">
+                            <p class="inpaint-download-hint">推荐安装 Fooocus Inpaint 组件</p>
+                            <button type="button" id="btn-inpaint-download" class="btn-secondary btn-inpaint-download">📥 一键下载 Inpaint 补丁</button>
+                            <p class="inpaint-download-manual">插件：ComfyUI Manager 搜索 <code>comfyui-inpaint-nodes</code>（作者 Acly）</p>
+                            <div id="inpaint-download-progress" class="inpaint-download-progress hidden">
+                                <div id="inpaint-progress-bar" class="inpaint-progress-bar"></div>
+                                <span id="inpaint-progress-text">准备下载…</span>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="inpaint-sdxl-panel" class="panel">
+                        <h2>重绘模型</h2>
+                        <label>SDXL 模型 <select id="sel-inpaint-checkpoint" title="局部重绘专用模型"></select></label>
+                        <label class="inpaint-vae-row">
+                            <input type="checkbox" id="chk-inpaint-vae"> 外挂 VAE
+                            <select id="sel-inpaint-vae" disabled></select>
+                        </label>
+                    </section>
+                    <section id="inpaint-anima-panel" class="panel hidden">
+                        <h2>Anima 模型</h2>
+                        <p id="inpaint-anima-model-info" class="inpaint-anima-model-info">跟随主界面 UNET / CLIP / VAE</p>
+                        <p class="inpaint-anima-hint">需安装 <code>ComfyUI-Anima-LLLite</code>；小范围修改推荐裁剪拼接引擎。</p>
+                    </section>
+                    <section class="panel">
+                        <h2>采样参数</h2>
+                        <div class="compact-row" id="inpaint-row-sampler">
+                            <label>采样器 <select id="sel-inpaint-sampler"></select></label>
+                            <label>调度器 <select id="sel-inpaint-scheduler"></select></label>
+                        </div>
+                        <div class="compact-row hidden" id="inpaint-row-fixed">
+                            <label>步数 <input type="number" id="inp-inpaint-steps" value="30" min="1" max="150"></label>
+                            <label>CFG <input type="number" id="inp-inpaint-cfg" value="5.0" min="1" max="30" step="0.5"></label>
+                        </div>
+                        <label id="inpaint-denoise-wrap" class="hidden">强度 <input type="number" id="inp-inpaint-denoise" value="0.55" min="0.1" max="1" step="0.01" title="实际强度会按模式自动限制"></label>
+                        <label>重绘方案
+                            <select id="sel-inpaint-mode" title="Anima 工作流两套方案：强化小范围 / 大范围重绘">
+                                <option value="small" selected>强化小范围</option>
+                                <option value="large">大范围重绘</option>
+                            </select>
+                        </label>
+                        <label class="inpaint-sam-range-label">SAM 选区范围
+                            <input type="range" id="inp-inpaint-sam-range" min="70" max="160" step="5" value="110">
+                            <span id="inpaint-sam-range-value">110%</span>
+                        </label>
+                    </section>
+                    <section class="panel">
+                        <h2>提示词</h2>
+                        <label>正向 <textarea id="txt-inpaint-pos" rows="3" placeholder="例：red bikini, detailed clothing, fabric texture…"></textarea></label>
+                    </section>
+                    <button type="button" id="btn-inpaint-run" class="btn-primary inpaint-run-btn">开始重绘</button>
+                </div>
+                <button type="button" id="btn-inpaint-sidebar-toggle" class="inpaint-sidebar-rail" title="收起设置" aria-expanded="true">
+                    <span class="inpaint-sidebar-rail-icon" aria-hidden="true">◀</span>
+                    <span class="inpaint-sidebar-rail-label">设置</span>
+                </button>
+            </aside>
+            <div class="inpaint-workspace">
+                <div id="inpaint-viewport" class="inpaint-viewport">
+                    <div id="inpaint-transform" class="inpaint-transform">
+                        <div id="inpaint-stage" class="inpaint-stage brush-mode">
+                            <img id="inpaint-image" class="inpaint-image" alt="重绘底图" draggable="false">
+                            <canvas id="inpaint-canvas" class="inpaint-canvas"></canvas>
+                        </div>
+                    </div>
+                    <div id="inpaint-cursor" class="inpaint-cursor hidden" aria-hidden="true"></div>
+                </div>
+                <footer class="inpaint-bottombar">
+                    <div class="inpaint-tools-row">
+                        <button type="button" id="btn-inpaint-brush" class="btn-secondary inpaint-tool active">画笔</button>
+                        <button type="button" id="btn-inpaint-eraser" class="btn-secondary inpaint-tool">橡皮</button>
+                        <button type="button" id="btn-inpaint-wand" class="btn-secondary inpaint-tool">魔棒</button>
+                        <button type="button" id="btn-inpaint-auto" class="btn-secondary inpaint-tool" title="点击后在图上点一下目标区域">SAM选区</button>
+                        <button type="button" id="btn-inpaint-auto-yolo" class="btn-secondary inpaint-tool" title="先用 YOLO 粗定位，再用 SAM 精修">YOLO+SAM</button>
+                        <button type="button" id="btn-inpaint-pan" class="btn-secondary inpaint-tool" title="拖动画布">平移</button>
+                        <label class="inpaint-brush-label">笔刷
+                            <input type="range" id="inpaint-brush" min="4" max="120" value="28">
+                        </label>
+                        <label class="inpaint-brush-label inpaint-wand-tol hidden" id="inpaint-wand-wrap">容差
+                            <input type="range" id="inpaint-wand-tol" min="4" max="96" value="32">
+                        </label>
+                        <label class="inpaint-brush-label inpaint-pixel-label">
+                            <input type="checkbox" id="chk-inpaint-pixel"> 1px像素笔
+                        </label>
+                        <span id="inpaint-zoom-label" class="inpaint-zoom-label">100%</span>
+                    </div>
+                </footer>
+            </div>
+        </div>
+    </div>
+
+    <!-- 教程弹窗 -->
+    <div id="modal-tutorial" class="modal hidden">
+        <div class="modal-content tutorial-content">
+            <h2>使用教程</h2>
+            <div class="tutorial-body">
+                <h3>1. 启动 ComfyUI</h3>
+                <p>启动时需要加 <code>--enable-cors-header</code> 参数以允许网页跨域访问：</p>
+                <pre>python main.py --enable-cors-header</pre>
+                <p>如果使用 bat 启动脚本，找到启动文件在 <code>python main.py</code> 后加上该参数。</p>
+                <p>若需局域网其他设备访问，同时加 <code>--listen</code>：</p>
+                <pre>python main.py --enable-cors-header --listen 0.0.0.0</pre>
+
+                <h3>2. 设置服务器地址</h3>
+                <p>点击右上角 ⚙️ 按钮，填入 ComfyUI 地址：</p>
+                <ul>
+                    <li>本机：<code>http://127.0.0.1:8188</code></li>
+                    <li>局域网：<code>http://你电脑的IP:8188</code></li>
+                </ul>
+
+                <h3>3. 选择模型架构</h3>
+                <p>左侧面板顶部选择模型架构：</p>
+                <ul>
+                    <li><b>SDXL (Checkpoint)</b> — 传统 SDXL 单文件大模型</li>
+                    <li><b>Anima (Diffusion Model)</b> — 新架构，扩散模型 + 文本编码器 + VAE 分开加载</li>
+                </ul>
+
+                <h3>4. 模型资源下载</h3>
+                <p class="tutorial-dl-hint">点击 <b>📥 下载</b>：已连 ComfyUI 且装了 Manager 时自动装到对应文件夹；否则浏览器直接下载，再手动放入 <code>ComfyUI/models/</code> 下对应目录。</p>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>Anima Base v1.0</strong>
+                        <span class="tutorial-resource-tag">Anima</span>
+                    </div>
+                    <p class="tutorial-resource-desc">CircleStone Labs 开源二次元向扩散模型（2B），擅长动漫插画与概念图。网站选 <b>Anima</b> 架构后，在三个下拉框分别加载下列文件。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">anima-base-v1.0.safetensors</span>
+                            <span class="tutorial-resource-folder">diffusion_models/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-base-v1.0.safetensors" data-filename="anima-base-v1.0.safetensors" data-save-path="diffusion_models">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">qwen_3_06b_base.safetensors</span>
+                            <span class="tutorial-resource-folder">text_encoders/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors" data-filename="qwen_3_06b_base.safetensors" data-save-path="text_encoders">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">qwen_image_vae.safetensors</span>
+                            <span class="tutorial-resource-folder">vae/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors" data-filename="qwen_image_vae.safetensors" data-save-path="vae">📥 下载</button>
+                        </div>
+                    </div>
+                    <a class="tutorial-resource-link" href="https://huggingface.co/circlestone-labs/Anima" target="_blank" rel="noopener">Hugging Face 主页 →</a>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>Krea 2</strong>
+                        <span class="tutorial-resource-tag">Anima</span>
+                    </div>
+                    <p class="tutorial-resource-desc">Krea 第二代开源文生图模型，同样用 Anima 架构加载。<b>Turbo</b> 版出图快，<b>Raw</b> 版质量更高。下列为 Turbo FP8 推荐组合（省显存）；Krea 与 Anima 共用同一 VAE。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">krea2_turbo_fp8_scaled.safetensors</span>
+                            <span class="tutorial-resource-folder">diffusion_models/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors" data-filename="krea2_turbo_fp8_scaled.safetensors" data-save-path="diffusion_models">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">qwen3vl_4b_fp8_scaled.safetensors</span>
+                            <span class="tutorial-resource-folder">text_encoders/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors" data-filename="qwen3vl_4b_fp8_scaled.safetensors" data-save-path="text_encoders">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">krea2_retroanime.safetensors</span>
+                            <span class="tutorial-resource-folder">loras/ · 触发词 <code>purple retro anime style</code></span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_retroanime.safetensors" data-filename="krea2_retroanime.safetensors" data-save-path="loras">📥 下载</button>
+                        </div>
+                    </div>
+                    <a class="tutorial-resource-link" href="https://huggingface.co/Comfy-Org/Krea-2" target="_blank" rel="noopener">Hugging Face 主页（含 9 款风格 LoRA）→</a>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>SDXL Base 1.0</strong>
+                        <span class="tutorial-resource-tag">SDXL</span>
+                    </div>
+                    <p class="tutorial-resource-desc">Stability AI 官方 SDXL 基础模型，选 <b>SDXL</b> 架构后在 Checkpoint 下拉框加载。适合写实、通用题材，可配合 ControlNet / IP-Adapter。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">sd_xl_base_1.0.safetensors</span>
+                            <span class="tutorial-resource-folder">checkpoints/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors" data-filename="sd_xl_base_1.0.safetensors" data-save-path="checkpoints">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">sdxl_vae.safetensors</span>
+                            <span class="tutorial-resource-folder">vae/ · 可选，改善发色</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors" data-filename="sdxl_vae.safetensors" data-save-path="vae">📥 下载</button>
+                        </div>
+                    </div>
+                    <a class="tutorial-resource-link" href="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0" target="_blank" rel="noopener">Hugging Face 主页 →</a>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>IP-Adapter Plus SDXL</strong>
+                        <span class="tutorial-resource-tag">SDXL 插件</span>
+                    </div>
+                    <p class="tutorial-resource-desc">参考图风格迁移，在左侧「风格迁移 IP-Adapter」中启用。需同时下载模型与 CLIP Vision 编码器。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">ip-adapter-plus_sdxl_vit-h.safetensors</span>
+                            <span class="tutorial-resource-folder">ipadapter/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors" data-filename="ip-adapter-plus_sdxl_vit-h.safetensors" data-save-path="ipadapter">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">model.safetensors</span>
+                            <span class="tutorial-resource-folder">clip_vision/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors" data-filename="model.safetensors" data-save-path="clip_vision">📥 下载</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tutorial-resource">
+                    <div class="tutorial-resource-head">
+                        <strong>ControlNet SDXL</strong>
+                        <span class="tutorial-resource-tag">SDXL 插件</span>
+                    </div>
+                    <p class="tutorial-resource-desc">姿势 / 线稿 / 深度控制，在左侧 ControlNet 面板选用。按需求下载对应模型。</p>
+                    <div class="tutorial-resource-files">
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">OpenPose XL</span>
+                            <span class="tutorial-resource-folder">controlnet/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/yzd-v/DWPose/resolve/main/yzd-v/DWPose-SDXL-OpenPoseXL2.safetensors" data-filename="OpenPoseXL2.safetensors" data-save-path="controlnet">📥 下载</button>
+                        </div>
+                        <div class="tutorial-resource-file">
+                            <span class="tutorial-resource-fname">Canny XL</span>
+                            <span class="tutorial-resource-folder">controlnet/</span>
+                            <button type="button" class="btn-dl-resource btn-secondary btn-sm" data-url="https://huggingface.co/yzd-v/DWPose/resolve/main/yzd-v/DWPose-SDXL-CannyXL2.safetensors" data-filename="CannyXL2.safetensors" data-save-path="controlnet">📥 下载</button>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>5. 生成图片</h3>
+                <ol>
+                    <li>输入正向提示词（可使用标签选择器）</li>
+                    <li>可选填反向提示词排除不想要的元素</li>
+                    <li>调整采样参数、图片尺寸</li>
+                    <li>点击"生成图片"开始</li>
+                </ol>
+
+                <h3>6. 可选功能</h3>
+                <ul>
+                    <li><b>LoRA</b> — 加载风格微调模型</li>
+                    <li><b>高清放大</b> — 生成后自动放大</li>
+                    <li><b>ControlNet</b> — 线稿/深度/姿态控制</li>
+                    <li><b>参考图 (img2img)</b> — 基于参考图重绘</li>
+                </ul>
+
+                <h3>7. 注意事项</h3>
+                <ul>
+                    <li>HTTPS 页面无法访问 HTTP 的 ComfyUI，建议本地使用</li>
+                    <li>Anima 架构暂不支持 ControlNet（官方开发中）</li>
+                    <li>种子设为 -1 表示随机</li>
+                </ul>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-close-tutorial" class="btn-primary">知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工作流粘贴弹窗 -->
+    <div id="modal-wf-paste" class="modal hidden">
+        <div class="modal-content">
+            <h2>粘贴工作流 JSON</h2>
+            <textarea id="txt-wf-paste" rows="10" placeholder="粘贴 ComfyUI 导出的工作流 JSON..."></textarea>
+            <label>工作流名称
+                <input type="text" id="inp-wf-name" placeholder="给工作流起个名字">
+            </label>
+            <div class="modal-actions">
+                <button id="btn-wf-paste-ok" class="btn-primary">导入</button>
+                <button id="btn-wf-paste-cancel" class="btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="inp-wf-file" accept=".json" hidden>
+
+    <!-- 图层合成（全屏工作台） -->
+    <div id="modal-composite" class="composite-fullscreen hidden" aria-label="图层合成">
+        <header class="composite-topbar">
+            <button type="button" id="btn-composite-close" class="btn-icon composite-close" title="退出">✕</button>
+            <h2 class="composite-title">图层合成</h2>
+            <button type="button" id="btn-composite-fit-view" class="btn-secondary btn-sm">适应窗口</button>
+            <button type="button" id="btn-composite-toggle-guides" class="btn-secondary btn-sm active">对齐线</button>
+            <p class="composite-hint-top">拖拽 A 图移动；拖角点缩放；Shift 等比缩放；滚轮缩放视图；空格+拖动平移</p>
+            <button type="button" id="btn-composite-export" class="btn-primary btn-sm">导出 PNG</button>
+            <button type="button" id="btn-composite-save-history" class="btn-secondary btn-sm">保存到历史</button>
+        </header>
+        <div class="composite-body">
+            <aside id="composite-sidebar" class="composite-sidebar">
+                <div class="composite-sidebar-panel">
+                    <section class="panel">
+                        <h2>底图 B</h2>
+                        <div class="composite-thumb-wrap">
+                            <img id="composite-base-thumb" alt="底图预览" class="hidden">
+                            <span id="composite-base-empty" class="composite-empty-hint">未加载</span>
+                        </div>
+                        <div class="composite-btn-row">
+                            <button type="button" id="btn-composite-load-base" class="btn-secondary btn-sm">上传底图</button>
+                            <button type="button" id="btn-composite-base-result" class="btn-secondary btn-sm">当前结果</button>
+                        </div>
+                    </section>
+                    <section class="panel">
+                        <h2>叠加 A</h2>
+                        <div class="composite-thumb-wrap">
+                            <img id="composite-overlay-thumb" alt="叠加预览" class="hidden">
+                            <span id="composite-overlay-empty" class="composite-empty-hint">未加载</span>
+                        </div>
+                        <div class="composite-btn-row">
+                            <button type="button" id="btn-composite-load-overlay" class="btn-secondary btn-sm">上传叠加</button>
+                            <button type="button" id="btn-composite-overlay-result" class="btn-secondary btn-sm">当前结果</button>
+                        </div>
+                        <div class="composite-btn-row">
+                            <button type="button" id="btn-composite-fit-half" class="btn-secondary btn-sm">适应 50%</button>
+                            <button type="button" id="btn-composite-fit-width" class="btn-secondary btn-sm">宽度铺满</button>
+                        </div>
+                        <button type="button" id="btn-composite-cutout-overlay" class="btn-secondary btn-sm composite-swap-btn">抠图 A（去背景）</button>
+                    </section>
+                    <section class="panel">
+                        <h2>变换</h2>
+                        <label class="composite-range-label">透明度 <span id="composite-opacity-val">100%</span>
+                            <input type="range" id="composite-opacity" min="0" max="100" value="100">
+                        </label>
+                        <label class="composite-range-label">旋转 <span id="composite-rotation-val">0°</span>
+                            <input type="range" id="composite-rotation" min="-180" max="180" value="0">
+                        </label>
+                    </section>
+                    <section class="panel">
+                        <h2>对齐</h2>
+                        <div class="composite-align-grid">
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="left" title="左对齐">⬅</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="hcenter" title="水平居中">↔</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="right" title="右对齐">➡</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="top" title="顶对齐">⬆</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="center" title="居中">◎</button>
+                            <button type="button" class="btn-secondary btn-sm composite-align" data-align="bottom" title="底对齐">⬇</button>
+                        </div>
+                        <button type="button" id="btn-composite-swap" class="btn-secondary btn-sm composite-swap-btn">交换 A / B</button>
+                    </section>
+                </div>
+            </aside>
+            <div id="composite-viewport" class="composite-viewport">
+                <canvas id="composite-canvas"></canvas>
+            </div>
+        </div>
+        <input type="file" id="inp-composite-base" accept="image/*" hidden>
+        <input type="file" id="inp-composite-overlay" accept="image/*" hidden>
+    </div>
+
+    <!-- 抠图 -->
+    <div id="modal-cutout" class="modal hidden">
+        <div class="modal-content cutout-content">
+            <h2>抠图</h2>
+            <p class="cutout-hint">浏览器本地 AI 抠图，图片不出本机。首次使用需下载约 30MB 模型（会缓存到浏览器）。</p>
+            <div class="cutout-preview-row">
+                <div class="cutout-preview-box">
+                    <span class="cutout-preview-label">原图</span>
+                    <div class="cutout-preview-frame">
+                        <img id="cutout-src-preview" alt="原图" class="hidden">
+                        <span id="cutout-src-empty" class="cutout-empty-hint">未选择图片</span>
+                    </div>
+                </div>
+                <div class="cutout-preview-box">
+                    <span class="cutout-preview-label">抠图结果</span>
+                    <div class="cutout-preview-frame cutout-checker">
+                        <img id="cutout-result-preview" alt="抠图结果" class="hidden">
+                        <span id="cutout-result-empty" class="cutout-empty-hint">等待处理</span>
+                    </div>
+                </div>
+            </div>
+            <div id="cutout-progress" class="cutout-progress hidden">
+                <div class="cutout-progress-bar-wrap">
+                    <div id="cutout-progress-bar" class="cutout-progress-bar"></div>
+                </div>
+                <span id="cutout-progress-text">准备中…</span>
+            </div>
+            <div class="cutout-load-row">
+                <button type="button" id="btn-cutout-load" class="btn-secondary btn-sm">上传图片</button>
+                <button type="button" id="btn-cutout-from-result" class="btn-secondary btn-sm">当前结果</button>
+            </div>
+            <div id="cutout-adjust-panel" class="cutout-adjust-panel hidden">
+                <h3 class="cutout-adjust-title">边缘调节</h3>
+                <p class="cutout-adjust-hint">AI 抠完后可微调。扣得过大时加大「边缘收缩」；毛边多时可提高「透明阈值」。</p>
+                <label class="cutout-range-label">边缘收缩 <span id="cutout-shrink-val">0px</span>
+                    <input type="range" id="cutout-shrink" min="0" max="24" value="0" step="1">
+                </label>
+                <label class="cutout-range-label">透明阈值 <span id="cutout-threshold-val">12</span>
+                    <input type="range" id="cutout-threshold" min="0" max="80" value="12" step="1">
+                </label>
+                <label class="cutout-range-label">边缘羽化 <span id="cutout-feather-val">0px</span>
+                    <input type="range" id="cutout-feather" min="0" max="8" value="0" step="1">
+                </label>
+                <button type="button" id="btn-cutout-reset-adjust" class="btn-secondary btn-sm">重置调节</button>
+            </div>
+            <div class="modal-actions cutout-actions">
+                <button type="button" id="btn-cutout-run" class="btn-primary">开始抠图</button>
+                <button type="button" id="btn-cutout-composite" class="btn-secondary" disabled>送入图层合成</button>
+                <button type="button" id="btn-cutout-download" class="btn-secondary" disabled>下载 PNG</button>
+                <button type="button" id="btn-cutout-history" class="btn-secondary" disabled>保存历史</button>
+                <button type="button" id="btn-cutout-close" class="btn-secondary">关闭</button>
+            </div>
+        </div>
+        <input type="file" id="inp-cutout" accept="image/*" hidden>
+    </div>
+
+    <!-- 元数据解析弹窗 -->
+    <div id="modal-meta" class="modal hidden">
+        <div class="modal-content modal-meta-content">
+            <h2>图片参数解析</h2>
+            <div id="meta-source" class="meta-source"></div>
+            <div id="meta-preview" class="meta-preview">
+                <img id="meta-preview-img" alt="预览">
+            </div>
+            <div id="meta-fields" class="meta-fields"></div>
+            <div id="meta-raw" class="meta-raw hidden">
+                <div class="meta-raw-toggle" id="meta-raw-toggle">▶ 原始数据</div>
+                <pre id="meta-raw-content" class="hidden"></pre>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-meta-apply" class="btn-primary">一键填入</button>
+                <button id="btn-meta-cancel" class="btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=416"></script>
+</body>
+</html>
