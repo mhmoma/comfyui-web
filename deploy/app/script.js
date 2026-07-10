@@ -8580,7 +8580,37 @@
 
     // ==================== 深链跳转 ====================
     function _isMobileAppLayout() {
+        const nav = document.getElementById('mobile-nav');
+        if (nav && getComputedStyle(nav).display !== 'none') return true;
         return window.matchMedia('(max-width: 640px)').matches;
+    }
+
+    function _parseDeepLinkParams() {
+        const params = new URLSearchParams(location.search);
+        const hashRaw = location.hash.replace(/^#/, '').trim();
+        const hashParams = new URLSearchParams(hashRaw.includes('=') ? hashRaw : '');
+        if (hashRaw === 'inpaint') hashParams.set('action', 'inpaint');
+        if (hashRaw === 'settings') hashParams.set('tab', 'settings');
+        const get = (k) => hashParams.get(k) || params.get(k);
+        return {
+            tag: get('tag'),
+            arch: get('arch'),
+            mode: get('mode'),
+            tab: get('tab'),
+            action: get('action'),
+            focus: get('focus'),
+        };
+    }
+
+    function _hasDeepLinkIntent(dl) {
+        return !!(dl.tag || dl.arch || dl.mode || dl.tab || dl.action || dl.focus);
+    }
+
+    function _applyModeDeepLink(mode) {
+        if (!mode || !['nai', 'simple', 'workflow'].includes(mode)) return;
+        const tab = document.querySelector(`.mode-tab[data-mode="${mode}"]`);
+        if (tab) tab.click();
+        else _profileApplyActiveMode(mode);
     }
 
     function _expandTagPickerSection(pickerId) {
@@ -8598,9 +8628,10 @@
     function _focusCharacterLibrary() {
         if (_isMobileAppLayout()) {
             switchMobileTab('characters');
+            renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
             return;
         }
-        _profileApplyActiveMode('simple');
+        _applyModeDeepLink('simple');
         if (posTagPicker && _charGroupIdx >= 0) {
             posTagPicker.groupIdx = _charGroupIdx;
             posTagPicker.subIdx = 0;
@@ -8615,9 +8646,14 @@
     function _focusArtistLibrary() {
         if (_isMobileAppLayout()) {
             switchMobileTab('artists');
+            if (posTagPicker && _artistGroupIdx >= 0) {
+                _prepareArtistTab(posTagPicker, 0);
+                syncMobileArtistNav(0);
+                posTagPicker.render();
+            }
             return;
         }
-        _profileApplyActiveMode('simple');
+        _applyModeDeepLink('simple');
         if (posTagPicker && _artistGroupIdx >= 0) {
             _prepareArtistTab(posTagPicker, 0);
             syncMobileArtistNav(0);
@@ -8654,44 +8690,44 @@
 
     // ==================== 初始化 ====================
     function applyDeepLinks() {
-        const params = new URLSearchParams(location.search);
-        const hashRaw = location.hash.replace(/^#/, '').trim();
-        const hashParams = new URLSearchParams(hashRaw.includes('=') ? hashRaw : '');
-        if (hashRaw === 'inpaint') hashParams.set('action', 'inpaint');
-        if (hashRaw === 'settings') hashParams.set('tab', 'settings');
+        const dl = _parseDeepLinkParams();
+        if (!_hasDeepLinkIntent(dl)) return;
 
-        const tag = params.get('tag');
-        if (tag && dom.inpPos) {
-            const cur = dom.inpPos.value.trim();
-            dom.inpPos.value = cur ? `${cur}, ${tag}` : tag;
+        if (dl.tag && dom.txtPositive) {
+            const cur = dom.txtPositive.value.trim();
+            dom.txtPositive.value = cur ? `${cur}, ${dl.tag}` : dl.tag;
+            dom.txtPositive.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
-        const arch = params.get('arch');
-        if (arch && dom.selArch) {
-            dom.selArch.value = arch;
+        if (dl.arch && dom.selArch) {
+            dom.selArch.value = dl.arch;
             dom.selArch.dispatchEvent(new Event('change'));
         }
 
-        const mode = hashParams.get('mode');
-        if (mode === 'nai' || mode === 'simple' || mode === 'workflow') {
-            _profileApplyActiveMode(mode);
-        }
+        _applyModeDeepLink(dl.mode);
 
-        const tab = hashParams.get('tab') || params.get('tab');
-        const action = hashParams.get('action');
-        const focus = hashParams.get('focus');
+        if (dl.tab === 'characters') _focusCharacterLibrary();
+        else if (dl.tab === 'artists') _focusArtistLibrary();
+        else if (dl.tab === 'settings') _openSettingsFocus(dl.focus || 'profile');
+        else if (dl.tab === 'history' || dl.action === 'inpaint') _handleInpaintDeepLink();
+        else if (dl.tab) switchMobileTab(dl.tab);
 
-        if (tab === 'characters') _focusCharacterLibrary();
-        else if (tab === 'artists') _focusArtistLibrary();
-        else if (tab === 'settings') _openSettingsFocus(focus || 'profile');
-        else if (tab === 'history' || action === 'inpaint') _handleInpaintDeepLink();
-        else if (tab) switchMobileTab(tab);
-
-        if (focus === 'profile' && tab !== 'settings') _openSettingsFocus('profile');
+        if (dl.focus === 'profile' && dl.tab !== 'settings') _openSettingsFocus('profile');
     }
 
+    function scheduleDeepLinks() {
+        try { applyDeepLinks(); } catch (e) { console.warn('[DeepLink]', e); }
+        requestAnimationFrame(() => {
+            try { applyDeepLinks(); } catch (e) { console.warn('[DeepLink]', e); }
+        });
+        setTimeout(() => { try { applyDeepLinks(); } catch (e) { /* ignore */ } }, 350);
+        setTimeout(() => { try { applyDeepLinks(); } catch (e) { /* ignore */ } }, 1200);
+    }
+
+    window.addEventListener('hashchange', () => scheduleDeepLinks());
+
     async function init() {
-        console.log('[ComfyUI Web] v4.21');
+        console.log('[ComfyUI Web] v4.22');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -8699,6 +8735,8 @@
         setupMobileArtistNav();
         setupMobileCharBrowser();
         renderMobileSeriesList('');
+
+        scheduleDeepLinks();
 
         Promise.all([
             loadCheckpoints(),
@@ -8709,12 +8747,16 @@
             loadIPAdapterModels(),
             loadAnimaModels(),
             _checkInpaintNodes(),
-        ]).then(async () => {
+        ]).finally(async () => {
             loadInpaintSettings();
             updateInpaintEngineUI();
             updateArchAwarePanels();
-            await ProfileManager.restoreActiveProfile();
-            applyDeepLinks();
+            try {
+                await ProfileManager.restoreActiveProfile();
+            } catch (e) {
+                console.warn('[Profile] restore failed:', e);
+            }
+            scheduleDeepLinks();
         });
     }
 
