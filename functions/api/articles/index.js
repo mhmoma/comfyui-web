@@ -14,12 +14,27 @@ export async function onRequestGet(context) {
 
   const url = new URL(request.url);
   const isAdmin = checkAdmin(request, env);
+  const now = Date.now();
+
+  const idParam = (url.searchParams.get('id') || '').trim();
+  if (idParam) {
+    try {
+      const row = await db.prepare('SELECT * FROM articles WHERE id = ?').bind(idParam).first();
+      if (!row) return json(404, { error: '文章不存在' });
+      if (!isAdmin && (row.status !== 'published' || row.published_at > now)) {
+        return json(404, { error: '文章不存在' });
+      }
+      return json(200, { ok: true, article: rowToArticle(row, { includeContent: true }) });
+    } catch (e) {
+      return json(500, { error: e.message });
+    }
+  }
+
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
   const limit = Math.min(isAdmin ? 100 : 50, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)));
   const category = url.searchParams.get('category');
   const q = (url.searchParams.get('q') || '').trim();
   const offset = (page - 1) * limit;
-  const now = Date.now();
 
   try {
     if (isAdmin && url.searchParams.get('stats') === '1') {

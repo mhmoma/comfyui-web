@@ -35,8 +35,9 @@
     }
 
     function articleUrl(article) {
+        if (article.slug) return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
         if (article.id) return `/news/detail?id=${encodeURIComponent(article.id)}`;
-        return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
+        return '/news/';
     }
 
     function parseTags(str) {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资讯详情 · ComfyUI Web</title>
-    <link rel="stylesheet" href="/assets/site.css?v=4">
+    <link rel="stylesheet" href="/assets/site.css?v=5">
 </head>
 <body>
     <header class="site-header">
@@ -66,17 +66,13 @@
         }
 
         const apiUrl = id
-            ? '/api/articles/by-id/' + encodeURIComponent(id)
+            ? '/api/articles?id=' + encodeURIComponent(id)
             : '/api/articles/' + encodeURIComponent(slug);
 
         fetch(apiUrl)
             .then(r => r.json().then(d => ({ ok: r.ok, d })))
             .then(({ ok, d }) => {
                 if (!ok || !d.article) {
-                    if (slug && !id) {
-                        location.replace('/news/' + encodeURIComponent(slug) + '/');
-                        return;
-                    }
                     root.innerHTML = '<p class="empty-state">文章不存在或已删除<br><a href="/news/">返回资讯列表</a></p>';
                     return;
                 }
@@ -87,6 +83,6 @@
             });
     })();
     </script>
-    <script src="/assets/site.js?v=4"></script>
+    <script src="/assets/site.js?v=5"></script>
 </body>
 </html>

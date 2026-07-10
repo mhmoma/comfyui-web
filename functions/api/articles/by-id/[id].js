@@ -1,4 +1,4 @@
-import { json, corsPreflight, checkAdmin, rowToArticle, makeTitle, makeSummary } from './_shared.js';
+import { json, corsPreflight, checkAdmin, rowToArticle, makeTitle, makeSummary } from '../_shared.js';
 
 async function getRowById(db, id) {
   return db.prepare('SELECT * FROM articles WHERE id = ?').bind(id).first();

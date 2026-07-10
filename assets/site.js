@@ -42,11 +42,11 @@
     }
 
     function articleUrl(article) {
+        if (article.source === 'api' && article.slug) {
+            return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
+        }
         if (article.source === 'api' && article.id) {
             return `/news/detail?id=${encodeURIComponent(article.id)}`;
-        }
-        if (article.source === 'api') {
-            return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
         }
         return `/news/${encodeURIComponent(article.slug)}/`;
     }
