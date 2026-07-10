@@ -8580,6 +8580,9 @@
 
     // ==================== 深链跳转 ====================
     let _appliedDeepLinkKey = '';
+    let _portalArtistSubIdx = 0;
+    let _portalArtistPage = 1;
+    let _portalArtistTotalPages = 1;
 
     function _isMobileAppLayout() {
         const nav = document.getElementById('mobile-nav');
@@ -8591,9 +8594,7 @@
         const params = new URLSearchParams(location.search);
         const hashRaw = location.hash.replace(/^#/, '').trim();
         const hashParams = new URLSearchParams(hashRaw.includes('=') ? hashRaw : '');
-        if (hashRaw === 'inpaint') hashParams.set('action', 'inpaint');
         if (hashRaw === 'settings') hashParams.set('tab', 'settings');
-        // 首页链接用 query，优先于 hash，避免旧 hash 覆盖新参数
         const get = (k) => params.get(k) || hashParams.get(k);
         return {
             tag: get('tag'),
@@ -8610,28 +8611,186 @@
     }
 
     function _hasDeepLinkIntent(dl) {
-        return !!(dl.tag || dl.arch || dl.mode || dl.tab || dl.action || dl.focus);
+        return !!(dl.tag || dl.arch || dl.mode || dl.tab || dl.focus);
     }
 
-    function _setDeepLinkBar(visible, title) {
-        const bar = document.getElementById('deep-link-bar');
-        const titleEl = document.getElementById('deep-link-bar-title');
-        if (titleEl && title) titleEl.textContent = title;
-        if (bar) {
-            bar.classList.toggle('hidden', !visible);
-            bar.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    function _closePortalOverlays() {
+        ['portal-char-overlay', 'portal-artist-overlay'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('hidden');
+                el.setAttribute('aria-hidden', 'true');
+            }
+        });
+        document.body.classList.remove('portal-overlay-open');
+    }
+
+    function _openPortalCharOverlay() {
+        _closePortalOverlays();
+        const overlay = document.getElementById('portal-char-overlay');
+        if (!overlay) return;
+        overlay.classList.remove('hidden');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('portal-overlay-open');
+        _seriesListState.page = 1;
+        _seriesListState.filter = '';
+        const search = document.getElementById('portal-char-search');
+        if (search) search.value = '';
+        renderMobileSeriesList('', { context: 'portal' });
+    }
+
+    function _renderPortalArtistPagination(total) {
+        const nav = document.getElementById('portal-artist-pagination');
+        if (!nav) return;
+        nav.innerHTML = '';
+        if (_portalArtistTotalPages <= 1) return;
+
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.textContent = '← 上一页';
+        prevBtn.disabled = _portalArtistPage <= 1;
+        prevBtn.addEventListener('click', () => {
+            _portalArtistPage--;
+            renderPortalArtistGrid();
+        });
+
+        const info = document.createElement('span');
+        info.className = 'page-info';
+        info.textContent = `第 ${_portalArtistPage} / ${_portalArtistTotalPages} 页（共 ${total || '?'} 位画师）`;
+
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.textContent = '下一页 →';
+        nextBtn.disabled = _portalArtistPage >= _portalArtistTotalPages;
+        nextBtn.addEventListener('click', () => {
+            _portalArtistPage++;
+            renderPortalArtistGrid();
+        });
+
+        nav.append(prevBtn, info, nextBtn);
+    }
+
+    function renderPortalArtistGrid() {
+        const grid = document.getElementById('portal-artist-grid');
+        if (!grid) return;
+        if (_artistGroupIdx < 0) _injectArtistGroup();
+
+        const mode = _ARTIST_SORT_MODES[_portalArtistSubIdx];
+        if (!mode) return;
+
+        document.querySelectorAll('#portal-artist-nav .portal-artist-nav-btn').forEach((btn, i) => {
+            btn.classList.toggle('active', i === _portalArtistSubIdx);
+        });
+
+        grid.innerHTML = '<div class="portal-artist-empty">加载中…</div>';
+
+        if (mode.sort === 'chains') {
+            ArtistChainManager.getAll().then(chains => {
+                grid.innerHTML = '';
+                if (!chains.length) {
+                    grid.innerHTML = '<div class="portal-artist-empty">暂无自定义画师串<br><small>可在工具内「画师串」分类创建</small></div>';
+                    _renderPortalArtistPagination(0);
+                    return;
+                }
+                const items = chains.map(c => ArtistChainManager.toTagItem(c));
+                const selected = posTagPicker ? posTagPicker.getSelectedTags() : new Set();
+                const lazyImages = [];
+                items.forEach(tag => {
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'portal-artist-card' + (selected.has(tag.t) ? ' selected' : '');
+                    if (tag.th) {
+                        const img = document.createElement('img');
+                        img.className = 'tag-thumb img-loading';
+                        img.dataset.src = tag.th;
+                        img.alt = tag.d;
+                        card.appendChild(img);
+                        lazyImages.push(img);
+                    } else {
+                        const ph = document.createElement('div');
+                        ph.className = 'tag-thumb';
+                        ph.textContent = '🎨';
+                        ph.style.display = 'flex';
+                        ph.style.alignItems = 'center';
+                        ph.style.justifyContent = 'center';
+                        card.appendChild(ph);
+                    }
+                    const desc = document.createElement('span');
+                    desc.className = 'tag-desc';
+                    desc.textContent = tag.d;
+                    card.appendChild(desc);
+                    card.addEventListener('click', () => {
+                        if (posTagPicker) {
+                            posTagPicker.toggleArtistChain(tag.t, tag.d);
+                            renderPortalArtistGrid();
+                        }
+                    });
+                    grid.appendChild(card);
+                });
+                if (lazyImages.length) _observeLazyImages(lazyImages);
+                _renderPortalArtistPagination(items.length);
+            });
+            return;
         }
-        document.body.classList.toggle('app-deep-link', visible);
+
+        const letter = mode.sort === 'name' ? _artistCurrentLetter : 'all';
+        _fetchArtists(mode.sort, mode.order, _portalArtistPage, letter).then(result => {
+            grid.innerHTML = '';
+            _portalArtistTotalPages = result.pages || 1;
+            if (!result.tags?.length) {
+                grid.innerHTML = '<div class="portal-artist-empty">暂无画师数据</div>';
+                _renderPortalArtistPagination(0);
+                return;
+            }
+            const selected = posTagPicker ? posTagPicker.getSelectedTags() : new Set();
+            const lazyImages = [];
+            result.tags.forEach(tag => {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'portal-artist-card' + (selected.has(tag.t) ? ' selected' : '');
+                if (tag.th) {
+                    const img = document.createElement('img');
+                    img.className = 'tag-thumb img-loading';
+                    img.dataset.src = tag.th;
+                    img.alt = tag.d;
+                    card.appendChild(img);
+                    lazyImages.push(img);
+                } else {
+                    const ph = document.createElement('div');
+                    ph.className = 'tag-thumb';
+                    ph.textContent = '🎨';
+                    ph.style.display = 'flex';
+                    ph.style.alignItems = 'center';
+                    ph.style.justifyContent = 'center';
+                    card.appendChild(ph);
+                }
+                const desc = document.createElement('span');
+                desc.className = 'tag-desc';
+                desc.textContent = tag.d || tag.t.split(',')[0];
+                card.appendChild(desc);
+                card.addEventListener('click', () => {
+                    if (posTagPicker) {
+                        posTagPicker.toggleTag(tag.t, tag.d, tag.th, 'artist');
+                        renderPortalArtistGrid();
+                    }
+                });
+                grid.appendChild(card);
+            });
+            if (lazyImages.length) _observeLazyImages(lazyImages);
+            _renderPortalArtistPagination(result.total);
+        });
     }
 
-    function _exitDeepLinkMode() {
-        _setDeepLinkBar(false);
-        document.body.classList.remove('mobile-artist-nav-visible');
-        switchMobileTab('create');
-    }
-
-    function _enterDeepLinkMode(title) {
-        _setDeepLinkBar(true, title);
+    function _openPortalArtistOverlay() {
+        _closePortalOverlays();
+        const overlay = document.getElementById('portal-artist-overlay');
+        if (!overlay) return;
+        overlay.classList.remove('hidden');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('portal-overlay-open');
+        _portalArtistSubIdx = 0;
+        _portalArtistPage = 1;
+        renderPortalArtistGrid();
     }
 
     function _applyModeDeepLink(mode) {
@@ -8641,39 +8800,25 @@
         else _profileApplyActiveMode(mode);
     }
 
-    function _expandTagPickerSection(pickerId) {
-        const picker = document.getElementById(pickerId);
-        if (!picker) return;
-        const toggleId = pickerId === 'tag-picker-pos' ? 'pos-collapse-toggle' : 'neg-collapse-toggle';
-        const toggle = document.getElementById(toggleId);
-        picker.classList.remove('hidden');
-        if (toggle) {
-            toggle.classList.add('expanded');
-            toggle.textContent = '▼ 收起标签选择器';
-        }
-    }
-
     function _focusCharacterLibrary() {
-        _enterDeepLinkMode('角色库');
-        switchMobileTab('characters');
-        renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
-        document.getElementById('mobile-panel-characters')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (_isMobileAppLayout()) {
+            switchMobileTab('characters');
+            renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
+            return;
+        }
+        _openPortalCharOverlay();
     }
 
     function _focusArtistLibrary() {
-        _enterDeepLinkMode('画师库');
-        switchMobileTab('artists');
-        if (!_isMobileAppLayout() && posTagPicker && _artistGroupIdx >= 0) {
-            _prepareArtistTab(posTagPicker, 0);
-            syncMobileArtistNav(0);
-            posTagPicker.render();
+        if (_isMobileAppLayout()) {
+            switchMobileTab('artists');
+            return;
         }
-        document.getElementById('tag-picker-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        _openPortalArtistOverlay();
     }
 
     function _openSettingsFocus(focus) {
-        _enterDeepLinkMode('设置');
-        switchMobileTab('settings');
+        _closePortalOverlays();
         if (!dom.btnSettings || !dom.modalSettings) return;
         dom.inpServer.value = getComfyUIAddress();
         if (dom.selProfile) dom.selProfile.value = ProfileManager.store.activeId;
@@ -8685,45 +8830,45 @@
         }
     }
 
-    function _handleInpaintDeepLink() {
-        const resultImg = document.getElementById('result-image');
-        const resultUrl = resultImg?.src;
-        if (resultImg && !resultImg.classList.contains('hidden') && resultUrl) {
-            _setDeepLinkBar(false);
-            document.body.classList.remove('app-deep-link', 'mobile-artist-nav-visible');
-            openInpaintModal(resultUrl);
-            return;
-        }
-        _enterDeepLinkMode('局部重绘');
-        switchMobileTab('history');
-        document.getElementById('history-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        showToast('请从历史记录或结果图点击「局部重绘」');
-    }
-
-    function setupDeepLinkBar() {
-        const btn = document.getElementById('btn-deep-link-back');
-        if (!btn) return;
-        btn.addEventListener('click', () => {
-            _exitDeepLinkMode();
+    function setupPortalOverlays() {
+        const closeChar = () => {
+            _closePortalOverlays();
             history.replaceState(null, '', location.pathname);
+        };
+        document.getElementById('portal-char-close')?.addEventListener('click', closeChar);
+        document.getElementById('portal-artist-close')?.addEventListener('click', closeChar);
+
+        const portalCharSearch = document.getElementById('portal-char-search');
+        if (portalCharSearch) {
+            let debounce;
+            portalCharSearch.addEventListener('input', () => {
+                clearTimeout(debounce);
+                debounce = setTimeout(() => {
+                    _seriesListState.page = 1;
+                    renderMobileSeriesList(portalCharSearch.value, { context: 'portal' });
+                }, 200);
+            });
+        }
+
+        document.querySelectorAll('#portal-artist-nav .portal-artist-nav-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = parseInt(btn.dataset.artistMode, 10);
+                if (Number.isNaN(mode)) return;
+                _portalArtistSubIdx = mode;
+                _portalArtistPage = 1;
+                renderPortalArtistGrid();
+            });
         });
     }
 
     function applyDeepLinks() {
         const dl = _parseDeepLinkParams();
         if (!_hasDeepLinkIntent(dl)) {
-            if (_appliedDeepLinkKey) _exitDeepLinkMode();
             _appliedDeepLinkKey = '';
             return;
         }
 
         const key = _makeDeepLinkIntentKey(dl);
-        const tabOrPanel = !!(dl.tab || dl.action === 'inpaint');
-        if (tabOrPanel && key !== _appliedDeepLinkKey) {
-            document.body.classList.remove('mobile-artist-nav-visible');
-            switchMobileTab('create');
-        }
-        _appliedDeepLinkKey = key;
 
         if (dl.tag && dom.txtPositive) {
             const cur = dom.txtPositive.value.trim();
@@ -8741,17 +8886,7 @@
         if (dl.tab === 'characters') _focusCharacterLibrary();
         else if (dl.tab === 'artists') _focusArtistLibrary();
         else if (dl.tab === 'settings') _openSettingsFocus(dl.focus || 'profile');
-        else if (dl.tab === 'history') {
-            _enterDeepLinkMode('历史记录');
-            switchMobileTab('history');
-        } else if (dl.tab) {
-            _enterDeepLinkMode(dl.tab);
-            switchMobileTab(dl.tab);
-        } else if (!dl.action) {
-            _setDeepLinkBar(false);
-        }
-
-        if (dl.action === 'inpaint') _handleInpaintDeepLink();
+        else _closePortalOverlays();
 
         if (dl.focus === 'profile' && dl.tab !== 'settings') _openSettingsFocus('profile');
     }
@@ -8765,17 +8900,23 @@
         setTimeout(() => { try { applyDeepLinks(); } catch (e) { /* ignore */ } }, 1200);
     }
 
-    window.addEventListener('hashchange', () => scheduleDeepLinks());
+    window.addEventListener('hashchange', () => {
+        _appliedDeepLinkKey = '';
+        scheduleDeepLinks();
+    });
     window.addEventListener('pageshow', (e) => {
-        if (e.persisted) scheduleDeepLinks();
+        if (e.persisted) {
+            _appliedDeepLinkKey = '';
+            scheduleDeepLinks();
+        }
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.23');
+        console.log('[ComfyUI Web] v4.24');
         await loadTags();
         renderHistory();
         setupTagPickers();
-        setupDeepLinkBar();
+        setupPortalOverlays();
         setupMobileTagsMount();
         setupMobileArtistNav();
         setupMobileCharBrowser();
@@ -9002,8 +9143,8 @@
         imgList.forEach(img => { if (img) _seriesCoverObserver.observe(img); });
     }
 
-    function _renderSeriesPagination(total, totalPages) {
-        const nav = document.getElementById('char-series-pagination');
+    function _renderSeriesPagination(total, totalPages, paginationId, rerender) {
+        const nav = document.getElementById(paginationId || 'char-series-pagination');
         if (!nav) return;
         nav.innerHTML = '';
         if (totalPages <= 1) return;
@@ -9014,7 +9155,7 @@
         prevBtn.disabled = _seriesListState.page <= 1;
         prevBtn.addEventListener('click', () => {
             _seriesListState.page--;
-            renderMobileSeriesList(_seriesListState.filter, { keepPage: true });
+            rerender();
         });
 
         const info = document.createElement('span');
@@ -9027,7 +9168,7 @@
         nextBtn.disabled = _seriesListState.page >= totalPages;
         nextBtn.addEventListener('click', () => {
             _seriesListState.page++;
-            renderMobileSeriesList(_seriesListState.filter, { keepPage: true });
+            rerender();
         });
 
         nav.append(prevBtn, info, nextBtn);
@@ -9084,8 +9225,13 @@
     }
 
     function renderMobileSeriesList(filter, options = {}) {
-        const scroll = document.getElementById('char-series-scroll');
+        const isPortal = options.context === 'portal';
+        const scrollId = options.scrollId || (isPortal ? 'portal-char-scroll' : 'char-series-scroll');
+        const paginationId = options.paginationId || (isPortal ? 'portal-char-pagination' : 'char-series-pagination');
+        const scroll = document.getElementById(scrollId);
         if (!scroll) return;
+
+        const rerender = () => renderMobileSeriesList(_seriesListState.filter, { ...options, keepPage: true });
 
         if (_charGroupIdx < 0) {
             _charGroupIdx = tagData.findIndex(g => g.name === '人物');
@@ -9102,17 +9248,17 @@
 
         if (!subs.length) {
             scroll.innerHTML = '<div class="char-browser-empty">正在加载作品列表…<br><small>共 800+ 个作品，请稍候</small></div>';
-            _renderSeriesPagination(0, 1);
+            _renderSeriesPagination(0, 1, paginationId, rerender);
             _loadSeriesFromApi().then(ok => {
                 if (ok) renderMobileSeriesList(q, options);
-                else scroll.innerHTML = '<div class="char-browser-empty">作品列表加载失败<br><small>请检查网络后刷新页面；线上版需访问已部署站点</small></div>';
+                else scroll.innerHTML = '<div class="char-browser-empty">作品列表加载失败<br><small>请检查网络后刷新页面</small></div>';
             });
             return;
         }
 
         if (!subs.every(s => s._coverUrl !== undefined)) {
             scroll.innerHTML = '<div class="char-browser-empty">正在加载作品封面…</div>';
-            _renderSeriesPagination(0, 1);
+            _renderSeriesPagination(0, 1, paginationId, rerender);
             _loadSeriesFromApi().then(ok => {
                 if (ok) renderMobileSeriesList(q, options);
             });
@@ -9128,36 +9274,37 @@
         const pageStart = (_seriesListState.page - 1) * _SERIES_PAGE_SIZE;
         const pageList = list.slice(pageStart, pageStart + _SERIES_PAGE_SIZE);
 
-        let recentIds = [];
-        try { recentIds = JSON.parse(localStorage.getItem('comfyui_recent_series') || '[]'); } catch { /* ignore */ }
-        recentIds = recentIds.slice(0, _SERIES_RECENT_MAX);
-
         scroll.innerHTML = '';
         const lazyImages = [];
 
-        if (!q && _seriesListState.page === 1 && recentIds.length) {
-            const recentLabel = document.createElement('div');
-            recentLabel.className = 'char-series-section-label';
-            recentLabel.textContent = '最近浏览';
-            scroll.appendChild(recentLabel);
-            const recentList = [];
-            recentIds.forEach(id => {
-                const s = subs.find(x => x._seriesId === id);
-                if (s) recentList.push(s);
-            });
-            if (recentList.length) {
-                const recentWrap = document.createElement('div');
-                recentWrap.className = 'char-series-recent-scroll';
-                const recentGrid = document.createElement('div');
-                recentGrid.className = 'char-series-grid char-series-grid-recent';
-                recentList.forEach(s => {
-                    const card = _createSeriesCard(s);
-                    const img = card.querySelector('img.char-series-cover-img');
-                    if (img) lazyImages.push(img);
-                    recentGrid.appendChild(card);
+        if (!isPortal && !q && _seriesListState.page === 1) {
+            let recentIds = [];
+            try { recentIds = JSON.parse(localStorage.getItem('comfyui_recent_series') || '[]'); } catch { /* ignore */ }
+            recentIds = recentIds.slice(0, _SERIES_RECENT_MAX);
+            if (recentIds.length) {
+                const recentLabel = document.createElement('div');
+                recentLabel.className = 'char-series-section-label';
+                recentLabel.textContent = '最近浏览';
+                scroll.appendChild(recentLabel);
+                const recentList = [];
+                recentIds.forEach(id => {
+                    const s = subs.find(x => x._seriesId === id);
+                    if (s) recentList.push(s);
                 });
-                recentWrap.appendChild(recentGrid);
-                scroll.appendChild(recentWrap);
+                if (recentList.length) {
+                    const recentWrap = document.createElement('div');
+                    recentWrap.className = 'char-series-recent-scroll';
+                    const recentGrid = document.createElement('div');
+                    recentGrid.className = 'char-series-grid char-series-grid-recent';
+                    recentList.forEach(s => {
+                        const card = _createSeriesCard(s);
+                        const img = card.querySelector('img.char-series-cover-img');
+                        if (img) lazyImages.push(img);
+                        recentGrid.appendChild(card);
+                    });
+                    recentWrap.appendChild(recentGrid);
+                    scroll.appendChild(recentWrap);
+                }
             }
         }
 
@@ -9173,14 +9320,14 @@
             empty.className = 'char-browser-empty';
             empty.textContent = '未找到匹配作品';
             scroll.appendChild(empty);
-            _renderSeriesPagination(list.length, totalPages);
+            _renderSeriesPagination(list.length, totalPages, paginationId, rerender);
             if (lazyImages.length) _observeSeriesCoverImages(lazyImages);
             return;
         }
 
         _appendSeriesGrid(scroll, pageList, lazyImages);
         if (lazyImages.length) _observeSeriesCoverImages(lazyImages);
-        _renderSeriesPagination(list.length, totalPages);
+        _renderSeriesPagination(list.length, totalPages, paginationId, rerender);
 
         if (options.keepPage) scroll.scrollTop = 0;
     }

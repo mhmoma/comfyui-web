@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.23</title>
-    <link rel="stylesheet" href="style.css?v=419">
+    <title>生图工具 · ComfyUI Web v4.24</title>
+    <link rel="stylesheet" href="style.css?v=420">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.23</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.24</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -37,11 +37,6 @@
             </div>
             <button id="btn-settings" class="btn-icon" title="设置">⚙️</button>
         </header>
-
-        <div id="deep-link-bar" class="deep-link-bar hidden" aria-hidden="true">
-            <button type="button" id="btn-deep-link-back" class="btn-deep-link-back">← 返回创作</button>
-            <span id="deep-link-bar-title" class="deep-link-bar-title"></span>
-        </div>
 
         <main class="main mobile-tab-create">
             <aside class="sidebar">
@@ -847,6 +842,38 @@
         </nav>
     </div>
 
+    <!-- 首页深链：桌面端角色库浮层 -->
+    <div id="portal-char-overlay" class="portal-overlay hidden" aria-hidden="true">
+        <header class="portal-overlay-header">
+            <button type="button" id="portal-char-close" class="portal-overlay-back">← 返回创作</button>
+            <h2 class="portal-overlay-title">角色库</h2>
+        </header>
+        <div class="portal-overlay-toolbar">
+            <input type="text" id="portal-char-search" class="portal-search" placeholder="搜索作品名（如：原神、命运）">
+        </div>
+        <div id="portal-char-scroll" class="portal-char-scroll"></div>
+        <nav id="portal-char-pagination" class="portal-pagination" aria-label="作品分页"></nav>
+    </div>
+
+    <!-- 首页深链：桌面端画师库浮层 -->
+    <div id="portal-artist-overlay" class="portal-overlay hidden" aria-hidden="true">
+        <header class="portal-overlay-header">
+            <button type="button" id="portal-artist-close" class="portal-overlay-back">← 返回创作</button>
+            <h2 class="portal-overlay-title">画师库</h2>
+        </header>
+        <nav id="portal-artist-nav" class="portal-artist-nav" aria-label="画师分类">
+            <button type="button" class="portal-artist-nav-btn active" data-artist-mode="0">🏆 精选</button>
+            <button type="button" class="portal-artist-nav-btn" data-artist-mode="1">🔥 热门</button>
+            <button type="button" class="portal-artist-nav-btn" data-artist-mode="2">❤️ 收藏</button>
+            <button type="button" class="portal-artist-nav-btn" data-artist-mode="3">🔤 字母</button>
+            <button type="button" class="portal-artist-nav-btn" data-artist-mode="4">📎 画师串</button>
+        </nav>
+        <div id="portal-artist-scroll" class="portal-artist-scroll">
+            <div id="portal-artist-grid" class="portal-artist-grid"></div>
+        </div>
+        <nav id="portal-artist-pagination" class="portal-pagination" aria-label="画师分页"></nav>
+    </div>
+
     <!-- 手机端：全屏角色浏览浮层 -->
     <div id="char-browser-overlay" class="char-browser-overlay hidden" aria-hidden="true">
         <header class="char-browser-header">
@@ -1422,6 +1449,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=419"></script>
+    <script src="script.js?v=420"></script>
 </body>
 </html>
