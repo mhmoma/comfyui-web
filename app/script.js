@@ -26,6 +26,11 @@
         localStorage.setItem('comfyui_address', url.replace(/\/+$/, ''));
     }
 
+    function openComfyUINative() {
+        const base = getComfyUIAddress().replace(/\/+$/, '');
+        window.open(`${base}/`, '_blank', 'noopener,noreferrer');
+    }
+
     // ==================== DOM 引用 ====================
     const $ = (sel) => document.querySelector(sel);
     const dom = {
@@ -67,6 +72,7 @@
         modalTutorial: $('#modal-tutorial'),
         btnCloseTutorial: $('#btn-close-tutorial'),
         btnSettings: $('#btn-settings'),
+        btnComfyNative: $('#btn-comfy-native'),
         modalSettings: $('#modal-settings'),
         inpServer: $('#inp-server'),
         btnSaveSettings: $('#btn-save-settings'),
@@ -6177,6 +6183,8 @@
         });
 
         setupTutorialDownloads();
+
+        dom.btnComfyNative?.addEventListener('click', openComfyUINative);
 
         // Settings modal
         dom.btnSettings.addEventListener('click', () => {

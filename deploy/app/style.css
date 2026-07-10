@@ -145,6 +145,14 @@ body {
     background: var(--bg-panel);
 }
 
+.btn-comfy-native {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 8px;
+    min-width: 40px;
+    letter-spacing: 0.02em;
+}
+
 .btn-discord {
     display: inline-flex;
     align-items: center;

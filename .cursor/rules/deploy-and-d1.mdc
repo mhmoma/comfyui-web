@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.108
+> **部署版本**: 1.109
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -325,4 +325,5 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.106 | 2026-07-10 | 浮层文字对比度优化 | 修复桌面端角色/画师卡片文字发黑难读：提高字号并强制浅色文字，画师卡片最小宽度增大（`app v4.25` / `style.css?v=421`）。 |
 | 1.107 | 2026-07-10 | 局部重绘依赖与文案对齐 | 安装脚本与 Anima 节点清单对齐（含 FLS/CropAndStitch/essentials）；清理 Fooocus 残留 UI 文案（`app v4.26` / `script.js?v=421`）。 |
 | 1.108 | 2026-07-10 | 恢复生成过程采样预览 | `/prompt` 增加 `extra_data.preview_method=latent2rgb`、WS 协商 `supports_preview_metadata`；ComfyUI 启动脚本加 `--preview-method auto`（`app v4.27` / `script.js?v=422`）。 |
+| 1.109 | 2026-07-10 | 顶栏官方界面入口 | 新增「官方」按钮，一键新标签打开设置中的 ComfyUI 地址（默认 `127.0.0.1:8188`）（`app v4.28` / `style.css?v=422` / `script.js?v=423`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |
