@@ -26,6 +26,20 @@
         localStorage.setItem('comfyui_address', url.replace(/\/+$/, ''));
     }
 
+    /** 本地日期文件夹 YYYY-MM-DD（ComfyUI output 子目录） */
+    function getLocalDateFolder(date = new Date()) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    /** SaveImage 按日期分子目录，例如 2026-07-10/ComfyUI_Web */
+    function getSaveImagePrefix(baseName) {
+        const safeBase = String(baseName || 'ComfyUI_Web').replace(/[\\/:*?"<>|]+/g, '_');
+        return `${getLocalDateFolder()}/${safeBase}`;
+    }
+
     function openComfyUINative() {
         const base = getComfyUIAddress().replace(/\/+$/, '');
         window.open(`${base}/`, '_blank', 'noopener,noreferrer');
@@ -2218,7 +2232,7 @@
                 const previewSaveId = id();
                 nodes[previewSaveId] = {
                     class_type: "SaveImage",
-                    inputs: { filename_prefix: "CN_Preview", images: preprocessedImage },
+                    inputs: { filename_prefix: getSaveImagePrefix("CN_Preview"), images: preprocessedImage },
                 };
             }
 
@@ -2470,7 +2484,7 @@
             const beforeSaveId = id();
             nodes[beforeSaveId] = {
                 class_type: "SaveImage",
-                inputs: { filename_prefix: "CW_Before", images: finalImage },
+                inputs: { filename_prefix: getSaveImagePrefix("CW_Before"), images: finalImage },
             };
         }
 
@@ -2527,7 +2541,7 @@
         nodes[saveId] = {
             class_type: "SaveImage",
             inputs: {
-                filename_prefix: stage === 'base' ? 'CW_Base' : 'ComfyUI_Web',
+                filename_prefix: getSaveImagePrefix(stage === 'base' ? 'CW_Base' : 'ComfyUI_Web'),
                 images: finalImage,
             },
         };
@@ -3449,7 +3463,7 @@
         }
 
         const saveId = id();
-        wf[saveId] = { class_type: 'SaveImage', inputs: { filename_prefix: 'ComfyUI_Web', images: finalImage } };
+        wf[saveId] = { class_type: 'SaveImage', inputs: { filename_prefix: getSaveImagePrefix('ComfyUI_Web'), images: finalImage } };
 
         return {
             prompt: wf,
@@ -6096,7 +6110,7 @@
                 prompt: {
                     '1': { class_type: 'LoadImage', inputs: { image: uploaded.name } },
                     '2': { class_type: prepClass, inputs: prepInputs },
-                    '3': { class_type: 'SaveImage', inputs: { filename_prefix: 'CN_Preview', images: ['2', 0] } },
+                    '3': { class_type: 'SaveImage', inputs: { filename_prefix: getSaveImagePrefix('CN_Preview'), images: ['2', 0] } },
                 },
             };
 
