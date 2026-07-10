@@ -123,11 +123,11 @@
 
     async function loadNews() {
         try {
-            const res = await fetch('/api/articles?limit=50');
+            const res = await fetch('/api/articles?limit=50', { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
-                if (data.articles && data.articles.length) {
-                    return data.articles;
+                if (Array.isArray(data.articles)) {
+                    return data.articles.map(a => ({ ...a, source: a.source || 'api' }));
                 }
             }
         } catch { /* API 不可用（本地静态预览），回退 */ }
