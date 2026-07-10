@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资讯详情 · ComfyUI Web</title>
-    <link rel="stylesheet" href="/assets/site.css?v=2">
+    <link rel="stylesheet" href="/assets/site.css?v=4">
 </head>
 <body>
     <header class="site-header">
@@ -31,6 +31,7 @@
     <script>
     (function () {
         const params = new URLSearchParams(location.search);
+        const id = params.get('id');
         const slug = params.get('slug');
         const root = document.getElementById('article-root');
         const CATEGORY_LABELS = { model: '模型动态', tutorial: '教程技巧', tool: '工具更新', community: '社区精选' };
@@ -39,42 +40,53 @@
             return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
-        if (!slug) {
+        function renderArticle(a) {
+            document.title = a.title + ' · ComfyUI Web';
+            const date = new Date(a.published_at).toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric' });
+            const tags = (a.tags||[]).map(t => `<span class="article-tag"><a href="/app/?tag=${encodeURIComponent(t)}">#${esc(t)}</a></span>`).join('');
+            root.innerHTML = `
+                <article>
+                    <header class="article-header">
+                        <span class="cat-badge cat-${esc(a.category)}">${CATEGORY_LABELS[a.category]||a.category}</span>
+                        <h1>${esc(a.title)}</h1>
+                        <div class="article-meta"><span>${date}</span></div>
+                    </header>
+                    ${a.cover_url ? `<img class="article-cover" src="${esc(a.cover_url)}" alt="">` : ''}
+                    <div class="article-content">${a.content_html}</div>
+                    ${tags ? `<div class="article-tags">${tags}</div>` : ''}
+                    <div class="article-actions">
+                        <a href="/news/" class="btn-secondary">← 返回资讯</a>
+                    </div>
+                </article>`;
+        }
+
+        if (!id && !slug) {
             root.innerHTML = '<p class="empty-state">缺少文章参数</p>';
             return;
         }
 
-        fetch('/api/articles/' + encodeURIComponent(slug))
+        const apiUrl = id
+            ? '/api/articles/by-id/' + encodeURIComponent(id)
+            : '/api/articles/' + encodeURIComponent(slug);
+
+        fetch(apiUrl)
             .then(r => r.json().then(d => ({ ok: r.ok, d })))
             .then(({ ok, d }) => {
-                if (!ok) {
-                    location.replace('/news/' + encodeURIComponent(slug) + '/');
+                if (!ok || !d.article) {
+                    if (slug && !id) {
+                        location.replace('/news/' + encodeURIComponent(slug) + '/');
+                        return;
+                    }
+                    root.innerHTML = '<p class="empty-state">文章不存在或已删除<br><a href="/news/">返回资讯列表</a></p>';
                     return;
                 }
-                const a = d.article;
-                document.title = a.title + ' · ComfyUI Web';
-                const date = new Date(a.published_at).toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric' });
-                const tags = (a.tags||[]).map(t => `<span class="article-tag"><a href="/app/?tag=${encodeURIComponent(t)}">#${esc(t)}</a></span>`).join('');
-                root.innerHTML = `
-                    <article>
-                        <header class="article-header">
-                            <span class="cat-badge cat-${esc(a.category)}">${CATEGORY_LABELS[a.category]||a.category}</span>
-                            <h1>${esc(a.title)}</h1>
-                            <div class="article-meta"><span>${date}</span></div>
-                        </header>
-                        ${a.cover_url ? `<img class="article-cover" src="${esc(a.cover_url)}" alt="">` : ''}
-                        <div class="article-content">${a.content_html}</div>
-                        ${tags ? `<div class="article-tags">${tags}</div>` : ''}
-                        <div class="article-actions">
-                            <a href="/news/" class="btn-secondary">← 返回资讯</a>
-                        </div>
-                    </article>`;
+                renderArticle(d.article);
             })
             .catch(() => {
-                location.replace('/news/' + encodeURIComponent(slug) + '/');
+                root.innerHTML = '<p class="empty-state">加载失败<br><a href="/news/">返回资讯列表</a></p>';
             });
     })();
     </script>
-    <script src="/assets/site.js?v=2"></script>
+    <script src="/assets/site.js?v=4"></script>
 </body>
 </html>

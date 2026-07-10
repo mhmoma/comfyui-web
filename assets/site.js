@@ -42,10 +42,13 @@
     }
 
     function articleUrl(article) {
-        if (article.source === 'api') {
-            return `/news/detail.html?slug=${encodeURIComponent(article.slug)}`;
+        if (article.source === 'api' && article.id) {
+            return `/news/detail?id=${encodeURIComponent(article.id)}`;
         }
-        return `/news/${escapeHtml(article.slug)}/`;
+        if (article.source === 'api') {
+            return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
+        }
+        return `/news/${encodeURIComponent(article.slug)}/`;
     }
 
     function catBadge(category) {

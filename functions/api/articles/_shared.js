@@ -73,9 +73,9 @@ export function makeSlug(text) {
   const base = String(text || '')
     .trim()
     .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fff]+/g, '-')
+    .replace(/[^\w-]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
+    .slice(0, 32);
   return `${base || 'post'}-${Date.now().toString(36)}`;
 }
 

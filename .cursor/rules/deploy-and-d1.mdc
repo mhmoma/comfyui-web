@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.96
+> **部署版本**: 1.97
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -168,6 +168,7 @@ https://raw.githubusercontent.com/mhmoma/comfyui-Web/main/characters.json
 | `/api/articles` | GET | 资讯列表（分页、分类） | 无 |
 | `/api/articles` | POST | 管理员发帖 | x-admin-key |
 | `/api/articles/init` | POST | 初始化 articles 表 | x-admin-key |
+| `/api/articles/auth` | GET | 验证管理密钥 | x-admin-key |
 | `/api/articles/{slug}` | GET | 文章详情 | 无 |
 | `/api/articles/{slug}` | PATCH / DELETE | 编辑 / 删除 | x-admin-key |
 
@@ -311,4 +312,6 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.93 | 2026-07-10 | 门户站 + 资讯阶段 A | 站点升级为资讯+工具双区：门户首页、`/app` 生图工具、Markdown 资讯构建（`content/news/` → `news.json`/详情页/RSS/sitemap）、教程/关于页（`v4.20` / `app/style.css?v=406` / `app/script.js?v=416`）。 |
 | 1.94 | 2026-07-10 | 微博式管理发帖（阶段 B） | D1 `articles` 表 + `/api/articles` CRUD；`/admin/` 管理发帖页；资讯页改 API 驱动微博流展示（`assets/site.css?v=2`）。 |
 | 1.95 | 2026-07-10 | 门户站完整上线 + 管理后台 | 门户首页、`/app` 生图工具、`/news` 资讯流、Markdown 构建、完整管理后台（发帖/编辑/删帖/草稿/搜索筛选）、首页资讯卡片优化（`v4.20` / `assets/site.css?v=4` / `app/script.js?v=416`）。 |
+| 1.96 | 2026-07-10 | 管理后台登录校验加固 | 新增 `/api/articles/auth` 服务端验密钥；错误密钥无法进入后台，403 自动登出（`admin.js?v=3`）。 |
+| 1.97 | 2026-07-10 | 修复资讯详情跳转回首页 | API 文章改用 `id` 打开 `/news/detail?id=`；新增 `/api/articles/by-id/[id]`；slug 仅 ASCII；不再错误重定向（`site.js?v=4`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |

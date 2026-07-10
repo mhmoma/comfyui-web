@@ -6,6 +6,7 @@
 
     let adminKey = sessionStorage.getItem(KEY_STORAGE) || '';
     let currentCategory = 'tool';
+    let editingId = null;
     let editingSlug = null;
     let filterStatus = '';
     let filterCategory = '';
@@ -33,8 +34,9 @@
         return d.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
-    function articleUrl(slug) {
-        return `/news/detail.html?slug=${encodeURIComponent(slug)}`;
+    function articleUrl(article) {
+        if (article.id) return `/news/detail?id=${encodeURIComponent(article.id)}`;
+        return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
     }
 
     function parseTags(str) {
@@ -99,6 +101,7 @@
     }
 
     function resetForm() {
+        editingId = null;
         editingSlug = null;
         $('post-title').value = '';
         $('post-content').value = '';
@@ -116,6 +119,7 @@
     }
 
     function startEdit(article) {
+        editingId = article.id;
         editingSlug = article.slug;
         $('post-title').value = article.title || '';
         $('post-content').value = article.content || article.summary || '';
@@ -162,7 +166,7 @@
             : '<span class="status-badge published">已发布</span>';
         const catLabel = CATEGORY_LABELS[a.category] || a.category;
         return `
-            <tr data-slug="${escapeHtml(a.slug)}">
+            <tr data-id="${escapeHtml(a.id)}" data-slug="${escapeHtml(a.slug)}">
                 <td class="col-title">
                     <div class="row-title">${escapeHtml(a.title)}</div>
                     <div class="row-summary">${escapeHtml(a.summary)}</div>
@@ -171,12 +175,12 @@
                 <td class="col-status">${statusLabel}</td>
                 <td class="col-time">${formatTime(a.published_at)}</td>
                 <td class="col-actions">
-                    <button type="button" class="btn-text btn-edit" data-slug="${escapeHtml(a.slug)}">编辑</button>
-                    <a href="${articleUrl(a.slug)}" target="_blank" rel="noopener" class="btn-text">预览</a>
-                    ${a.status === 'draft'
-                        ? `<button type="button" class="btn-text btn-publish-one" data-slug="${escapeHtml(a.slug)}">发布</button>`
-                        : `<button type="button" class="btn-text btn-unpublish" data-slug="${escapeHtml(a.slug)}">转草稿</button>`}
-                    <button type="button" class="btn-text btn-delete danger" data-slug="${escapeHtml(a.slug)}">删除</button>
+                        <button type="button" class="btn-text btn-edit" data-id="${escapeHtml(a.id)}">编辑</button>
+                        <a href="${articleUrl(a)}" target="_blank" rel="noopener" class="btn-text">预览</a>
+                        ${a.status === 'draft'
+                        ? `<button type="button" class="btn-text btn-publish-one" data-id="${escapeHtml(a.id)}">发布</button>`
+                        : `<button type="button" class="btn-text btn-unpublish" data-id="${escapeHtml(a.id)}">转草稿</button>`}
+                        <button type="button" class="btn-text btn-delete danger" data-id="${escapeHtml(a.id)}">删除</button>
                 </td>
             </tr>`;
     }
@@ -256,7 +260,7 @@
         if (!data.content) { showMsg('正文不能为空', true); return; }
 
         const btn = $('btn-publish');
-        const isEdit = !!editingSlug;
+        const isEdit = !!editingId;
         btn.disabled = true;
         btn.textContent = isEdit ? '保存中…' : '发布中…';
 
@@ -272,7 +276,7 @@
             };
 
             const res = await apiFetch(
-                isEdit ? `/api/articles/${encodeURIComponent(editingSlug)}` : '/api/articles',
+                isEdit ? `/api/articles/by-id/${encodeURIComponent(editingId)}` : '/api/articles',
                 {
                     method: isEdit ? 'PATCH' : 'POST',
                     headers: headers(),
@@ -293,9 +297,9 @@
         }
     }
 
-    async function fetchAndEdit(slug) {
+    async function fetchAndEdit(id) {
         try {
-            const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, { headers: adminHeaders() });
+            const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, { headers: adminHeaders() });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '加载失败');
             startEdit(data.article);
@@ -304,9 +308,9 @@
         }
     }
 
-    async function toggleStatus(slug, newStatus) {
+    async function toggleStatus(id, newStatus) {
         try {
-            const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, {
+            const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, {
                 method: 'PATCH',
                 headers: headers(),
                 body: JSON.stringify({ status: newStatus }),
@@ -320,18 +324,18 @@
         }
     }
 
-    async function deletePost(slug) {
-        const item = allArticles.find(a => a.slug === slug);
-        const title = item?.title || slug;
+    async function deletePost(id) {
+        const item = allArticles.find(a => a.id === id);
+        const title = item?.title || id;
         if (!confirm(`确认删除「${title}」？\n此操作不可恢复。`)) return;
         try {
-            const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, {
+            const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, {
                 method: 'DELETE',
                 headers: adminHeaders(),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '删除失败');
-            if (editingSlug === slug) resetForm();
+            if (editingId === id) resetForm();
             await loadFeed();
             showMsg('已删除');
         } catch (e) {
@@ -444,12 +448,13 @@
     });
 
     $('admin-feed')?.addEventListener('click', e => {
-        const slug = e.target.closest('[data-slug]')?.dataset.slug;
-        if (!slug) return;
-        if (e.target.closest('.btn-edit')) fetchAndEdit(slug);
-        else if (e.target.closest('.btn-delete')) deletePost(slug);
-        else if (e.target.closest('.btn-publish-one')) toggleStatus(slug, 'published');
-        else if (e.target.closest('.btn-unpublish')) toggleStatus(slug, 'draft');
+        const row = e.target.closest('[data-id]');
+        const id = row?.dataset.id;
+        if (!id) return;
+        if (e.target.closest('.btn-edit')) fetchAndEdit(id);
+        else if (e.target.closest('.btn-delete')) deletePost(id);
+        else if (e.target.closest('.btn-publish-one')) toggleStatus(id, 'published');
+        else if (e.target.closest('.btn-unpublish')) toggleStatus(id, 'draft');
     });
 
     tryRestoreSession();
