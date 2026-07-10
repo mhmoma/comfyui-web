@@ -6630,7 +6630,159 @@
         { name: '热门', sort: 'count', order: 'desc', icon: '🔥' },
         { name: '收藏', sort: 'fav', order: 'desc', icon: '❤️' },
         { name: '字母', sort: 'name', order: 'asc', icon: '🔤' },
+        { name: '画师串', sort: 'chains', order: 'desc', icon: '📎' },
     ];
+
+    const ARTIST_CHAIN_STORAGE_KEY = 'comfyui_artist_chains';
+    const ARTIST_CHAIN_IMG_PREFIX = 'artist_chain_img_';
+
+    function formatArtistChainPrompt(prompt) {
+        if (!prompt) return '';
+        if (!isAnimaMode()) return prompt.trim();
+        return prompt.split(',').map(s => s.trim()).filter(Boolean)
+            .map(part => formatAnimaArtistTag(part))
+            .join(', ');
+    }
+
+    function _isArtistChainPromptInTextarea(textareaValue, rawPrompt) {
+        const formatted = formatArtistChainPrompt(rawPrompt);
+        const parts = textareaValue.split(',').map(s => s.trim()).filter(Boolean);
+        const formattedParts = formatted.split(',').map(s => s.trim()).filter(Boolean);
+        if (!formattedParts.length) return false;
+        return formattedParts.every(fp => parts.some(p => {
+            const m = p.match(/^\((.+?):([\d.]+)\)$/);
+            return (m ? m[1] : p) === fp;
+        }));
+    }
+
+    const ArtistChainManager = {
+        _chains: null,
+        async load() {
+            if (this._chains) return this._chains;
+            try {
+                const raw = localStorage.getItem(ARTIST_CHAIN_STORAGE_KEY);
+                const meta = raw ? JSON.parse(raw) : [];
+                this._chains = await Promise.all(meta.map(async (m) => {
+                    const img = await _bigCacheGet(ARTIST_CHAIN_IMG_PREFIX + m.id);
+                    return { ...m, th: img || m.th || '' };
+                }));
+            } catch {
+                this._chains = [];
+            }
+            return this._chains;
+        },
+        async _persistMeta() {
+            const meta = this._chains.map(({ id, name, prompt, createdAt, updatedAt }) => ({
+                id, name, prompt, createdAt, updatedAt,
+            }));
+            localStorage.setItem(ARTIST_CHAIN_STORAGE_KEY, JSON.stringify(meta));
+        },
+        async getAll() {
+            await this.load();
+            return [...this._chains];
+        },
+        toTagItem(chain) {
+            return {
+                t: chain.prompt,
+                d: chain.name,
+                th: chain.th || '',
+                img: chain.th || '',
+                _chainId: chain.id,
+                _isArtistChain: true,
+                type: 'artist',
+            };
+        },
+        async add({ name, prompt, imageData }) {
+            await this.load();
+            const id = 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            const chain = {
+                id,
+                name: (name || '未命名画师串').trim(),
+                prompt: (prompt || '').trim(),
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                th: '',
+            };
+            if (imageData) {
+                await _bigCacheSet(ARTIST_CHAIN_IMG_PREFIX + id, imageData);
+                chain.th = imageData;
+            }
+            this._chains.unshift(chain);
+            await this._persistMeta();
+            return chain;
+        },
+        async update(id, { name, prompt, imageData, removeImage }) {
+            await this.load();
+            const chain = this._chains.find(c => c.id === id);
+            if (!chain) return null;
+            if (name != null) chain.name = name.trim() || chain.name;
+            if (prompt != null) chain.prompt = prompt.trim();
+            if (removeImage) {
+                try {
+                    const db = await _openBigCacheDb();
+                    await new Promise((resolve, reject) => {
+                        const tx = db.transaction('kv', 'readwrite');
+                        tx.objectStore('kv').delete(ARTIST_CHAIN_IMG_PREFIX + id);
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => reject(tx.error);
+                    });
+                } catch { /* ignore */ }
+                chain.th = '';
+            } else if (imageData) {
+                await _bigCacheSet(ARTIST_CHAIN_IMG_PREFIX + id, imageData);
+                chain.th = imageData;
+            }
+            chain.updatedAt = Date.now();
+            await this._persistMeta();
+            return chain;
+        },
+        async remove(id) {
+            await this.load();
+            this._chains = this._chains.filter(c => c.id !== id);
+            try {
+                const db = await _openBigCacheDb();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('kv', 'readwrite');
+                    tx.objectStore('kv').delete(ARTIST_CHAIN_IMG_PREFIX + id);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch { /* ignore */ }
+            await this._persistMeta();
+        },
+    };
+
+    async function _compressChainImageFile(file, maxSize = 480) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxSize || h > maxSize) {
+                        const ratio = Math.min(maxSize / w, maxSize / h);
+                        w = Math.round(w * ratio);
+                        h = Math.round(h * ratio);
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.85));
+                };
+                img.onerror = () => reject(new Error('图片读取失败'));
+                img.src = reader.result;
+            };
+            reader.onerror = () => reject(new Error('文件读取失败'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function _isArtistChainsMode(picker) {
+        const sub = tagData[_artistGroupIdx]?.subgroups[picker?.subIdx];
+        return sub?._artistSort === 'chains';
+    }
 
     function _isArtistGroupIndex(groupIdx) {
         const g = tagData[groupIdx];
@@ -6656,7 +6808,7 @@
             picker.searchModeBtn.textContent = '标签';
             picker.searchModeBtn.classList.remove('mode-category');
         }
-        picker.searchEl.placeholder = '搜索画师...';
+        picker.searchEl.placeholder = sub?._artistSort === 'chains' ? '搜索画师串...' : '搜索画师...';
         _artistPage = 1;
         const sub = tagData[_artistGroupIdx]?.subgroups[picker.subIdx];
         if (sub?._artistSort) {
@@ -7407,6 +7559,18 @@
             let items;
             if (search) {
                 if (this.groupIdx === _artistGroupIdx || onArtistTab) {
+                    const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
+                    if (sub?._artistSort === 'chains') {
+                        this.gridEl.innerHTML = _buildSkeletonGrid(4);
+                        ArtistChainManager.getAll().then(chains => {
+                            const q = search.toLowerCase();
+                            const filtered = chains
+                                .filter(c => c.name.toLowerCase().includes(q) || c.prompt.toLowerCase().includes(q))
+                                .map(c => ArtistChainManager.toTagItem(c));
+                            this._renderArtistChains(filtered);
+                        });
+                        return;
+                    }
                     this.gridEl.innerHTML = _buildSkeletonGrid(4);
                     _searchArtistsFromDb(search).then(dbItems => {
                         this._renderItems(dbItems);
@@ -7434,6 +7598,13 @@
                 }
                 const sub = tagData[_artistGroupIdx]?.subgroups[this.subIdx];
                 if (!sub || !sub._artistSort) return;
+                if (sub._artistSort === 'chains') {
+                    this.gridEl.innerHTML = _buildSkeletonGrid(4);
+                    ArtistChainManager.getAll().then(chains => {
+                        this._renderArtistChains(chains.map(c => ArtistChainManager.toTagItem(c)));
+                    });
+                    return;
+                }
                 this.gridEl.innerHTML = _buildSkeletonGrid(6);
                 const letter = sub._artistSort === 'name' ? _artistCurrentLetter : 'all';
                 _fetchArtists(sub._artistSort, sub._artistOrder, _artistPage, letter).then(result => {
@@ -7500,6 +7671,98 @@
 
             nav.append(prevBtn, info, nextBtn, jumpWrap);
             this.gridEl.parentElement.insertBefore(nav, this.gridEl.nextSibling);
+        }
+
+        _renderArtistChains(items) {
+            this.gridEl.innerHTML = '';
+            const toolbar = document.createElement('div');
+            toolbar.className = 'artist-chain-toolbar';
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'artist-chain-add-btn';
+            addBtn.textContent = '+ 新建画师串';
+            addBtn.addEventListener('click', () => openArtistChainEditor(null, () => this.renderGrid()));
+            toolbar.appendChild(addBtn);
+            this.gridEl.appendChild(toolbar);
+
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'artist-chain-empty';
+                empty.textContent = '还没有自定义画师串，点击上方按钮创建并上传示例图';
+                this.gridEl.appendChild(empty);
+                this._updateMobileCharLayout();
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'artist-chain-grid';
+            const taVal = this.textarea.value;
+            const lazyImages = [];
+
+            items.forEach(tag => {
+                const div = document.createElement('div');
+                const isSelected = _isArtistChainPromptInTextarea(taVal, tag.t);
+                const hasThumb = !!tag.th;
+                div.className = 'tag-item tag-char artist-chain-card' + (isSelected ? ' selected' : '');
+                div.dataset.chainId = tag._chainId;
+
+                const editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.className = 'artist-chain-edit-btn';
+                editBtn.title = '编辑';
+                editBtn.textContent = '✎';
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openArtistChainEditor(tag._chainId, () => this.renderGrid());
+                });
+
+                if (hasThumb) {
+                    div.innerHTML = `<div class="thumb-skeleton"></div><img class="tag-thumb img-loading" data-src="${tag.th}" alt="${tag.d}"><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
+                    lazyImages.push(div.querySelector('img.tag-thumb'));
+                } else {
+                    div.innerHTML = `<div class="artist-chain-no-thumb">🎨</div><span class="tag-desc">${tag.d}</span><span class="tag-text">${tag.t.split(',')[0]}</span>`;
+                }
+                div.appendChild(editBtn);
+
+                div.addEventListener('click', (e) => {
+                    if (e.target.closest('.artist-chain-edit-btn')) return;
+                    if (hasThumb) {
+                        showArtistChainPreview(tag, () => this.renderGrid());
+                    } else {
+                        this.toggleArtistChain(tag.t, tag.d);
+                        this.renderGrid();
+                    }
+                });
+                div.title = hasThumb ? '点击查看预览并填入' : '点击填入画师串 | ✎ 编辑';
+                grid.appendChild(div);
+            });
+
+            this.gridEl.appendChild(grid);
+            if (lazyImages.length) _observeLazyImages(lazyImages);
+            this._updateMobileCharLayout();
+        }
+
+        toggleArtistChain(rawPrompt, chainName) {
+            const formatted = formatArtistChainPrompt(rawPrompt);
+            const formattedParts = formatted.split(',').map(s => s.trim()).filter(Boolean);
+            let parts = this.textarea.value.split(',').map(s => s.trim()).filter(Boolean);
+            const allPresent = formattedParts.length > 0 && formattedParts.every(fp => parts.some(p => {
+                const m = p.match(/^\((.+?):([\d.]+)\)$/);
+                return (m ? m[1] : p) === fp;
+            }));
+
+            if (allPresent) {
+                parts = parts.filter(p => {
+                    const m = p.match(/^\((.+?):([\d.]+)\)$/);
+                    const name = m ? m[1] : p;
+                    return !formattedParts.includes(name);
+                });
+            } else {
+                parts.push(...formattedParts);
+                UsageTracker.record(rawPrompt, chainName || '', '', 'artist');
+            }
+            this.textarea.value = parts.join(', ');
+            this.textarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
         _renderCharPage(allTags) {
@@ -8065,6 +8328,206 @@
         overlay.classList.remove('hidden');
     }
 
+    function showArtistChainPreview(tag, onUpdate) {
+        const imgUrl = tag.img || tag.th || '';
+        let overlay = document.getElementById('artist-chain-preview-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'artist-chain-preview-overlay';
+            overlay.className = 'char-preview-overlay';
+            overlay.innerHTML = `
+                <div class="char-preview-card">
+                    <img class="char-preview-img" alt="">
+                    <div class="char-preview-info">
+                        <div class="char-preview-name"></div>
+                        <div class="char-preview-trigger"></div>
+                        <div class="char-preview-tags"></div>
+                        <div class="char-preview-actions">
+                            <button class="char-preview-btn" data-action="trigger">填入画师串</button>
+                            <button class="char-preview-btn" data-action="edit">编辑</button>
+                            <button class="char-preview-btn char-preview-btn-danger" data-action="delete">删除</button>
+                        </div>
+                    </div>
+                    <button class="char-preview-close">✕</button>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', async (e) => {
+                if (e.target === overlay || e.target.classList.contains('char-preview-close')) {
+                    overlay.classList.add('hidden');
+                    return;
+                }
+                const storedTag = overlay._currentTag;
+                if (!storedTag) return;
+                if (e.target.dataset.action === 'trigger') {
+                    UsageTracker.record(storedTag.t, storedTag.d, storedTag.th, 'artist');
+                    const formatted = formatArtistChainPrompt(storedTag.t);
+                    const ta = dom.txtPositive;
+                    const cur = ta.value.trim();
+                    ta.value = cur ? cur + ', ' + formatted : formatted;
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    overlay.classList.add('hidden');
+                    overlay._onUpdate?.();
+                    return;
+                }
+                if (e.target.dataset.action === 'edit') {
+                    overlay.classList.add('hidden');
+                    openArtistChainEditor(storedTag._chainId, overlay._onUpdate);
+                    return;
+                }
+                if (e.target.dataset.action === 'delete') {
+                    if (!confirm(`确定删除画师串「${storedTag.d}」？`)) return;
+                    await ArtistChainManager.remove(storedTag._chainId);
+                    overlay.classList.add('hidden');
+                    overlay._onUpdate?.();
+                }
+            });
+        }
+        overlay._currentTag = tag;
+        overlay._onUpdate = onUpdate;
+        const previewImg = overlay.querySelector('.char-preview-img');
+        previewImg.alt = tag.d;
+        if (imgUrl) {
+            previewImg.classList.remove('hidden');
+            loadImageWithFade(previewImg, imgUrl);
+        } else {
+            previewImg.classList.add('hidden');
+            previewImg.removeAttribute('src');
+        }
+        overlay.querySelector('.char-preview-name').textContent = tag.d;
+        overlay.querySelector('.char-preview-trigger').innerHTML =
+            `<span style="color:var(--text-secondary);font-size:0.7rem">画师串：</span>${tag.t}`;
+        const tagsEl = overlay.querySelector('.char-preview-tags');
+        tagsEl.innerHTML = `<span class="char-tag-pill">自定义画师串</span>`;
+        tagsEl.classList.remove('hidden');
+        overlay.classList.remove('hidden');
+    }
+
+    function openArtistChainEditor(chainId, onSaved) {
+        let modal = document.getElementById('artist-chain-editor-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'artist-chain-editor-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal artist-chain-editor">
+                    <h3 class="artist-chain-editor-title">新建画师串</h3>
+                    <label class="artist-chain-field">名称<input type="text" id="artist-chain-name" placeholder="例：厚涂双人组合"></label>
+                    <label class="artist-chain-field">画师串（英文触发词，逗号分隔）<textarea id="artist-chain-prompt" rows="3" placeholder="artist:xxx, artist:yyy"></textarea></label>
+                    <div class="artist-chain-upload">
+                        <div class="artist-chain-preview-wrap">
+                            <img id="artist-chain-preview-img" class="artist-chain-preview-img hidden" alt="">
+                            <div id="artist-chain-preview-placeholder" class="artist-chain-preview-placeholder">示例图预览</div>
+                        </div>
+                        <div class="artist-chain-upload-actions">
+                            <input type="file" id="artist-chain-file" accept="image/*" class="hidden">
+                            <button type="button" class="btn-secondary" id="artist-chain-upload-btn">上传示例图</button>
+                            <button type="button" class="btn-secondary hidden" id="artist-chain-clear-img">清除图片</button>
+                        </div>
+                    </div>
+                    <div class="artist-chain-editor-actions">
+                        <button type="button" class="btn-secondary" id="artist-chain-cancel">取消</button>
+                        <button type="button" class="btn-primary" id="artist-chain-save">保存</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.add('hidden');
+            });
+            modal.querySelector('#artist-chain-cancel').addEventListener('click', () => modal.classList.add('hidden'));
+            modal.querySelector('#artist-chain-upload-btn').addEventListener('click', () => {
+                modal.querySelector('#artist-chain-file').click();
+            });
+            modal.querySelector('#artist-chain-file').addEventListener('change', async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                    const dataUrl = await _compressChainImageFile(file);
+                    modal._pendingImage = dataUrl;
+                    modal._removeImage = false;
+                    const img = modal.querySelector('#artist-chain-preview-img');
+                    img.src = dataUrl;
+                    img.classList.remove('hidden');
+                    modal.querySelector('#artist-chain-preview-placeholder').classList.add('hidden');
+                    modal.querySelector('#artist-chain-clear-img').classList.remove('hidden');
+                } catch (err) {
+                    alert('图片处理失败: ' + err.message);
+                }
+                e.target.value = '';
+            });
+            modal.querySelector('#artist-chain-clear-img').addEventListener('click', () => {
+                modal._pendingImage = null;
+                modal._removeImage = true;
+                const img = modal.querySelector('#artist-chain-preview-img');
+                img.classList.add('hidden');
+                img.removeAttribute('src');
+                modal.querySelector('#artist-chain-preview-placeholder').classList.remove('hidden');
+                modal.querySelector('#artist-chain-clear-img').classList.add('hidden');
+            });
+            modal.querySelector('#artist-chain-save').addEventListener('click', async () => {
+                const name = modal.querySelector('#artist-chain-name').value.trim();
+                const prompt = modal.querySelector('#artist-chain-prompt').value.trim();
+                if (!name) { alert('请填写名称'); return; }
+                if (!prompt) { alert('请填写画师串内容'); return; }
+                const saveBtn = modal.querySelector('#artist-chain-save');
+                saveBtn.disabled = true;
+                try {
+                    if (modal._editId) {
+                        await ArtistChainManager.update(modal._editId, {
+                            name,
+                            prompt,
+                            imageData: modal._pendingImage,
+                            removeImage: modal._removeImage,
+                        });
+                    } else {
+                        await ArtistChainManager.add({
+                            name,
+                            prompt,
+                            imageData: modal._pendingImage,
+                        });
+                    }
+                    ArtistChainManager._chains = null;
+                    modal.classList.add('hidden');
+                    modal._onSaved?.();
+                } catch (err) {
+                    alert('保存失败: ' + err.message);
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+        }
+
+        modal._editId = chainId || null;
+        modal._onSaved = onSaved;
+        modal._pendingImage = null;
+        modal._removeImage = false;
+        modal.querySelector('.artist-chain-editor-title').textContent = chainId ? '编辑画师串' : '新建画师串';
+        modal.querySelector('#artist-chain-name').value = '';
+        modal.querySelector('#artist-chain-prompt').value = '';
+        const img = modal.querySelector('#artist-chain-preview-img');
+        img.classList.add('hidden');
+        img.removeAttribute('src');
+        modal.querySelector('#artist-chain-preview-placeholder').classList.remove('hidden');
+        modal.querySelector('#artist-chain-clear-img').classList.add('hidden');
+
+        if (chainId) {
+            ArtistChainManager.getAll().then(chains => {
+                const chain = chains.find(c => c.id === chainId);
+                if (!chain) return;
+                modal.querySelector('#artist-chain-name').value = chain.name;
+                modal.querySelector('#artist-chain-prompt').value = chain.prompt;
+                if (chain.th) {
+                    img.src = chain.th;
+                    img.classList.remove('hidden');
+                    modal.querySelector('#artist-chain-preview-placeholder').classList.add('hidden');
+                    modal.querySelector('#artist-chain-clear-img').classList.remove('hidden');
+                }
+            });
+        }
+
+        modal.classList.remove('hidden');
+        modal.querySelector('#artist-chain-name').focus();
+    }
+
     function setupTagPickers() {
         if (tagData.length === 0) return;
         posTagPicker = new TagPicker('pos', dom.txtPositive);
@@ -8117,7 +8580,7 @@
 
     // ==================== 初始化 ====================
     async function init() {
-        console.log('[ComfyUI Web] v4.18');
+        console.log('[ComfyUI Web] v4.19');
         await loadTags();
         renderHistory();
         setupTagPickers();

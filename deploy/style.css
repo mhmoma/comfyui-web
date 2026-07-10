@@ -1194,6 +1194,174 @@ textarea {
     font-weight: 600;
 }
 
+/* Artist chains (custom) */
+.artist-chain-toolbar {
+    width: 100%;
+    padding: 8px 4px 10px;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.artist-chain-add-btn {
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: 1px dashed var(--accent);
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.artist-chain-add-btn:hover {
+    background: rgba(99, 102, 241, 0.16);
+}
+
+.artist-chain-empty {
+    width: 100%;
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.artist-chain-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.artist-chain-card {
+    position: relative;
+    width: calc(33.333% - 6px);
+    min-width: 100px;
+}
+
+.artist-chain-edit-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 3;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.artist-chain-edit-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.artist-chain-no-thumb {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: var(--radius);
+    margin-bottom: 4px;
+}
+
+.artist-chain-editor {
+    width: min(92vw, 480px);
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.artist-chain-editor-title {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.artist-chain-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.artist-chain-field input,
+.artist-chain-field textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.artist-chain-upload {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.artist-chain-preview-wrap {
+    width: 120px;
+    height: 160px;
+    border-radius: var(--radius);
+    border: 1px dashed var(--border);
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.artist-chain-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.artist-chain-preview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 8px;
+}
+
+.artist-chain-upload-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.artist-chain-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.char-preview-btn-danger {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #f87171 !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
 /* Collapse */
 .tag-collapse-header {
     padding: 8px 12px;
@@ -3202,14 +3370,14 @@ body.inpaint-open {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        padding: 8px 4px;
+        gap: 1px;
+        padding: 6px 2px;
         min-height: 48px;
         border: none;
         background: transparent;
         color: var(--text-secondary);
         cursor: pointer;
-        font-size: 10px;
+        font-size: 9px;
         font-weight: 600;
         -webkit-tap-highlight-color: transparent;
     }
@@ -3323,6 +3491,10 @@ body.inpaint-open {
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-artist .tag-desc {
         font-size: 0.55rem;
+    }
+
+    .main.mobile-tab-artists .artist-chain-card {
+        width: calc(33.333% - 6px);
     }
 
     .main.mobile-tab-tags .mobile-tags-switch {
