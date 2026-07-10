@@ -8579,6 +8579,8 @@
     }
 
     // ==================== 深链跳转 ====================
+    let _appliedDeepLinkKey = '';
+
     function _isMobileAppLayout() {
         const nav = document.getElementById('mobile-nav');
         if (nav && getComputedStyle(nav).display !== 'none') return true;
@@ -8591,7 +8593,8 @@
         const hashParams = new URLSearchParams(hashRaw.includes('=') ? hashRaw : '');
         if (hashRaw === 'inpaint') hashParams.set('action', 'inpaint');
         if (hashRaw === 'settings') hashParams.set('tab', 'settings');
-        const get = (k) => hashParams.get(k) || params.get(k);
+        // 首页链接用 query，优先于 hash，避免旧 hash 覆盖新参数
+        const get = (k) => params.get(k) || hashParams.get(k);
         return {
             tag: get('tag'),
             arch: get('arch'),
@@ -8602,8 +8605,33 @@
         };
     }
 
+    function _makeDeepLinkIntentKey(dl) {
+        return [dl.tag, dl.arch, dl.mode, dl.tab, dl.action, dl.focus].map(v => v || '').join('|');
+    }
+
     function _hasDeepLinkIntent(dl) {
         return !!(dl.tag || dl.arch || dl.mode || dl.tab || dl.action || dl.focus);
+    }
+
+    function _setDeepLinkBar(visible, title) {
+        const bar = document.getElementById('deep-link-bar');
+        const titleEl = document.getElementById('deep-link-bar-title');
+        if (titleEl && title) titleEl.textContent = title;
+        if (bar) {
+            bar.classList.toggle('hidden', !visible);
+            bar.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        }
+        document.body.classList.toggle('app-deep-link', visible);
+    }
+
+    function _exitDeepLinkMode() {
+        _setDeepLinkBar(false);
+        document.body.classList.remove('mobile-artist-nav-visible');
+        switchMobileTab('create');
+    }
+
+    function _enterDeepLinkMode(title) {
+        _setDeepLinkBar(true, title);
     }
 
     function _applyModeDeepLink(mode) {
@@ -8626,45 +8654,26 @@
     }
 
     function _focusCharacterLibrary() {
-        if (_isMobileAppLayout()) {
-            switchMobileTab('characters');
-            renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
-            return;
-        }
-        _applyModeDeepLink('simple');
-        if (posTagPicker && _charGroupIdx >= 0) {
-            posTagPicker.groupIdx = _charGroupIdx;
-            posTagPicker.subIdx = 0;
-            posTagPicker._virtualMode = null;
-            posTagPicker.searchEl.value = '';
-            posTagPicker.render();
-        }
-        _expandTagPickerSection('tag-picker-pos');
-        document.getElementById('tag-picker-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        _enterDeepLinkMode('角色库');
+        switchMobileTab('characters');
+        renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
+        document.getElementById('mobile-panel-characters')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function _focusArtistLibrary() {
-        if (_isMobileAppLayout()) {
-            switchMobileTab('artists');
-            if (posTagPicker && _artistGroupIdx >= 0) {
-                _prepareArtistTab(posTagPicker, 0);
-                syncMobileArtistNav(0);
-                posTagPicker.render();
-            }
-            return;
-        }
-        _applyModeDeepLink('simple');
-        if (posTagPicker && _artistGroupIdx >= 0) {
+        _enterDeepLinkMode('画师库');
+        switchMobileTab('artists');
+        if (!_isMobileAppLayout() && posTagPicker && _artistGroupIdx >= 0) {
             _prepareArtistTab(posTagPicker, 0);
             syncMobileArtistNav(0);
             posTagPicker.render();
         }
-        _expandTagPickerSection('tag-picker-pos');
         document.getElementById('tag-picker-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function _openSettingsFocus(focus) {
-        if (_isMobileAppLayout()) switchMobileTab('settings');
+        _enterDeepLinkMode('设置');
+        switchMobileTab('settings');
         if (!dom.btnSettings || !dom.modalSettings) return;
         dom.inpServer.value = getComfyUIAddress();
         if (dom.selProfile) dom.selProfile.value = ProfileManager.store.activeId;
@@ -8680,18 +8689,41 @@
         const resultImg = document.getElementById('result-image');
         const resultUrl = resultImg?.src;
         if (resultImg && !resultImg.classList.contains('hidden') && resultUrl) {
+            _setDeepLinkBar(false);
+            document.body.classList.remove('app-deep-link', 'mobile-artist-nav-visible');
             openInpaintModal(resultUrl);
             return;
         }
-        if (_isMobileAppLayout()) switchMobileTab('history');
+        _enterDeepLinkMode('局部重绘');
+        switchMobileTab('history');
         document.getElementById('history-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         showToast('请从历史记录或结果图点击「局部重绘」');
     }
 
-    // ==================== 初始化 ====================
+    function setupDeepLinkBar() {
+        const btn = document.getElementById('btn-deep-link-back');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            _exitDeepLinkMode();
+            history.replaceState(null, '', location.pathname);
+        });
+    }
+
     function applyDeepLinks() {
         const dl = _parseDeepLinkParams();
-        if (!_hasDeepLinkIntent(dl)) return;
+        if (!_hasDeepLinkIntent(dl)) {
+            if (_appliedDeepLinkKey) _exitDeepLinkMode();
+            _appliedDeepLinkKey = '';
+            return;
+        }
+
+        const key = _makeDeepLinkIntentKey(dl);
+        const tabOrPanel = !!(dl.tab || dl.action === 'inpaint');
+        if (tabOrPanel && key !== _appliedDeepLinkKey) {
+            document.body.classList.remove('mobile-artist-nav-visible');
+            switchMobileTab('create');
+        }
+        _appliedDeepLinkKey = key;
 
         if (dl.tag && dom.txtPositive) {
             const cur = dom.txtPositive.value.trim();
@@ -8704,13 +8736,22 @@
             dom.selArch.dispatchEvent(new Event('change'));
         }
 
-        _applyModeDeepLink(dl.mode);
+        if (dl.mode) _applyModeDeepLink(dl.mode);
 
         if (dl.tab === 'characters') _focusCharacterLibrary();
         else if (dl.tab === 'artists') _focusArtistLibrary();
         else if (dl.tab === 'settings') _openSettingsFocus(dl.focus || 'profile');
-        else if (dl.tab === 'history' || dl.action === 'inpaint') _handleInpaintDeepLink();
-        else if (dl.tab) switchMobileTab(dl.tab);
+        else if (dl.tab === 'history') {
+            _enterDeepLinkMode('历史记录');
+            switchMobileTab('history');
+        } else if (dl.tab) {
+            _enterDeepLinkMode(dl.tab);
+            switchMobileTab(dl.tab);
+        } else if (!dl.action) {
+            _setDeepLinkBar(false);
+        }
+
+        if (dl.action === 'inpaint') _handleInpaintDeepLink();
 
         if (dl.focus === 'profile' && dl.tab !== 'settings') _openSettingsFocus('profile');
     }
@@ -8725,12 +8766,16 @@
     }
 
     window.addEventListener('hashchange', () => scheduleDeepLinks());
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) scheduleDeepLinks();
+    });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.22');
+        console.log('[ComfyUI Web] v4.23');
         await loadTags();
         renderHistory();
         setupTagPickers();
+        setupDeepLinkBar();
         setupMobileTagsMount();
         setupMobileArtistNav();
         setupMobileCharBrowser();

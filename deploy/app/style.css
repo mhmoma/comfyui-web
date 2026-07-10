@@ -2962,6 +2962,40 @@ body.inpaint-open {
     opacity: 0.85;
 }
 
+/* 首页深链顶栏（桌面端从门户跳入时显示） */
+.deep-link-bar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.deep-link-bar.hidden { display: none !important; }
+body.app-deep-link .deep-link-bar:not(.hidden) {
+    display: flex;
+}
+.btn-deep-link-back {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btn-deep-link-back:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.deep-link-bar-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
 /* Mobile-only UI (hidden on desktop) */
 .mobile-panel,
 .mobile-prompt-shortcuts,
@@ -2997,6 +3031,155 @@ body.inpaint-open {
     padding: 10px;
     background: rgba(10, 14, 34, 0.45);
     position: relative;
+}
+
+/* 桌面端：首页能力卡片深链 → 启用与手机相同的 Tab 全屏面板 */
+@media (min-width: 641px) {
+    body.app-deep-link .app {
+        min-height: 100vh;
+    }
+
+    body.app-deep-link .main {
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.app-deep-link .main.mobile-tab-characters .sidebar,
+    body.app-deep-link .main.mobile-tab-characters .content,
+    body.app-deep-link .main.mobile-tab-characters .history-panel {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-characters .mobile-panel-characters {
+        display: flex !important;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .sidebar,
+    body.app-deep-link .main.mobile-tab-artists .history-panel,
+    body.app-deep-link .main.mobile-tab-artists .mobile-panel-characters,
+    body.app-deep-link .main.mobile-tab-artists .mobile-panel-tags {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .content {
+        display: flex !important;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        max-width: 100%;
+        padding: 0 !important;
+        overflow: hidden;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .prompt-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        gap: 0;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .prompt-block > *:not(.tag-picker-collapse) {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .tag-collapse-header {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .tag-picker-collapse:not(.mobile-tags-hidden) {
+        display: flex !important;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        border: none;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .tag-picker {
+        flex: 1;
+        max-height: none !important;
+        min-height: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .tag-tabs,
+    body.app-deep-link .main.mobile-tab-artists .tag-subtabs {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-artists .result-area,
+    body.app-deep-link .main.mobile-tab-artists .action-bar {
+        display: none !important;
+    }
+
+    body.app-deep-link.mobile-artist-nav-visible .mobile-artist-nav {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 199;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    body.app-deep-link .main.mobile-tab-history .sidebar,
+    body.app-deep-link .main.mobile-tab-history .content {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-history .history-panel {
+        display: flex !important;
+        flex: 1;
+        max-height: none !important;
+        width: 100%;
+        border-top: none;
+        border-left: none;
+        padding-bottom: 12px;
+    }
+
+    body.app-deep-link .main.mobile-tab-history .history-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-content: flex-start;
+    }
+
+    body.app-deep-link .main.mobile-tab-history .history-item {
+        width: calc(20% - 7px);
+        min-width: 100px;
+        aspect-ratio: 1;
+    }
+
+    body.app-deep-link .main.mobile-tab-settings .content,
+    body.app-deep-link .main.mobile-tab-settings .history-panel {
+        display: none !important;
+    }
+
+    body.app-deep-link .main.mobile-tab-settings .sidebar {
+        display: flex !important;
+        flex: 1;
+        width: 100% !important;
+        max-width: none;
+        border-right: none;
+        border-bottom: none;
+        max-height: none;
+    }
 }
 
 /* Responsive - Tablet */
