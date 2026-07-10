@@ -8578,11 +8578,87 @@
         });
     }
 
+    // ==================== 深链跳转 ====================
+    function _isMobileAppLayout() {
+        return window.matchMedia('(max-width: 640px)').matches;
+    }
+
+    function _expandTagPickerSection(pickerId) {
+        const picker = document.getElementById(pickerId);
+        if (!picker) return;
+        const toggleId = pickerId === 'tag-picker-pos' ? 'pos-collapse-toggle' : 'neg-collapse-toggle';
+        const toggle = document.getElementById(toggleId);
+        picker.classList.remove('hidden');
+        if (toggle) {
+            toggle.classList.add('expanded');
+            toggle.textContent = '▼ 收起标签选择器';
+        }
+    }
+
+    function _focusCharacterLibrary() {
+        if (_isMobileAppLayout()) {
+            switchMobileTab('characters');
+            return;
+        }
+        _profileApplyActiveMode('simple');
+        if (posTagPicker && _charGroupIdx >= 0) {
+            posTagPicker.groupIdx = _charGroupIdx;
+            posTagPicker.subIdx = 0;
+            posTagPicker._virtualMode = null;
+            posTagPicker.searchEl.value = '';
+            posTagPicker.render();
+        }
+        _expandTagPickerSection('tag-picker-pos');
+        document.getElementById('tag-picker-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function _focusArtistLibrary() {
+        if (_isMobileAppLayout()) {
+            switchMobileTab('artists');
+            return;
+        }
+        _profileApplyActiveMode('simple');
+        if (posTagPicker && _artistGroupIdx >= 0) {
+            _prepareArtistTab(posTagPicker, 0);
+            syncMobileArtistNav(0);
+            posTagPicker.render();
+        }
+        _expandTagPickerSection('tag-picker-pos');
+        document.getElementById('tag-picker-pos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function _openSettingsFocus(focus) {
+        if (_isMobileAppLayout()) switchMobileTab('settings');
+        if (!dom.btnSettings || !dom.modalSettings) return;
+        dom.inpServer.value = getComfyUIAddress();
+        if (dom.selProfile) dom.selProfile.value = ProfileManager.store.activeId;
+        dom.modalSettings.classList.remove('hidden');
+        if (focus === 'profile') {
+            requestAnimationFrame(() => {
+                document.getElementById('sel-profile')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        }
+    }
+
+    function _handleInpaintDeepLink() {
+        const resultImg = document.getElementById('result-image');
+        const resultUrl = resultImg?.src;
+        if (resultImg && !resultImg.classList.contains('hidden') && resultUrl) {
+            openInpaintModal(resultUrl);
+            return;
+        }
+        if (_isMobileAppLayout()) switchMobileTab('history');
+        document.getElementById('history-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        showToast('请从历史记录或结果图点击「局部重绘」');
+    }
+
     // ==================== 初始化 ====================
     function applyDeepLinks() {
         const params = new URLSearchParams(location.search);
-        const hashRaw = location.hash.replace(/^#/, '');
+        const hashRaw = location.hash.replace(/^#/, '').trim();
         const hashParams = new URLSearchParams(hashRaw.includes('=') ? hashRaw : '');
+        if (hashRaw === 'inpaint') hashParams.set('action', 'inpaint');
+        if (hashRaw === 'settings') hashParams.set('tab', 'settings');
 
         const tag = params.get('tag');
         if (tag && dom.inpPos) {
@@ -8602,11 +8678,20 @@
         }
 
         const tab = hashParams.get('tab') || params.get('tab');
-        if (tab) switchMobileTab(tab);
+        const action = hashParams.get('action');
+        const focus = hashParams.get('focus');
+
+        if (tab === 'characters') _focusCharacterLibrary();
+        else if (tab === 'artists') _focusArtistLibrary();
+        else if (tab === 'settings') _openSettingsFocus(focus || 'profile');
+        else if (tab === 'history' || action === 'inpaint') _handleInpaintDeepLink();
+        else if (tab) switchMobileTab(tab);
+
+        if (focus === 'profile' && tab !== 'settings') _openSettingsFocus('profile');
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.20');
+        console.log('[ComfyUI Web] v4.21');
         await loadTags();
         renderHistory();
         setupTagPickers();
