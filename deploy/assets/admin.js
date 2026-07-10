@@ -41,6 +41,42 @@
         return String(str || '').split(/[,，]/).map(t => t.trim()).filter(Boolean);
     }
 
+    function showLoginError(text) {
+        const el = $('login-error');
+        if (!el) return;
+        if (text) {
+            el.textContent = text;
+            el.classList.remove('hidden');
+        } else {
+            el.textContent = '';
+            el.classList.add('hidden');
+        }
+    }
+
+    async function verifyAuth(key) {
+        const res = await fetch('/api/articles/auth', {
+            headers: { 'x-admin-key': key || adminKey },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 503) throw new Error(data.error || '服务端未配置 ADMIN_KEY');
+        if (!res.ok) throw new Error(data.error || '管理密钥错误');
+        return true;
+    }
+
+    function handleAuthFailure() {
+        showMsg('登录已失效，请重新输入管理密钥', true);
+        logout();
+    }
+
+    async function apiFetch(url, options = {}) {
+        const res = await fetch(url, options);
+        if (res.status === 403) {
+            handleAuthFailure();
+            throw new Error('管理密钥无效或已过期');
+        }
+        return res;
+    }
+
     function showMsg(text, isError) {
         const el = $('composer-msg');
         if (!el) return;
@@ -183,7 +219,7 @@
 
     async function loadStats() {
         try {
-            const res = await fetch('/api/articles?stats=1', { headers: adminHeaders() });
+            const res = await apiFetch('/api/articles?stats=1', { headers: adminHeaders() });
             const data = await res.json();
             if (!res.ok || !data.stats) return;
             $('stat-total').textContent = data.stats.total || 0;
@@ -200,7 +236,7 @@
             if (filterCategory) params.set('category', filterCategory);
             if (searchQuery) params.set('q', searchQuery);
 
-            const res = await fetch(`/api/articles?${params}`, { headers: adminHeaders() });
+            const res = await apiFetch(`/api/articles?${params}`, { headers: adminHeaders() });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '加载失败');
             if (data.needs_init) {
@@ -235,7 +271,7 @@
                 status: data.status,
             };
 
-            const res = await fetch(
+            const res = await apiFetch(
                 isEdit ? `/api/articles/${encodeURIComponent(editingSlug)}` : '/api/articles',
                 {
                     method: isEdit ? 'PATCH' : 'POST',
@@ -259,7 +295,7 @@
 
     async function fetchAndEdit(slug) {
         try {
-            const res = await fetch(`/api/articles/${encodeURIComponent(slug)}`, { headers: adminHeaders() });
+            const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, { headers: adminHeaders() });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '加载失败');
             startEdit(data.article);
@@ -270,7 +306,7 @@
 
     async function toggleStatus(slug, newStatus) {
         try {
-            const res = await fetch(`/api/articles/${encodeURIComponent(slug)}`, {
+            const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, {
                 method: 'PATCH',
                 headers: headers(),
                 body: JSON.stringify({ status: newStatus }),
@@ -289,7 +325,7 @@
         const title = item?.title || slug;
         if (!confirm(`确认删除「${title}」？\n此操作不可恢复。`)) return;
         try {
-            const res = await fetch(`/api/articles/${encodeURIComponent(slug)}`, {
+            const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, {
                 method: 'DELETE',
                 headers: adminHeaders(),
             });
@@ -306,7 +342,7 @@
     async function initDb() {
         if (!confirm('确认初始化 articles 数据库表？\n（不会删除已有文章）')) return;
         try {
-            const res = await fetch('/api/articles/init', { method: 'POST', headers: headers() });
+            const res = await apiFetch('/api/articles/init', { method: 'POST', headers: headers() });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '初始化失败');
             showMsg('数据库表已就绪');
@@ -322,11 +358,28 @@
         loadFeed();
     }
 
-    function login() {
-        adminKey = $('admin-key-input').value.trim();
-        if (!adminKey) return;
-        sessionStorage.setItem(KEY_STORAGE, adminKey);
-        showComposer();
+    async function login() {
+        const key = $('admin-key-input').value.trim();
+        if (!key) { showLoginError('请输入管理密钥'); return; }
+
+        const btn = $('btn-admin-login');
+        btn.disabled = true;
+        btn.textContent = '验证中…';
+        showLoginError('');
+
+        try {
+            await verifyAuth(key);
+            adminKey = key;
+            sessionStorage.setItem(KEY_STORAGE, adminKey);
+            showComposer();
+        } catch (e) {
+            adminKey = '';
+            sessionStorage.removeItem(KEY_STORAGE);
+            showLoginError(e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '登录';
+        }
     }
 
     function logout() {
@@ -334,7 +387,19 @@
         sessionStorage.removeItem(KEY_STORAGE);
         $('composer-panel').classList.add('hidden');
         $('login-panel').classList.remove('hidden');
+        $('admin-key-input').value = '';
         resetForm();
+    }
+
+    async function tryRestoreSession() {
+        if (!adminKey) return;
+        try {
+            await verifyAuth(adminKey);
+            showComposer();
+        } catch {
+            logout();
+            showLoginError('上次登录已失效，请重新输入密钥');
+        }
     }
 
     // ── 事件绑定 ──
@@ -387,6 +452,6 @@
         else if (e.target.closest('.btn-unpublish')) toggleStatus(slug, 'draft');
     });
 
-    if (adminKey) showComposer();
-    else updateCharCount();
+    tryRestoreSession();
+    updateCharCount();
 })();
