@@ -34,6 +34,33 @@
         return d.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
+    async function patchArticleById(id, payload) {
+        const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: headers(),
+            body: JSON.stringify(payload),
+        });
+        if (res.ok) return { res, data: await res.json() };
+        const res2 = await apiFetch(`/api/articles?id=${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: headers(),
+            body: JSON.stringify(payload),
+        });
+        return { res: res2, data: await res2.json() };
+    }
+
+    async function fetchArticleById(id) {
+        let res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, { headers: adminHeaders() });
+        if (!res.ok) {
+            res = await apiFetch(`/api/articles?id=${encodeURIComponent(id)}`, { headers: adminHeaders() });
+        }
+        return res;
+    }
+
+    function articleIdFrom(el) {
+        return el?.getAttribute('data-article-id') || '';
+    }
+
     function articleUrl(article) {
         if (article.slug) return `/news/detail?slug=${encodeURIComponent(article.slug)}`;
         if (article.id) return `/news/detail?id=${encodeURIComponent(article.id)}`;
@@ -167,7 +194,7 @@
             : '<span class="status-badge published">已发布</span>';
         const catLabel = CATEGORY_LABELS[a.category] || a.category;
         return `
-            <tr data-id="${escapeHtml(a.id)}" data-slug="${escapeHtml(a.slug)}">
+            <tr data-article-id="${escapeHtml(a.id)}" data-slug="${escapeHtml(a.slug)}">
                 <td class="col-title">
                     <div class="row-title">${escapeHtml(a.title)}</div>
                     <div class="row-summary">${escapeHtml(a.summary)}</div>
@@ -176,12 +203,12 @@
                 <td class="col-status">${statusLabel}</td>
                 <td class="col-time">${formatTime(a.published_at)}</td>
                 <td class="col-actions">
-                        <button type="button" class="btn-text btn-edit" data-id="${escapeHtml(a.id)}">编辑</button>
+                        <button type="button" class="btn-text btn-edit" data-article-id="${escapeHtml(a.id)}">编辑</button>
                         <a href="${articleUrl(a)}" target="_blank" rel="noopener" class="btn-text">预览</a>
                         ${a.status === 'draft'
-                        ? `<button type="button" class="btn-text btn-publish-one" data-id="${escapeHtml(a.id)}">发布</button>`
-                        : `<button type="button" class="btn-text btn-unpublish" data-id="${escapeHtml(a.id)}">转草稿</button>`}
-                        <button type="button" class="btn-text btn-delete danger" data-id="${escapeHtml(a.id)}">删除</button>
+                        ? `<button type="button" class="btn-text btn-publish-one" data-article-id="${escapeHtml(a.id)}">发布</button>`
+                        : `<button type="button" class="btn-text btn-unpublish" data-article-id="${escapeHtml(a.id)}">转草稿</button>`}
+                        <button type="button" class="btn-text btn-delete danger" data-article-id="${escapeHtml(a.id)}">删除</button>
                 </td>
             </tr>`;
     }
@@ -276,15 +303,17 @@
                 status: data.status,
             };
 
-            const res = await apiFetch(
-                isEdit ? `/api/articles/by-id/${encodeURIComponent(editingId)}` : '/api/articles',
-                {
-                    method: isEdit ? 'PATCH' : 'POST',
+            let res, json;
+            if (isEdit) {
+                ({ res, data: json } = await patchArticleById(editingId, payload));
+            } else {
+                res = await apiFetch('/api/articles', {
+                    method: 'POST',
                     headers: headers(),
                     body: JSON.stringify(payload),
-                }
-            );
-            const json = await res.json();
+                });
+                json = await res.json();
+            }
             if (!res.ok) throw new Error(json.error || '保存失败');
 
             showMsg(isEdit ? '修改已保存' : (data.status === 'draft' ? '草稿已保存' : '发布成功'));
@@ -299,8 +328,9 @@
     }
 
     async function fetchAndEdit(id) {
+        if (!id) { showMsg('无法识别文章 ID', true); return; }
         try {
-            const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, { headers: adminHeaders() });
+            const res = await fetchArticleById(id);
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '加载失败');
             startEdit(data.article);
@@ -310,13 +340,9 @@
     }
 
     async function toggleStatus(id, newStatus) {
+        if (!id) { showMsg('无法识别文章 ID', true); return; }
         try {
-            const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, {
-                method: 'PATCH',
-                headers: headers(),
-                body: JSON.stringify({ status: newStatus }),
-            });
-            const data = await res.json();
+            const { res, data } = await patchArticleById(id, { status: newStatus });
             if (!res.ok) throw new Error(data.error || '操作失败');
             await loadFeed();
             showMsg(newStatus === 'published' ? '已发布' : '已转为草稿');
@@ -326,14 +352,21 @@
     }
 
     async function deletePost(id) {
+        if (!id) { showMsg('无法识别文章 ID', true); return; }
         const item = allArticles.find(a => a.id === id);
         const title = item?.title || id;
         if (!confirm(`确认删除「${title}」？\n此操作不可恢复。`)) return;
         try {
-            const res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, {
+            let res = await apiFetch(`/api/articles/by-id/${encodeURIComponent(id)}`, {
                 method: 'DELETE',
                 headers: adminHeaders(),
             });
+            if (!res.ok) {
+                res = await apiFetch(`/api/articles?id=${encodeURIComponent(id)}`, {
+                    method: 'DELETE',
+                    headers: adminHeaders(),
+                });
+            }
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || '删除失败');
             if (editingId === id) resetForm();
@@ -449,8 +482,8 @@
     });
 
     $('admin-feed')?.addEventListener('click', e => {
-        const row = e.target.closest('[data-id]');
-        const id = row?.dataset.id;
+        const row = e.target.closest('[data-article-id]');
+        const id = articleIdFrom(row);
         if (!id) return;
         if (e.target.closest('.btn-edit')) fetchAndEdit(id);
         else if (e.target.closest('.btn-delete')) deletePost(id);

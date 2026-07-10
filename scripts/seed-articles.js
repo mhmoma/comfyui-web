@@ -137,9 +137,14 @@ async function clearAll() {
   const res = await fetch(`${API}?limit=100`, { headers: adminHeaders });
   const data = await res.json();
   for (const a of data.articles || []) {
-    await fetch(`${API}/by-id/${encodeURIComponent(a.id)}`, { method: 'DELETE', headers: adminHeaders });
-    console.log('DEL:', a.title);
-    await new Promise(r => setTimeout(r, 300));
+    let r = await fetch(`${API}/by-id/${encodeURIComponent(a.id)}`, { method: 'DELETE', headers: adminHeaders });
+    if (!r.ok) {
+      r = await fetch(`${API}?id=${encodeURIComponent(a.id)}`, { method: 'DELETE', headers: adminHeaders });
+    }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) console.error('DEL FAIL:', a.title, d);
+    else console.log('DEL:', a.title);
+    await new Promise(res => setTimeout(res, 300));
   }
 }
 

@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.98
+> **部署版本**: 1.99
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -315,4 +315,5 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.96 | 2026-07-10 | 管理后台登录校验加固 | 新增 `/api/articles/auth` 服务端验密钥；错误密钥无法进入后台，403 自动登出（`admin.js?v=3`）。 |
 | 1.97 | 2026-07-10 | 修复资讯详情跳转回首页 | API 文章改用 `id` 打开 `/news/detail?id=`；新增 `/api/articles/by-id/[id]`；slug 仅 ASCII；不再错误重定向（`site.js?v=4`）。 |
 | 1.98 | 2026-07-10 | 资讯详情 API 路由修复 | 修复 by-id 函数 import；`GET /api/articles?id=` 兜底；详情页取消错误静态重定向；链接优先 slug（`site.js?v=5`）。 |
+| 1.99 | 2026-07-10 | 管理后台删除修复 | 修复 `data-id` 与元素 `id` 冲突导致删除/编辑 ID 为空；API 增加 `PATCH/DELETE ?id=` 兜底（`admin.js?v=5`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |

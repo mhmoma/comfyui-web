@@ -134,3 +134,69 @@ export async function onRequestPost(context) {
     return json(500, { error: e.message });
   }
 }
+
+async function getRowById(db, id) {
+  return db.prepare('SELECT * FROM articles WHERE id = ?').bind(id).first();
+}
+
+export async function onRequestPatch(context) {
+  const { request, env } = context;
+  if (!checkAdmin(request, env)) return json(403, { error: 'Forbidden' });
+
+  const db = env.DB;
+  if (!db) return json(500, { error: 'Database not configured' });
+
+  const id = (new URL(request.url).searchParams.get('id') || '').trim();
+  if (!id) return json(400, { error: '缺少 id 参数' });
+
+  let body;
+  try { body = await request.json(); } catch { return json(400, { error: 'Invalid JSON' }); }
+
+  const row = await getRowById(db, id);
+  if (!row) return json(404, { error: '文章不存在' });
+
+  const now = Date.now();
+  let content = body.content !== undefined ? String(body.content).trim() : row.content;
+  let title = body.title !== undefined ? String(body.title).trim() : row.title;
+  let summary = body.summary !== undefined ? String(body.summary).trim() : row.summary;
+  if (body.content !== undefined) {
+    if (body.title === undefined) title = makeTitle(content, row.title);
+    if (body.summary === undefined) summary = makeSummary(content, row.summary);
+  }
+  const category = body.category !== undefined ? body.category : row.category;
+  const cover_url = body.cover_url !== undefined ? String(body.cover_url).trim() : row.cover_url;
+  let status = body.status !== undefined ? body.status : row.status;
+  const tags = body.tags !== undefined ? JSON.stringify(body.tags) : row.tags;
+  let published_at = body.published_at !== undefined ? Number(body.published_at) : row.published_at;
+  if (body.status === 'published' && row.status === 'draft') published_at = now;
+
+  try {
+    await db.prepare(
+      `UPDATE articles SET title=?, summary=?, cover_url=?, content=?, category=?, tags=?, status=?, published_at=?, updated_at=? WHERE id=?`
+    ).bind(title, summary, cover_url, content, category, tags, status, published_at, now, id).run();
+
+    const updated = await getRowById(db, id);
+    return json(200, { ok: true, article: rowToArticle(updated, { includeContent: true }) });
+  } catch (e) {
+    return json(500, { error: e.message });
+  }
+}
+
+export async function onRequestDelete(context) {
+  const { request, env } = context;
+  if (!checkAdmin(request, env)) return json(403, { error: 'Forbidden' });
+
+  const db = env.DB;
+  if (!db) return json(500, { error: 'Database not configured' });
+
+  const id = (new URL(request.url).searchParams.get('id') || '').trim();
+  if (!id) return json(400, { error: '缺少 id 参数' });
+
+  try {
+    const result = await db.prepare('DELETE FROM articles WHERE id = ?').bind(id).run();
+    if (!result.meta.changes) return json(404, { error: '文章不存在' });
+    return json(200, { ok: true });
+  } catch (e) {
+    return json(500, { error: e.message });
+  }
+}
