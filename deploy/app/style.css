@@ -3093,8 +3093,9 @@ body.inpaint-open {
 }
 .portal-char-scroll .char-series-name {
     display: block;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #eaf0ff;
     padding: 6px 4px 2px;
     white-space: nowrap;
     overflow: hidden;
@@ -3102,8 +3103,8 @@ body.inpaint-open {
 }
 .portal-char-scroll .char-series-count {
     display: block;
-    font-size: 0.65rem;
-    color: var(--text-muted);
+    font-size: 0.68rem;
+    color: #b9c4e8;
     padding: 0 4px 6px;
 }
 .portal-artist-nav {
@@ -3132,7 +3133,7 @@ body.inpaint-open {
 }
 .portal-artist-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
     gap: 8px;
     align-content: start;
 }
@@ -3163,9 +3164,10 @@ body.inpaint-open {
     background: #2a2a42;
 }
 .portal-artist-card .tag-desc {
-    font-size: 0.68rem;
-    font-weight: 600;
-    margin-top: 4px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #eaf0ff;
+    margin-top: 6px;
     line-height: 1.3;
     max-width: 100%;
     overflow: hidden;
