@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>ComfyUI Web · AI 绘画资讯与工具站</title>
-    <meta name="description" content="看资讯、学技巧、用工具生图，一站完成。模型动态、教程技巧、ComfyUI 本地生图与在线 NAI 生图。">
+    <meta name="description" content="连上本地 ComfyUI，Anima / SDXL 一键出图；3 万角色 Trigger 点选即用。教程、局部重绘、角色库一站完成。">
     <meta property="og:title" content="ComfyUI Web · AI 绘画资讯与工具站">
-    <meta property="og:description" content="看资讯、学技巧、用工具生图，一站完成。">
+    <meta property="og:description" content="连上本地 ComfyUI，Anima / SDXL 一键出图；3 万角色 Trigger 点选即用。">
     <meta property="og:url" content="https://comfyui-web-89u.pages.dev/">
     <meta property="og:type" content="website">
+    <meta property="og:image" content="https://comfyui-web-89u.pages.dev/assets/hero-app-preview.png">
     <link rel="canonical" href="https://comfyui-web-89u.pages.dev/">
     <link rel="alternate" type="application/rss+xml" title="ComfyUI Web 资讯" href="/feed.xml">
-    <link rel="stylesheet" href="/assets/site.css?v=5">
+    <link rel="stylesheet" href="/assets/site.css?v=7">
 </head>
 <body>
     <header class="site-header">
@@ -29,48 +30,97 @@
 
     <main class="site-main">
         <section class="hero">
-            <p class="hero-tagline">AI 绘画资讯与工具站</p>
-            <h1>看资讯、学技巧<br>用工具生图，一站完成</h1>
-            <p class="hero-desc">追踪 Anima / SDXL 模型动态，学习 ControlNet、LoRA、局部重绘技巧，并用 ComfyUI Web 直接出图。</p>
-            <div class="hero-actions">
-                <a href="/app/" class="btn-primary">🎨 进入生图工具</a>
-                <a href="/news/" class="btn-secondary">📰 浏览资讯</a>
+            <div class="hero-grid">
+                <div class="hero-content">
+                    <p class="hero-tagline">AI 绘画工具站</p>
+                    <h1>连上 ComfyUI<br>点选角色，直接出图</h1>
+                    <p class="hero-desc">Anima / SDXL 双架构，30,609 个角色 Trigger、画师库、局部重绘与配置方案——网页操作，本地算力出图。</p>
+                    <div class="hero-actions">
+                        <a href="/app/?arch=anima" class="btn-primary">🎨 进入生图工具</a>
+                        <a href="/news/" class="btn-secondary">📖 看教程</a>
+                    </div>
+                </div>
+                <div class="hero-preview">
+                    <div class="hero-preview-frame">
+                        <img src="/assets/hero-app-preview.png" alt="ComfyUI Web 角色库界面预览" width="390" height="844" loading="eager">
+                    </div>
+                    <p class="hero-preview-caption">角色库 · 862 作品系列 · 点选插入 Trigger</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="onboarding" aria-label="新手上路">
+            <h2 class="section-title">新手上路</h2>
+            <div class="onboarding-steps">
+                <a href="/news/detail?slug=comfyui-cors-troubleshoot" class="onboarding-step">
+                    <span class="onboarding-num">1</span>
+                    <span class="onboarding-text">
+                        <strong>启动 ComfyUI</strong>
+                        <small>加 --enable-cors-header，连接灯变绿</small>
+                    </span>
+                </a>
+                <span class="onboarding-arrow" aria-hidden="true">→</span>
+                <a href="/news/detail?slug=anima-setup-complete-guide" class="onboarding-step">
+                    <span class="onboarding-num">2</span>
+                    <span class="onboarding-text">
+                        <strong>下载 Anima 三件套</strong>
+                        <small>扩散模型 + 文本编码器 + VAE</small>
+                    </span>
+                </a>
+                <span class="onboarding-arrow" aria-hidden="true">→</span>
+                <a href="/app/?arch=anima" class="onboarding-step onboarding-step-cta">
+                    <span class="onboarding-num">3</span>
+                    <span class="onboarding-text">
+                        <strong>打开生图工具</strong>
+                        <small>选架构 → 加载模型 → 生成</small>
+                    </span>
+                </a>
             </div>
         </section>
 
         <div id="featured-article">
-            <p class="empty-state">加载中…</p>
+            <p class="empty-state">加载教程中…</p>
         </div>
 
-        <h2 class="section-title">最新资讯</h2>
+        <h2 class="section-title">推荐教程</h2>
         <div id="news-grid" class="news-grid">
-            <p class="empty-state">加载中…</p>
+            <p class="empty-state">加载教程中…</p>
         </div>
-        <p style="text-align:center;margin-bottom:40px">
-            <a href="/news/" class="btn-secondary">查看全部资讯 →</a>
+        <p class="section-more">
+            <a href="/news/" class="btn-secondary">查看全部教程 →</a>
         </p>
 
-        <h2 class="section-title">快速入口</h2>
-        <div class="quick-links">
-            <a href="/app/" class="quick-link">
-                <span class="quick-link-icon">🖥️</span>
-                <span class="quick-link-label">本地生图</span>
-                <span class="quick-link-desc">连接 ComfyUI 出图</span>
+        <h2 class="section-title">工具能力</h2>
+        <div class="capability-grid">
+            <a href="/app/" class="capability-card">
+                <span class="capability-icon">🖥️</span>
+                <span class="capability-label">本地生图</span>
+                <span class="capability-desc">连接 ComfyUI，Anima / SDXL 双架构</span>
             </a>
-            <a href="/app/#mode=nai" class="quick-link">
-                <span class="quick-link-icon">☁️</span>
-                <span class="quick-link-label">在线生图</span>
-                <span class="quick-link-desc">NAI API 云端出图</span>
+            <a href="/app/#mode=nai" class="capability-card">
+                <span class="capability-icon">☁️</span>
+                <span class="capability-label">在线生图</span>
+                <span class="capability-desc">无 GPU 时用 NAI API 云端出图</span>
             </a>
-            <a href="/app/#tab=characters" class="quick-link">
-                <span class="quick-link-icon">👤</span>
-                <span class="quick-link-label">角色库</span>
-                <span class="quick-link-desc">30,000+ 角色 Trigger</span>
+            <a href="/app/#tab=characters" class="capability-card">
+                <span class="capability-icon">👤</span>
+                <span class="capability-label">角色库</span>
+                <span class="capability-desc">30,000+ 角色 Trigger 点选插入</span>
             </a>
-            <a href="/app/#tab=artists" class="quick-link">
-                <span class="quick-link-icon">🎨</span>
-                <span class="quick-link-label">画师库</span>
-                <span class="quick-link-desc">画师标签与画师串</span>
+            <a href="/app/#tab=artists" class="capability-card">
+                <span class="capability-icon">🎨</span>
+                <span class="capability-label">画师库</span>
+                <span class="capability-desc">画师标签与自定义画师串</span>
+            </a>
+            <a href="/app/#inpaint" class="capability-card">
+                <span class="capability-icon">✏️</span>
+                <span class="capability-label">局部重绘</span>
+                <span class="capability-desc">换衣服、修手、换背景，Anima 专用</span>
+            </a>
+            <a href="/app/" class="capability-card">
+                <span class="capability-icon">💾</span>
+                <span class="capability-label">配置方案</span>
+                <span class="capability-desc">多套参数保存，SDXL / Anima 各自独立</span>
             </a>
         </div>
     </main>
@@ -85,6 +135,6 @@
         </p>
     </footer>
 
-    <script src="/assets/site.js?v=6"></script>
+    <script src="/assets/site.js?v=7"></script>
 </body>
 </html>

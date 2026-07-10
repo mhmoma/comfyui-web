@@ -16,6 +16,44 @@
         community: '🎨',
     };
 
+    const PINNED_SLUGS = [
+        'anima-setup-complete-guide',
+        'comfyui-cors-troubleshoot',
+    ];
+
+    function estimateReadMinutes(article) {
+        const text = [article.title, article.summary, article.content].filter(Boolean).join(' ');
+        const chars = text.replace(/\s+/g, '').length;
+        return Math.max(2, Math.min(20, Math.ceil(chars / 400)));
+    }
+
+    function sortArticles(articles) {
+        const pinned = [];
+        const rest = [];
+        for (const slug of PINNED_SLUGS) {
+            const found = articles.find(a => a.slug === slug);
+            if (found) pinned.push(found);
+        }
+        for (const a of articles) {
+            if (!PINNED_SLUGS.includes(a.slug)) rest.push(a);
+        }
+        return [...pinned, ...rest];
+    }
+
+    function categoryCoverHtml(category, size) {
+        const label = CATEGORY_LABELS[category] || category;
+        const icon = CATEGORY_ICONS[category] || '📰';
+        const cls = escapeHtml(category || 'tutorial');
+        return `<div class="cat-cover cat-${cls}"><span class="cat-cover-icon">${icon}</span><span class="cat-cover-label">${escapeHtml(label)}</span></div>`;
+    }
+
+    function thumbHtml(article) {
+        if (article.cover_url) {
+            return `<img src="${escapeHtml(article.cover_url)}" alt="" loading="lazy">`;
+        }
+        return categoryCoverHtml(article.category);
+    }
+
     function escapeHtml(str) {
         return String(str || '')
             .replace(/&/g, '&amp;')
@@ -60,27 +98,23 @@
         if (coverUrl) {
             return `<img src="${escapeHtml(coverUrl)}" alt="" loading="lazy">`;
         }
-        const icon = CATEGORY_ICONS[category] || '📰';
-        return `<div class="${cls}-placeholder">${icon}</div>`;
+        return categoryCoverHtml(category);
     }
 
     function articleCard(article) {
         const url = articleUrl(article);
-        const icon = CATEGORY_ICONS[article.category] || '📰';
-        const thumbInner = article.cover_url
-            ? `<img src="${escapeHtml(article.cover_url)}" alt="" loading="lazy">`
-            : `<span class="news-card-thumb-icon">${icon}</span>`;
+        const mins = estimateReadMinutes(article);
         return `
             <article class="news-card">
-                <a href="${url}" class="news-card-thumb">${thumbInner}</a>
+                <a href="${url}" class="news-card-thumb">${thumbHtml(article)}</a>
                 <div class="news-card-body">
                     <div class="news-card-top">
                         ${catBadge(article.category)}
-                        <time class="news-card-date">${formatDate(article.published_at)}</time>
+                        <span class="news-card-read-time">约 ${mins} 分钟</span>
                     </div>
                     <h3 class="news-card-title"><a href="${url}">${escapeHtml(article.title)}</a></h3>
                     <p class="news-card-summary">${escapeHtml(article.summary)}</p>
-                    <a href="${url}" class="news-card-read">阅读全文 →</a>
+                    <a href="${url}" class="news-card-read">阅读教程 →</a>
                 </div>
             </article>`;
     }
@@ -107,16 +141,18 @@
 
     function featuredArticle(article) {
         const url = articleUrl(article);
+        const mins = estimateReadMinutes(article);
+        const pinned = PINNED_SLUGS.includes(article.slug);
         return `
             <article class="featured-article">
                 <a href="${url}" class="featured-cover">
                     ${coverHtml(article.cover_url, article.category, 'featured-cover')}
                 </a>
                 <div class="featured-body">
-                    ${catBadge(article.category)}
+                    ${pinned ? '<span class="cat-badge cat-tool" style="margin-right:6px">必读</span>' : ''}${catBadge(article.category)}
                     <h2><a href="${url}">${escapeHtml(article.title)}</a></h2>
                     <p class="featured-summary">${escapeHtml(article.summary)}</p>
-                    <div class="featured-meta">${formatDate(article.published_at)} · <a href="${url}">阅读全文 →</a></div>
+                    <div class="featured-meta">约 ${mins} 分钟阅读 · ${formatDate(article.published_at)} · <a href="${url}">阅读教程 →</a></div>
                 </div>
             </article>`;
     }
@@ -152,18 +188,20 @@
         if (!featuredEl && !gridEl) return;
 
         try {
-            const articles = await loadNews();
-            if (featuredEl && articles.length) {
-                featuredEl.innerHTML = featuredArticle(articles[0]);
+            const articles = sortArticles(await loadNews());
+            if (featuredEl) {
+                featuredEl.innerHTML = articles.length
+                    ? featuredArticle(articles[0])
+                    : '<p class="empty-state">暂无教程，<a href="/admin/">管理后台</a>可发布</p>';
             }
             if (gridEl) {
                 const rest = articles.slice(1, 7);
                 gridEl.innerHTML = rest.length
                     ? rest.map(articleCard).join('')
-                    : '<p class="empty-state">暂无更多资讯</p>';
+                    : '<p class="empty-state">暂无更多教程</p>';
             }
         } catch (e) {
-            if (gridEl) gridEl.innerHTML = '<p class="empty-state">资讯加载失败</p>';
+            if (gridEl) gridEl.innerHTML = '<p class="empty-state">教程加载失败</p>';
         }
     }
 

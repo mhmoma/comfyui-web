@@ -106,18 +106,28 @@ a:hover { color: var(--accent); }
 
 /* ── Hero ── */
 .hero {
-    text-align: center;
-    padding: 48px 0 40px;
+    padding: 40px 0 48px;
+}
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+}
+.hero-content {
+    text-align: left;
 }
 .hero-tagline {
-    font-size: 1rem;
-    color: var(--text-secondary);
+    font-size: 0.95rem;
+    color: var(--accent-purple);
+    font-weight: 600;
     margin-bottom: 12px;
+    letter-spacing: 0.02em;
 }
 .hero h1 {
-    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    font-size: clamp(1.9rem, 4.5vw, 2.75rem);
     font-weight: 800;
-    line-height: 1.25;
+    line-height: 1.2;
     margin-bottom: 16px;
     background: linear-gradient(135deg, #fff 30%, var(--accent-purple));
     -webkit-background-clip: text;
@@ -125,16 +135,176 @@ a:hover { color: var(--accent); }
     background-clip: text;
 }
 .hero-desc {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     color: var(--text-secondary);
-    max-width: 560px;
-    margin: 0 auto 28px;
+    max-width: 520px;
+    margin: 0 0 28px;
+    line-height: 1.7;
 }
 .hero-actions {
     display: flex;
     gap: 12px;
-    justify-content: center;
     flex-wrap: wrap;
+}
+.hero-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.hero-preview-frame {
+    width: min(280px, 100%);
+    border-radius: 24px;
+    overflow: hidden;
+    border: 2px solid var(--border);
+    box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,0.04) inset;
+    background: var(--bg-secondary);
+    line-height: 0;
+}
+.hero-preview-frame img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.hero-preview-caption {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* ── 新手上路 ── */
+.onboarding {
+    margin-bottom: 48px;
+}
+.onboarding-steps {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.onboarding-step {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    transition: border-color 0.2s, transform 0.2s, background 0.2s;
+}
+.onboarding-step:hover {
+    border-color: var(--accent-purple);
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+    color: var(--text-primary);
+}
+.onboarding-step-cta {
+    border-color: rgba(233, 69, 96, 0.35);
+    background: linear-gradient(135deg, rgba(233,69,96,0.08), rgba(167,139,250,0.08));
+}
+.onboarding-step-cta:hover {
+    border-color: var(--accent);
+}
+.onboarding-num {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #c0264a);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.onboarding-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.onboarding-text strong {
+    font-size: 0.95rem;
+    line-height: 1.35;
+}
+.onboarding-text small {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+.onboarding-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+
+.section-more {
+    text-align: center;
+    margin-bottom: 48px;
+}
+
+/* ── 工具能力 ── */
+.capability-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+.capability-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 20px 18px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+.capability-card:hover {
+    border-color: var(--accent);
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+    color: var(--text-primary);
+}
+.capability-icon { font-size: 1.75rem; line-height: 1; }
+.capability-label { font-weight: 700; font-size: 0.95rem; }
+.capability-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; }
+
+/* 分类渐变封面 */
+.cat-cover {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px;
+    text-align: center;
+}
+.cat-cover.cat-model { background: linear-gradient(145deg, #1a2a4a, #2a3a6a); }
+.cat-cover.cat-tutorial { background: linear-gradient(145deg, #2a1a4a, #4a2a6a); }
+.cat-cover.cat-tool { background: linear-gradient(145deg, #3a1a2a, #6a2a3a); }
+.cat-cover.cat-community { background: linear-gradient(145deg, #1a3a3a, #2a5a5a); }
+.cat-cover-icon { font-size: 1.5rem; line-height: 1; opacity: 0.9; }
+.cat-cover-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 0.04em;
+}
+.featured-cover .cat-cover { min-height: 200px; }
+.featured-cover .cat-cover-icon { font-size: 2.5rem; }
+.news-card-read-time {
+    font-size: 0.72rem;
+    color: var(--text-muted);
 }
 .btn-primary {
     display: inline-flex;
@@ -977,6 +1147,12 @@ a:hover { color: var(--accent); }
     .admin-layout { grid-template-columns: 1fr; }
     .admin-select { margin-left: 0; }
     .col-actions { min-width: 120px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 32px; }
+    .hero-content { text-align: center; }
+    .hero-desc { margin-left: auto; margin-right: auto; }
+    .hero-actions { justify-content: center; }
+    .capability-grid { grid-template-columns: repeat(2, 1fr); }
+    .onboarding-arrow { display: none; }
 }
 
 @media (max-width: 768px) {
@@ -984,5 +1160,10 @@ a:hover { color: var(--accent); }
     .site-nav { display: none; }
     .featured-article { grid-template-columns: 1fr; }
     .featured-body { padding: 20px; }
-    .hero { padding: 32px 0 24px; }
+    .hero { padding: 28px 0 32px; }
+    .hero-preview-frame { width: min(220px, 70vw); }
+    .onboarding-steps { flex-direction: column; }
+    .onboarding-step { min-width: 0; }
+    .capability-grid { grid-template-columns: 1fr; }
+    .news-grid { grid-template-columns: 1fr; }
 }
