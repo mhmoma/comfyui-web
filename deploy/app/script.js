@@ -332,6 +332,10 @@
         lastPreviewUrl: null,
     };
 
+    function _promptExtraData() {
+        return { preview_method: 'latent2rgb' };
+    }
+
     function _fmtMs(ms) {
         const s = Math.max(0, Math.floor(ms / 1000));
         const m = Math.floor(s / 60);
@@ -374,6 +378,7 @@
         _gen.lastPreviewUrl = url;
         dom.livePreview.src = url;
         dom.livePreview.classList.remove('hidden');
+        dom.resultPlaceholder?.classList.add('hidden');
     }
 
     function _hideLivePreview() {
@@ -418,6 +423,14 @@
             return;
         }
         ws.binaryType = 'arraybuffer';
+        ws.onopen = () => {
+            try {
+                ws.send(JSON.stringify({
+                    type: 'feature_flags',
+                    data: { supports_preview_metadata: true },
+                }));
+            } catch { /* ignore */ }
+        };
         ws.onmessage = (ev) => {
             if (!_gen.active) return;
             if (typeof ev.data === 'string') {
@@ -2718,12 +2731,10 @@
         if (_inpaintNodes && !force) return _inpaintNodes;
         const nodes = {
             loadImageMask: false,
-            composite: false,
             inpaintCropRequired: {},
         };
         const checks = [
             ['loadImageMask', 'LoadImageMask'],
-            ['composite', 'ImageCompositeMasked'],
             ['animaLLLite', 'AnimaLLLiteApply'],
             ['inpaintPreprocessor', 'InpaintPreprocessor'],
             ['inpaintCrop', 'InpaintCropImproved'],
@@ -2955,11 +2966,8 @@
         if (!dom.btnInpaintDownload) return;
         dom.btnInpaintDownload.disabled = true;
         dom.inpaintDownloadProgress?.classList.remove('hidden');
-        const anima = isAnimaMode();
         if (dom.inpaintProgressText) {
-            dom.inpaintProgressText.textContent = anima
-                ? '正在下载 Anima LLLite Inpaint 权重...'
-                : '正在下载 Fooocus Inpaint 补丁...';
+            dom.inpaintProgressText.textContent = '正在下载 Anima LLLite Inpaint 权重...';
         }
         if (dom.inpaintProgressBar) dom.inpaintProgressBar.style.width = '8%';
         try {
@@ -3000,18 +3008,14 @@
             });
             if (dom.inpaintProgressBar) dom.inpaintProgressBar.style.width = '100%';
             if (dom.inpaintProgressText) {
-                dom.inpaintProgressText.textContent = anima
-                    ? 'LLLite 权重就绪！请重启 ComfyUI 后使用'
-                    : '补丁就绪！请重启 ComfyUI 后使用';
+                dom.inpaintProgressText.textContent = 'LLLite 权重就绪！请重启 ComfyUI 后使用';
             }
             await updateInpaintEngineUI();
             setTimeout(() => dom.inpaintDownloadProgress?.classList.add('hidden'), 2500);
         } catch (e) {
             console.warn('[Inpaint] download failed:', e);
             if (dom.inpaintProgressText) {
-                dom.inpaintProgressText.textContent = anima
-                    ? '下载失败：请安装 ComfyUI-Anima-LLLite，并手动将权重放到 models/controlnet/'
-                    : '自动下载失败：请在 Manager 安装 comfyui-inpaint-nodes，并手动下载补丁到 models/inpaint/';
+                dom.inpaintProgressText.textContent = '下载失败：请安装 ComfyUI-Anima-LLLite，并手动将权重放到 models/controlnet/';
             }
             setTimeout(() => dom.inpaintDownloadProgress?.classList.add('hidden'), 5000);
         } finally {
@@ -3166,7 +3170,7 @@
             denoise: 0.50,
         },
         nude: {
-            hint: '只涂衣物。模式选「标准」或「强力」；Fooocus 引擎就绪后效果最好。',
+            hint: '只涂衣物区域。建议选「强化小范围」；强度过高容易偏离原图。',
             positive: 'bare skin, nude, natural skin texture, nipples, anatomically correct, seamless skin',
             negative: 'clothes, clothing, underwear, bra, panties, bikini, swimsuit, fabric, strap, censored, mosaic, deformed',
             denoise: 0.62,
@@ -5733,6 +5737,7 @@
         const payload = {
             prompt: workflowBuilt.prompt,
             client_id: _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`),
+            extra_data: _promptExtraData(),
         };
         _gen.wsClientId = payload.client_id;
         _connectPreviewWS();
@@ -8889,6 +8894,8 @@
         else _closePortalOverlays();
 
         if (dl.focus === 'profile' && dl.tab !== 'settings') _openSettingsFocus('profile');
+
+        _appliedDeepLinkKey = key;
     }
 
     function scheduleDeepLinks() {
@@ -10465,7 +10472,7 @@
             const clientId = _gen.wsClientId || (`cw_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`);
             _gen.wsClientId = clientId;
             _connectPreviewWS();
-            const result = await apiPost('/prompt', { prompt: workflow, client_id: clientId });
+            const result = await apiPost('/prompt', { prompt: workflow, client_id: clientId, extra_data: _promptExtraData() });
             _gen.promptId = result.prompt_id;
             await pollProgress(result.prompt_id);
         } catch (e) {

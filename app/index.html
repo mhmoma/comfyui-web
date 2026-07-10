@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.25</title>
+    <title>生图工具 · ComfyUI Web v4.27</title>
     <link rel="stylesheet" href="style.css?v=421">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.25</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.27</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1024,9 +1024,9 @@
                             <span class="inpaint-sam-text">SAM 模型：检测中…</span>
                         </p>
                         <div id="inpaint-download-area" class="inpaint-download-area hidden">
-                            <p class="inpaint-download-hint">推荐安装 Fooocus Inpaint 组件</p>
-                            <button type="button" id="btn-inpaint-download" class="btn-secondary btn-inpaint-download">📥 一键下载 Inpaint 补丁</button>
-                            <p class="inpaint-download-manual">插件：ComfyUI Manager 搜索 <code>comfyui-inpaint-nodes</code>（作者 Acly）</p>
+                            <p class="inpaint-download-hint">需安装 Anima LLLite 插件并下载 inpaint 权重</p>
+                            <button type="button" id="btn-inpaint-download" class="btn-secondary btn-inpaint-download">📥 下载 Anima LLLite Inpaint</button>
+                            <p class="inpaint-download-manual">必装插件：<code>ComfyUI-Anima-LLLite</code>、<code>comfyui_controlnet_aux</code>、<code>ComfyUI-BSS_FLSampler</code>、<code>ComfyUI-Inpaint-CropAndStitch</code>（小范围）、<code>ComfyUI_essentials</code>（大范围）</p>
                             <div id="inpaint-download-progress" class="inpaint-download-progress hidden">
                                 <div id="inpaint-progress-bar" class="inpaint-progress-bar"></div>
                                 <span id="inpaint-progress-text">准备下载…</span>
@@ -1449,6 +1449,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=420"></script>
+    <script src="script.js?v=422"></script>
 </body>
 </html>
