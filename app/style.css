@@ -3193,6 +3193,7 @@ body.inpaint-open {
 .mobile-panel,
 .mobile-prompt-shortcuts,
 .generate-fab,
+.prompt-tag-mobile-sheet,
 .char-browser-overlay,
 .mobile-artist-nav {
     display: none;
@@ -3816,21 +3817,33 @@ body.inpaint-open {
 
     .mobile-prompt-shortcuts {
         display: flex;
-        gap: 8px;
-        margin-top: 6px;
+        gap: 6px;
+        margin-top: 4px;
     }
 
     .mobile-shortcut-btn {
         flex: 1;
-        padding: 10px 12px;
-        min-height: 44px;
+        padding: 5px 8px;
+        min-height: 32px;
         border: 1px solid var(--border);
-        border-radius: var(--radius);
+        border-radius: 6px;
         background: var(--bg-panel);
         color: var(--text-primary);
-        font-size: 13px;
+        font-size: 11px;
         font-weight: 600;
         cursor: pointer;
+    }
+
+    .main.mobile-tab-create .mobile-prompt-shortcuts {
+        gap: 4px;
+        margin-top: 3px;
+    }
+
+    .main.mobile-tab-create .mobile-shortcut-btn {
+        padding: 4px 6px;
+        min-height: 28px;
+        font-size: 10px;
+        border-radius: 5px;
     }
 
     .mobile-shortcut-btn:active {
@@ -4097,25 +4110,37 @@ body.inpaint-open {
         content: none;
     }
 
-    /* 生成 FAB */
+    /* 生成 FAB — 默认贴底栏上方，可拖动 */
     .generate-fab {
         display: flex;
         align-items: center;
         justify-content: center;
         position: fixed;
-        right: 16px;
-        bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+        right: 14px;
+        bottom: calc(56px + 44px + 10px + env(safe-area-inset-bottom, 0px));
         z-index: 210;
-        width: 56px;
-        height: 56px;
+        width: 52px;
+        height: 52px;
         border: none;
         border-radius: 50%;
         background: linear-gradient(135deg, var(--accent), #ff6b9d);
         color: #fff;
-        font-size: 1.4rem;
+        font-size: 1.35rem;
         box-shadow: 0 4px 20px rgba(233, 69, 96, 0.45);
-        cursor: pointer;
+        cursor: grab;
+        touch-action: none;
         -webkit-tap-highlight-color: transparent;
+    }
+
+    .generate-fab.is-custom-pos {
+        right: auto;
+        bottom: auto;
+    }
+
+    .generate-fab.is-dragging {
+        cursor: grabbing;
+        transform: scale(1.04);
+        box-shadow: 0 6px 24px rgba(233, 69, 96, 0.55);
     }
 
     .generate-fab.hidden {
@@ -4328,10 +4353,53 @@ body.inpaint-open {
         overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        padding-bottom: calc(56px + 48px + 12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    body.prompt-tag-sheet-open .main.mobile-tab-create .content {
+        padding-bottom: calc(56px + 48px + 132px + env(safe-area-inset-bottom, 0px));
     }
 
     .main.mobile-tab-create .prompt-area {
         order: 1;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        gap: 8px;
+    }
+
+    .main.mobile-tab-create .prompt-block {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .main.mobile-tab-create .prompt-block:first-child {
+        flex: 1.35;
+    }
+
+    .main.mobile-tab-create .prompt-block:nth-child(2) {
+        flex: 0.85;
+    }
+
+    .main.mobile-tab-create .prompt-block textarea {
+        flex: 1;
+        min-height: 56px;
+        resize: none;
+    }
+
+    .main.mobile-tab-create .prompt-tags-bar {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .main.mobile-tab-create .prompt-tags {
+        flex: 1;
+        max-height: none;
+        min-height: 44px;
     }
 
     .main.mobile-tab-create .result-area {
@@ -4627,17 +4695,30 @@ body.inpaint-open {
         width: 100%;
     }
 
-    /* Sticky action bar above bottom nav */
+    /* Fixed dzmm bar above bottom nav */
     .main.mobile-tab-create .action-bar {
-        position: sticky;
+        position: fixed;
+        left: 0;
+        right: 0;
         bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-        z-index: 50;
+        z-index: 185;
+        order: unset;
         flex-direction: column;
         align-items: stretch;
-        gap: 8px;
-        padding: 10px 0 12px;
-        margin-top: auto;
-        background: linear-gradient(transparent, var(--content-bg) 20%);
+        gap: 4px;
+        padding: 6px 12px;
+        margin: 0;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.22);
+    }
+
+    .btn-dzmm {
+        width: 100%;
+        justify-content: center;
+        padding: 10px;
+        min-height: 40px;
+        font-size: 14px;
     }
 
     .action-bar {
@@ -4650,13 +4731,6 @@ body.inpaint-open {
         padding: 14px;
         font-size: 16px;
         min-height: 48px;
-    }
-
-    .btn-dzmm {
-        width: 100%;
-        justify-content: center;
-        padding: 12px;
-        min-height: 44px;
     }
 
     .main.mobile-tab-create .progress-container {
@@ -4708,7 +4782,132 @@ body.inpaint-open {
     }
 
     .main.mobile-tab-create .prompt-block textarea {
-        min-height: 72px;
+        min-height: 56px;
+    }
+
+    /* 手机端：标签点击打开底部调节面板，隐藏内联操作钮 */
+    .prompt-tag-actions {
+        display: none !important;
+    }
+
+    .prompt-tag.prompt-tag-tap {
+        cursor: pointer;
+        max-width: none;
+    }
+
+    .prompt-tag.prompt-tag-tap.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 8px rgba(233, 69, 96, 0.35);
+        background: rgba(233, 69, 96, 0.08);
+    }
+
+    .prompt-tag-mobile-sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: calc(56px + 44px + env(safe-area-inset-bottom, 0px));
+        z-index: 195;
+        display: block;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.28);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .prompt-tag-mobile-sheet.hidden {
+        display: none !important;
+    }
+
+    .prompt-tag-sheet-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px 4px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .prompt-tag-sheet-title {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .prompt-tag-sheet-close {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-input);
+        color: var(--text-secondary);
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    .prompt-tag-sheet-body {
+        padding: 8px 12px 10px;
+    }
+
+    .prompt-tag-sheet-weight-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .prompt-tag-sheet-btn {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .prompt-tag-sheet-range {
+        flex: 1;
+        min-width: 0;
+        accent-color: var(--accent);
+    }
+
+    .prompt-tag-sheet-weight-val {
+        flex-shrink: 0;
+        min-width: 32px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--accent-amber);
+    }
+
+    .prompt-tag-sheet-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    .prompt-tag-sheet-action {
+        padding: 8px 6px;
+        min-height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .prompt-tag-sheet-action.prompt-tag-sheet-delete {
+        color: #ff6b6b;
+        border-color: rgba(255, 107, 107, 0.35);
     }
 
     .result-wrapper.expanded {

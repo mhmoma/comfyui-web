@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.45</title>
-    <link rel="stylesheet" href="style.css?v=430">
+    <title>生图工具 · ComfyUI Web v4.46</title>
+    <link rel="stylesheet" href="style.css?v=431">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.45</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.46</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -805,7 +805,28 @@
             </section>
         </main>
 
-        <button type="button" id="btn-generate-fab" class="generate-fab" title="生成图片" aria-label="生成">✨</button>
+        <div id="prompt-tag-mobile-sheet" class="prompt-tag-mobile-sheet hidden" aria-hidden="true" role="dialog" aria-labelledby="prompt-tag-sheet-title">
+            <div class="prompt-tag-sheet-header">
+                <span id="prompt-tag-sheet-title" class="prompt-tag-sheet-title">标签</span>
+                <button type="button" id="prompt-tag-sheet-close" class="prompt-tag-sheet-close" aria-label="关闭">✕</button>
+            </div>
+            <div class="prompt-tag-sheet-body">
+                <div class="prompt-tag-sheet-weight-row">
+                    <button type="button" id="prompt-tag-sheet-w-down" class="prompt-tag-sheet-btn" aria-label="降低权重">−</button>
+                    <input type="range" id="prompt-tag-sheet-weight-range" class="prompt-tag-sheet-range" min="0.1" max="2" step="0.1" value="1">
+                    <span id="prompt-tag-sheet-weight-val" class="prompt-tag-sheet-weight-val">1.0</span>
+                    <button type="button" id="prompt-tag-sheet-w-up" class="prompt-tag-sheet-btn" aria-label="提高权重">+</button>
+                </div>
+                <div class="prompt-tag-sheet-actions">
+                    <button type="button" id="prompt-tag-sheet-move-left" class="prompt-tag-sheet-action">← 前移</button>
+                    <button type="button" id="prompt-tag-sheet-move-right" class="prompt-tag-sheet-action">后移 →</button>
+                    <button type="button" id="prompt-tag-sheet-copy" class="prompt-tag-sheet-action">复制</button>
+                    <button type="button" id="prompt-tag-sheet-delete" class="prompt-tag-sheet-action prompt-tag-sheet-delete">删除</button>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" id="btn-generate-fab" class="generate-fab" title="生成图片（可拖动）" aria-label="生成">✨</button>
 
         <nav class="mobile-artist-nav" id="mobile-artist-nav" aria-label="画师分类">
             <button type="button" class="mobile-artist-nav-btn active" data-artist-mode="0"><span class="mobile-artist-nav-icon">🏆</span><span class="mobile-artist-nav-label">精选</span></button>
@@ -1452,6 +1473,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=440"></script>
+    <script src="script.js?v=441"></script>
 </body>
 </html>

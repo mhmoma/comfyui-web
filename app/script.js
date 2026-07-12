@@ -9045,7 +9045,7 @@
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.45');
+        console.log('[ComfyUI Web] v4.46');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9586,12 +9586,223 @@
             posTagPicker?.render();
             negTagPicker?.render();
         }
+        MobilePromptTagSheet.close();
     }
+
+    const MobilePromptTagSheet = {
+        sheet: null,
+        editor: null,
+        idx: -1,
+        _inited: false,
+
+        isMobile() {
+            return window.matchMedia('(max-width: 640px)').matches;
+        },
+
+        init() {
+            if (this._inited) return;
+            this.sheet = document.getElementById('prompt-tag-mobile-sheet');
+            if (!this.sheet) return;
+            this._inited = true;
+
+            document.getElementById('prompt-tag-sheet-close')?.addEventListener('click', () => this.close());
+            document.getElementById('prompt-tag-sheet-w-up')?.addEventListener('click', () => this.changeWeight(0.1));
+            document.getElementById('prompt-tag-sheet-w-down')?.addEventListener('click', () => this.changeWeight(-0.1));
+            document.getElementById('prompt-tag-sheet-move-left')?.addEventListener('click', () => this.moveTag(-1));
+            document.getElementById('prompt-tag-sheet-move-right')?.addEventListener('click', () => this.moveTag(1));
+            document.getElementById('prompt-tag-sheet-copy')?.addEventListener('click', () => this.copyTag());
+            document.getElementById('prompt-tag-sheet-delete')?.addEventListener('click', () => this.deleteTag());
+
+            const slider = document.getElementById('prompt-tag-sheet-weight-range');
+            slider?.addEventListener('input', () => {
+                if (!this.editor || this.idx < 0) return;
+                const tag = this.editor.tags[this.idx];
+                if (!tag) return;
+                tag.weight = Math.max(0.1, Math.round(parseFloat(slider.value) * 10) / 10);
+                this.editor.syncToTextarea();
+                this.editor.render();
+                this.updateUI();
+            });
+        },
+
+        open(editor, idx) {
+            if (!this.isMobile()) return;
+            this.init();
+            if (!this.sheet) return;
+            this.editor = editor;
+            this.idx = idx;
+            document.body.classList.add('prompt-tag-sheet-open');
+            this.sheet.classList.remove('hidden');
+            this.sheet.setAttribute('aria-hidden', 'false');
+            editor.render();
+            this.updateUI();
+        },
+
+        close() {
+            if (!this.sheet) return;
+            const hadOpen = this.idx >= 0;
+            this.idx = -1;
+            this.editor = null;
+            document.body.classList.remove('prompt-tag-sheet-open');
+            this.sheet.classList.add('hidden');
+            this.sheet.setAttribute('aria-hidden', 'true');
+            if (hadOpen) {
+                [dom.txtPositive, dom.txtNegative].forEach(ta => ta?._tagEditor?.render());
+            }
+        },
+
+        updateUI() {
+            const tag = this.editor?.tags[this.idx];
+            if (!tag) return;
+            const title = document.getElementById('prompt-tag-sheet-title');
+            const weightVal = document.getElementById('prompt-tag-sheet-weight-val');
+            const slider = document.getElementById('prompt-tag-sheet-weight-range');
+            const zh = TagTranslator.getSync(tag.name);
+            if (title) {
+                title.textContent = TagTranslator.showChinese && zh
+                    ? `${tag.name} · ${zh}`
+                    : tag.name;
+            }
+            if (weightVal) weightVal.textContent = tag.weight.toFixed(1);
+            if (slider) slider.value = String(tag.weight);
+        },
+
+        changeWeight(delta) {
+            if (!this.editor || this.idx < 0) return;
+            this.editor.changeWeight(this.idx, delta);
+            this.updateUI();
+        },
+
+        moveTag(delta) {
+            if (!this.editor || this.idx < 0) return;
+            const newIdx = this.idx + delta;
+            if (newIdx < 0 || newIdx >= this.editor.tags.length) return;
+            this.editor.moveTag(this.idx, delta);
+            this.idx = newIdx;
+            this.updateUI();
+        },
+
+        copyTag() {
+            if (!this.editor || this.idx < 0) return;
+            const tag = this.editor.tags[this.idx];
+            if (!tag) return;
+            const text = tag.weight !== 1.0
+                ? `(${tag.name}:${tag.weight.toFixed(1)})`
+                : tag.name;
+            navigator.clipboard.writeText(text);
+        },
+
+        deleteTag() {
+            if (!this.editor || this.idx < 0) return;
+            this.editor.removeTag(this.idx);
+            if (this.editor.tags.length === 0) {
+                this.close();
+                return;
+            }
+            this.idx = Math.min(this.idx, this.editor.tags.length - 1);
+            this.editor.render();
+            this.updateUI();
+        },
+
+        syncAfterRender(editor) {
+            if (this.editor !== editor || this.idx < 0) return;
+            if (this.idx >= editor.tags.length) {
+                this.close();
+                return;
+            }
+            this.updateUI();
+        }
+    };
 
     function setupGenerateFab() {
         const fab = document.getElementById('btn-generate-fab');
         if (!fab) return;
-        fab.addEventListener('click', () => {
+
+        const STORAGE_KEY = 'comfyui_fab_pos_v1';
+        let fabDragMoved = false;
+        let fabDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let origLeft = 0;
+        let origTop = 0;
+
+        function isMobileFab() {
+            return window.matchMedia('(max-width: 640px)').matches;
+        }
+
+        function applySavedFabPos() {
+            if (!isMobileFab()) return;
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const pos = JSON.parse(raw);
+                if (typeof pos.x === 'number' && typeof pos.y === 'number') {
+                    fab.classList.add('is-custom-pos');
+                    fab.style.left = `${pos.x}px`;
+                    fab.style.top = `${pos.y}px`;
+                    fab.style.right = 'auto';
+                    fab.style.bottom = 'auto';
+                }
+            } catch (_) { /* ignore */ }
+        }
+
+        applySavedFabPos();
+
+        fab.addEventListener('pointerdown', (e) => {
+            if (!isMobileFab() || e.button !== 0) return;
+            fabDragMoved = false;
+            fabDragging = true;
+            fab.classList.add('is-dragging');
+            fab.setPointerCapture(e.pointerId);
+            const rect = fab.getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            origLeft = rect.left;
+            origTop = rect.top;
+            fab.classList.add('is-custom-pos');
+            fab.style.right = 'auto';
+            fab.style.bottom = 'auto';
+            fab.style.left = `${origLeft}px`;
+            fab.style.top = `${origTop}px`;
+        });
+
+        fab.addEventListener('pointermove', (e) => {
+            if (!fabDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (Math.abs(dx) + Math.abs(dy) > 5) fabDragMoved = true;
+            const w = fab.offsetWidth;
+            const h = fab.offsetHeight;
+            let nx = origLeft + dx;
+            let ny = origTop + dy;
+            nx = Math.max(8, Math.min(window.innerWidth - w - 8, nx));
+            ny = Math.max(8, Math.min(window.innerHeight - h - 8, ny));
+            fab.style.left = `${nx}px`;
+            fab.style.top = `${ny}px`;
+        });
+
+        function endFabDrag(e) {
+            if (!fabDragging) return;
+            fabDragging = false;
+            fab.classList.remove('is-dragging');
+            try { fab.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+            if (fabDragMoved) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    x: parseInt(fab.style.left, 10),
+                    y: parseInt(fab.style.top, 10)
+                }));
+            }
+        }
+
+        fab.addEventListener('pointerup', endFabDrag);
+        fab.addEventListener('pointercancel', endFabDrag);
+
+        fab.addEventListener('click', (e) => {
+            if (fabDragMoved) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
             const modeNai = document.querySelector('.mode-tab[data-mode="nai"]')?.classList.contains('active');
             if (modeNai) {
                 document.getElementById('btn-nai-generate')?.click();
@@ -10878,13 +11089,19 @@
                 const el = this.createTagElement(tag, idx);
                 this.container.appendChild(el);
             });
+            MobilePromptTagSheet.syncAfterRender(this);
         }
 
         createTagElement(tag, idx) {
             const el = document.createElement('div');
-            el.className = 'prompt-tag';
-            el.draggable = true;
+            const isMobileTap = MobilePromptTagSheet.isMobile();
+            el.className = 'prompt-tag' + (isMobileTap ? ' prompt-tag-tap' : '');
+            el.draggable = !isMobileTap;
             el.dataset.idx = idx;
+
+            if (isMobileTap && MobilePromptTagSheet.editor === this && MobilePromptTagSheet.idx === idx) {
+                el.classList.add('active');
+            }
 
             const textCol = document.createElement('span');
             textCol.className = 'prompt-tag-text-col';
@@ -10937,38 +11154,45 @@
             actions.append(btnUp, btnDown, btnCopy, btnDel);
             el.appendChild(actions);
 
-            el.addEventListener('dragstart', (e) => {
-                this.dragIdx = idx;
-                el.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
+            if (isMobileTap) {
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('.prompt-tag-btn')) return;
+                    MobilePromptTagSheet.open(this, idx);
+                });
+            } else {
+                el.addEventListener('dragstart', (e) => {
+                    this.dragIdx = idx;
+                    el.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
 
-            el.addEventListener('dragend', () => {
-                el.classList.remove('dragging');
-                this.container.querySelectorAll('.prompt-tag').forEach(t => t.classList.remove('drag-over'));
-            });
+                el.addEventListener('dragend', () => {
+                    el.classList.remove('dragging');
+                    this.container.querySelectorAll('.prompt-tag').forEach(t => t.classList.remove('drag-over'));
+                });
 
-            el.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                const dragging = this.container.querySelector('.dragging');
-                if (dragging && dragging !== el) {
-                    el.classList.add('drag-over');
-                }
-            });
+                el.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const dragging = this.container.querySelector('.dragging');
+                    if (dragging && dragging !== el) {
+                        el.classList.add('drag-over');
+                    }
+                });
 
-            el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+                el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
 
-            el.addEventListener('drop', (e) => {
-                e.preventDefault();
-                el.classList.remove('drag-over');
-                const fromIdx = this.dragIdx;
-                const toIdx = idx;
-                if (fromIdx === toIdx || fromIdx < 0) return;
-                const [moved] = this.tags.splice(fromIdx, 1);
-                this.tags.splice(toIdx, 0, moved);
-                this.syncToTextarea();
-                this.render();
-            });
+                el.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    el.classList.remove('drag-over');
+                    const fromIdx = this.dragIdx;
+                    const toIdx = idx;
+                    if (fromIdx === toIdx || fromIdx < 0) return;
+                    const [moved] = this.tags.splice(fromIdx, 1);
+                    this.tags.splice(toIdx, 0, moved);
+                    this.syncToTextarea();
+                    this.render();
+                });
+            }
 
             return el;
         }
@@ -10989,6 +11213,15 @@
             const tag = this.tags[idx];
             if (!tag) return;
             tag.weight = Math.max(0.1, Math.round((tag.weight + delta) * 10) / 10);
+            this.syncToTextarea();
+            this.render();
+        }
+
+        moveTag(idx, delta) {
+            const newIdx = idx + delta;
+            if (newIdx < 0 || newIdx >= this.tags.length) return;
+            const [moved] = this.tags.splice(idx, 1);
+            this.tags.splice(newIdx, 0, moved);
             this.syncToTextarea();
             this.render();
         }
