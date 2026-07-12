@@ -7761,39 +7761,46 @@
         _renderPagination(total) {
             this._removePagination();
             if (_artistTotalPages <= 1) return;
+            const mobile = window.matchMedia('(max-width: 640px)').matches;
             const nav = document.createElement('div');
             nav.className = 'artist-pagination';
             const prevBtn = document.createElement('button');
-            prevBtn.textContent = '← 上一页';
+            prevBtn.textContent = mobile ? '←' : '← 上一页';
             prevBtn.disabled = _artistPage <= 1;
             prevBtn.addEventListener('click', () => { _artistPage--; this.renderGrid(); });
 
             const info = document.createElement('span');
             info.className = 'page-info';
-            info.textContent = `第 ${_artistPage} / ${_artistTotalPages} 页（共 ${total || '?'} 位画师）`;
+            info.textContent = mobile
+                ? `第 ${_artistPage}/${_artistTotalPages} 页 · ${total || '?'}`
+                : `第 ${_artistPage} / ${_artistTotalPages} 页（共 ${total || '?'} 位画师）`;
 
             const nextBtn = document.createElement('button');
-            nextBtn.textContent = '下一页 →';
+            nextBtn.textContent = mobile ? '→' : '下一页 →';
             nextBtn.disabled = _artistPage >= _artistTotalPages;
             nextBtn.addEventListener('click', () => { _artistPage++; this.renderGrid(); });
 
-            const jumpWrap = document.createElement('span');
-            jumpWrap.className = 'page-jump';
-            const jumpInput = document.createElement('input');
-            jumpInput.type = 'number';
-            jumpInput.min = 1;
-            jumpInput.max = _artistTotalPages;
-            jumpInput.placeholder = '跳转';
-            jumpInput.style.width = '50px';
-            const jumpBtn = document.createElement('button');
-            jumpBtn.textContent = 'Go';
-            jumpBtn.addEventListener('click', () => {
-                const p = parseInt(jumpInput.value);
-                if (p >= 1 && p <= _artistTotalPages) { _artistPage = p; this.renderGrid(); }
-            });
-            jumpWrap.append(jumpInput, jumpBtn);
+            nav.append(prevBtn, info, nextBtn);
 
-            nav.append(prevBtn, info, nextBtn, jumpWrap);
+            if (!mobile) {
+                const jumpWrap = document.createElement('span');
+                jumpWrap.className = 'page-jump';
+                const jumpInput = document.createElement('input');
+                jumpInput.type = 'number';
+                jumpInput.min = 1;
+                jumpInput.max = _artistTotalPages;
+                jumpInput.placeholder = '跳转';
+                jumpInput.style.width = '50px';
+                const jumpBtn = document.createElement('button');
+                jumpBtn.textContent = 'Go';
+                jumpBtn.addEventListener('click', () => {
+                    const p = parseInt(jumpInput.value);
+                    if (p >= 1 && p <= _artistTotalPages) { _artistPage = p; this.renderGrid(); }
+                });
+                jumpWrap.append(jumpInput, jumpBtn);
+                nav.append(jumpWrap);
+            }
+
             this.gridEl.parentElement.insertBefore(nav, this.gridEl.nextSibling);
         }
 
@@ -9038,7 +9045,7 @@
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.43');
+        console.log('[ComfyUI Web] v4.44');
         await loadTags();
         renderHistory();
         setupTagPickers();

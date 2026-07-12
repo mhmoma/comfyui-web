@@ -3292,32 +3292,32 @@ body.inpaint-open {
     }
 
     .header {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
-        gap: 6px 8px;
-        padding: 8px 10px;
-        padding-top: calc(8px + env(safe-area-inset-top, 0px));
+        gap: 4px;
+        padding: 6px 8px;
+        padding-top: calc(6px + env(safe-area-inset-top, 0px));
         max-width: 100%;
-        overflow: hidden;
+        overflow-x: auto;
+        overflow-y: hidden;
         flex-shrink: 0;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .header::-webkit-scrollbar {
+        display: none;
     }
 
     .header h1 {
-        flex: 1 1 auto;
-        width: auto;
-        min-width: 0;
-        font-size: 1rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin: 0;
+        display: none !important;
     }
 
     .header .site-home-link {
-        width: 32px;
-        height: 32px;
-        margin-right: 6px;
-        font-size: 1rem;
+        width: 30px;
+        height: 30px;
+        margin-right: 2px;
+        font-size: 0.95rem;
         flex-shrink: 0;
     }
 
@@ -3327,7 +3327,7 @@ body.inpaint-open {
 
     .conn-status {
         flex-shrink: 0;
-        padding: 4px 8px;
+        padding: 3px 6px;
     }
 
     .conn-text {
@@ -3335,19 +3335,29 @@ body.inpaint-open {
     }
 
     .header .btn-icon {
-        padding: 6px;
-        min-width: 36px;
-        min-height: 36px;
-        font-size: 1.2rem;
+        padding: 4px;
+        min-width: 30px;
+        min-height: 30px;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+    }
+
+    .header .btn-comfy-native {
+        font-size: 10px;
+        padding: 0 5px;
+        min-width: 28px;
+        min-height: 30px;
+        flex-shrink: 0;
     }
 
     .profile-quick-select {
-        max-width: 88px;
+        max-width: 64px;
         min-width: 0;
-        flex: 1 1 auto;
-        font-size: 0.72rem;
-        padding: 4px 6px;
-        margin-left: auto;
+        flex: 0 1 auto;
+        font-size: 0.62rem;
+        padding: 3px 4px;
+        margin-left: 0;
+        flex-shrink: 0;
     }
 
     .header > a.btn-discord,
@@ -3680,25 +3690,39 @@ body.inpaint-open {
         overflow-y: auto;
     }
 
-    .artist-pagination {
-        flex-wrap: wrap;
+    .main.mobile-tab-artists .artist-pagination {
+        flex-wrap: nowrap;
         justify-content: center;
-        gap: 6px;
+        gap: 4px;
         max-width: 100%;
-        padding: 8px;
+        padding: 4px 8px 6px;
         box-sizing: border-box;
+        border-top: 1px solid var(--border);
+        background: var(--bg-panel);
+        flex-shrink: 0;
     }
 
-    .artist-pagination .page-info {
-        width: 100%;
+    .main.mobile-tab-artists .artist-pagination .page-info {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         text-align: center;
-        white-space: normal;
-        word-break: break-word;
+        font-size: 10px;
+        word-break: normal;
     }
 
-    .artist-pagination .page-jump {
-        flex-wrap: wrap;
-        justify-content: center;
+    .main.mobile-tab-artists .artist-pagination .page-jump {
+        display: none !important;
+    }
+
+    .main.mobile-tab-artists .artist-pagination button {
+        padding: 4px 8px;
+        font-size: 11px;
+        min-height: 32px;
+        flex-shrink: 0;
     }
 
     .char-series-pagination {
