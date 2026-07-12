@@ -9045,7 +9045,7 @@
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.46');
+        console.log('[ComfyUI Web] v4.47');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9596,6 +9596,8 @@
         _inited: false,
 
         isMobile() {
+            const nav = document.getElementById('mobile-nav');
+            if (nav && getComputedStyle(nav).display !== 'none') return true;
             return window.matchMedia('(max-width: 640px)').matches;
         },
 
@@ -9626,7 +9628,6 @@
         },
 
         open(editor, idx) {
-            if (!this.isMobile()) return;
             this.init();
             if (!this.sheet) return;
             this.editor = editor;
@@ -11010,6 +11011,12 @@
             allEditors.push(editor);
         });
 
+        window.addEventListener('resize', () => {
+            allEditors.forEach(ed => ed.render());
+        });
+
+        MobilePromptTagSheet.init();
+
         const toggleBtn = document.getElementById('btn-translate-toggle');
         if (toggleBtn) {
             toggleBtn.classList.toggle('active', TagTranslator.showChinese);
@@ -11042,12 +11049,26 @@
 
             this.textarea.addEventListener('blur', (e) => {
                 if (this.container.contains(e.relatedTarget)) return;
+                // 手机点标签时 blur 会抢先触发并重绘 DOM，导致点击丢失
+                if (MobilePromptTagSheet.isMobile()) return;
                 this.parseAndRender();
             });
 
             this.textarea.addEventListener('input', () => {
                 if (!this.suppressSync) this.parseAndRender();
             });
+
+            this._onTagPointerDown = (e) => {
+                if (!MobilePromptTagSheet.isMobile()) return;
+                const tagEl = e.target.closest('.prompt-tag');
+                if (!tagEl || !this.container.contains(tagEl)) return;
+                if (e.target.closest('.prompt-tag-btn')) return;
+                const idx = parseInt(tagEl.dataset.idx, 10);
+                if (Number.isNaN(idx)) return;
+                e.preventDefault();
+                MobilePromptTagSheet.open(this, idx);
+            };
+            this.container.addEventListener('pointerdown', this._onTagPointerDown);
 
             this.container.addEventListener('dragover', (e) => e.preventDefault());
             this.container.addEventListener('drop', (e) => e.preventDefault());
@@ -11154,12 +11175,7 @@
             actions.append(btnUp, btnDown, btnCopy, btnDel);
             el.appendChild(actions);
 
-            if (isMobileTap) {
-                el.addEventListener('click', (e) => {
-                    if (e.target.closest('.prompt-tag-btn')) return;
-                    MobilePromptTagSheet.open(this, idx);
-                });
-            } else {
+            if (!isMobileTap) {
                 el.addEventListener('dragstart', (e) => {
                     this.dragIdx = idx;
                     el.classList.add('dragging');
