@@ -923,6 +923,9 @@
         'chk-speedup', 'chk-vae', 'chk-freeu', 'chk-controlnet', 'chk-ipadapter',
     ];
 
+    /** FaceDetailer 的 bbox_detector 必须用检测模型，不能用 segm 分割模型 */
+    const ADETAILER_DEFAULT_MODEL = 'bbox/face_yolov8m.pt';
+
     const ARCH_MODULE_CHECKBOX_IDS = [
         'chk-speedup', 'chk-vae', 'chk-lora', 'chk-hires', 'chk-freeu',
         'chk-controlnet', 'chk-img2img', 'chk-regional', 'chk-post-preview', 'chk-adetailer', 'chk-ipadapter',
@@ -948,6 +951,22 @@
     function stripSdxlOnlyCheckboxes(checkboxes) {
         if (!checkboxes) return;
         SDXL_ONLY_CHECKBOX_IDS.forEach(id => { checkboxes[id] = false; });
+    }
+
+    function resolveAdetailerModelName(raw) {
+        const val = String(raw || '').trim();
+        if (!val) return ADETAILER_DEFAULT_MODEL;
+        // 分割模型不能作为 FaceDetailer 的 bbox 检测器
+        if (val.startsWith('segm/')) return ADETAILER_DEFAULT_MODEL;
+        return val;
+    }
+
+    function ensureAdetailerDefaultModel() {
+        if (!dom.selAdetailerModel) return;
+        const fixed = resolveAdetailerModelName(dom.selAdetailerModel.value);
+        if (dom.selAdetailerModel.value !== fixed) {
+            setSelectIfExists(dom.selAdetailerModel, fixed);
+        }
     }
 
     function syncArchIsolation(opts = {}) {
@@ -1051,7 +1070,7 @@
             const el = document.getElementById(id);
             if (el) inputs[id] = el.value;
         });
-        return { loras: [], regions: [], checkboxes, selects: {}, inputs };
+        return { loras: [], regions: [], checkboxes, selects: { 'sel-adetailer-model': ADETAILER_DEFAULT_MODEL }, inputs };
     }
 
     function captureArchModules() {
@@ -1076,6 +1095,10 @@
         _profileWriteMap(data.checkboxes);
         _profileWriteMap(data.selects);
         _profileWriteMap(data.inputs);
+        if (!data.selects?.['sel-adetailer-model']) {
+            setSelectIfExists(dom.selAdetailerModel, ADETAILER_DEFAULT_MODEL);
+        }
+        ensureAdetailerDefaultModel();
         dom.loraList.innerHTML = '';
         loraCount = 0;
         (data.loras || []).forEach(l => {
@@ -2567,7 +2590,7 @@
             const detectorId = id();
             nodes[detectorId] = {
                 class_type: "UltralyticsDetectorProvider",
-                inputs: { model_name: dom.selAdetailerModel.value },
+                inputs: { model_name: resolveAdetailerModelName(dom.selAdetailerModel?.value) },
             };
 
             const detailerId = id();
