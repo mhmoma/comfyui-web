@@ -5432,6 +5432,26 @@ body.inpaint-open {
     padding: 6px 12px;
 }
 
+.meta-lora-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.btn-meta-lora-toggle {
+    margin: 6px 0 4px;
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
+.meta-field-lora-inactive .meta-field-value {
+    opacity: 0.55;
+}
+
+.meta-field-lora-inactive .meta-field-label {
+    opacity: 0.55;
+}
+
 .meta-raw {
     margin-top: 10px;
 }

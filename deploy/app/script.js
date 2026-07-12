@@ -11219,20 +11219,42 @@
         },
 
         extractComfyLoras(prompt, wfMap) {
-            const loras = [];
+            return this.extractUsedComfyLoras(prompt, wfMap);
+        },
 
-            const addFromManager = (list) => {
-                if (!Array.isArray(list)) return;
-                list.forEach(l => {
-                    if (!l?.name || l.active === false) return;
-                    const w = parseFloat(l.strength ?? l.strength_model ?? l.clipStrength ?? 1);
-                    loras.push({
-                        name: l.name.split('/').pop() || l.name,
-                        fullName: l.name,
-                        weight: Number.isFinite(w) ? w : 1,
-                    });
-                });
+        dedupeLoras(loras) {
+            const deduped = [];
+            const seen = new Set();
+            for (const l of loras) {
+                const key = (l.fullName || l.name).toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                deduped.push(l);
+            }
+            return deduped;
+        },
+
+        loraEntryFromName(fullName, weight) {
+            const w = parseFloat(weight);
+            return {
+                name: fullName.split('/').pop() || fullName,
+                fullName,
+                weight: Number.isFinite(w) ? w : 1,
             };
+        },
+
+        extractLorasFromTextField(text, out) {
+            if (typeof text !== 'string' || !text.includes('<lora:')) return;
+            const loraRegex = /<lora:([^:>]+):([^>]+)>/gi;
+            let match;
+            while ((match = loraRegex.exec(text)) !== null) {
+                out.push(this.loraEntryFromName(match[1].trim(), match[2]));
+            }
+        },
+
+        extractUsedComfyLoras(prompt, wfMap) {
+            const loras = [];
+            let hasManagerTextLoras = false;
 
             for (const node of Object.values(prompt)) {
                 const ct = node.class_type || '';
@@ -11242,30 +11264,62 @@
                     const loraName = inputs.lora_name;
                     const strength = parseFloat(inputs.strength_model ?? inputs.strength ?? 1);
                     if (typeof loraName === 'string' && loraName) {
-                        loras.push({
-                            name: loraName.split('/').pop() || loraName,
-                            fullName: loraName,
-                            weight: Number.isFinite(strength) ? strength : 1,
-                        });
+                        loras.push(this.loraEntryFromName(loraName, strength));
                     }
                 }
 
                 if (ct === 'Lora Loader (LoraManager)') {
-                    addFromManager(inputs.loras?.__value__);
                     if (typeof inputs.text === 'string' && inputs.text.includes('<lora:')) {
-                        const tmp = { loras: [], positive: inputs.text };
-                        this.extractLoras(tmp);
-                        (tmp.loras || []).forEach(l => loras.push(l));
+                        hasManagerTextLoras = true;
+                        this.extractLorasFromTextField(inputs.text, loras);
                     }
                 }
 
                 if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
                     const loraStr = inputs.lora_str || inputs.temp_lora_str || '';
-                    if (typeof loraStr === 'string' && loraStr.includes('<lora:')) {
-                        const tmp = { loras: [], positive: loraStr };
-                        this.extractLoras(tmp);
-                        (tmp.loras || []).forEach(l => loras.push(l));
-                    }
+                    this.extractLorasFromTextField(loraStr, loras);
+                }
+
+                if (ct.includes('TriggerWord') || ct.includes('LoraManager')) {
+                    const msg = inputs.orinalMessage || inputs.originalMessage;
+                    this.extractLorasFromTextField(msg, loras);
+                }
+            }
+
+            if (!hasManagerTextLoras) {
+                for (const node of Object.values(prompt)) {
+                    if (node.class_type !== 'Lora Loader (LoraManager)') continue;
+                    const list = node.inputs?.loras?.__value__;
+                    if (!Array.isArray(list)) continue;
+                    list.forEach(l => {
+                        if (!l?.name || l.active === false) return;
+                        loras.push(this.loraEntryFromName(
+                            l.name,
+                            l.strength ?? l.strength_model ?? l.clipStrength ?? 1
+                        ));
+                    });
+                }
+            }
+
+            return this.dedupeLoras(loras);
+        },
+
+        extractLibraryComfyLoras(prompt, wfMap) {
+            const loras = [];
+            const addFromManager = (list) => {
+                if (!Array.isArray(list)) return;
+                list.forEach(l => {
+                    if (!l?.name) return;
+                    loras.push(this.loraEntryFromName(
+                        l.name,
+                        l.strength ?? l.strength_model ?? l.clipStrength ?? 1
+                    ));
+                });
+            };
+
+            for (const node of Object.values(prompt)) {
+                if (node.class_type === 'Lora Loader (LoraManager)') {
+                    addFromManager(node.inputs?.loras?.__value__);
                 }
             }
 
@@ -11278,15 +11332,7 @@
                 }
             }
 
-            const deduped = [];
-            const seen = new Set();
-            for (const l of loras) {
-                const key = (l.fullName || l.name).toLowerCase();
-                if (seen.has(key)) continue;
-                seen.add(key);
-                deduped.push(l);
-            }
-            return deduped;
+            return this.dedupeLoras(loras);
         },
 
         tokenJsonToText(val) {
@@ -11730,7 +11776,8 @@
 
                 this.applyComfyLiteralFallback(prompt, result);
 
-                result.loras = this.extractComfyLoras(prompt, wfMap);
+                result.loras = this.extractUsedComfyLoras(prompt, wfMap);
+                result.lorasLibrary = this.extractLibraryComfyLoras(prompt, wfMap);
                 this.extractLoras(result);
             } catch {}
             return result;
@@ -11896,6 +11943,38 @@
         URL.revokeObjectURL(url);
     }
 
+    function renderMetaLoraRows(container, loras, usedKeys, showingAll) {
+        container.innerHTML = '';
+        loras.forEach((lora, idx) => {
+            const key = (lora.fullName || lora.name).toLowerCase();
+            const row = document.createElement('div');
+            row.className = 'meta-field meta-field-lora-item';
+            if (showingAll && !usedKeys.has(key)) row.classList.add('meta-field-lora-inactive');
+
+            const lbl = document.createElement('span');
+            lbl.className = 'meta-field-label';
+            lbl.textContent = `#${idx + 1}`;
+
+            const val = document.createElement('span');
+            val.className = 'meta-field-value';
+            let label = `${lora.name} (${lora.weight})`;
+            if (showingAll && usedKeys.has(key)) label += ' · 使用中';
+            val.textContent = label;
+            val.title = lora.fullName || lora.name;
+
+            const link = document.createElement('a');
+            link.className = 'meta-civitai-link';
+            link.href = civitaiSearchUrl(lora.fullName || lora.name, 'LORA');
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'C站下载';
+            link.title = `在 Civitai 搜索 ${lora.name}`;
+
+            row.append(lbl, val, link);
+            container.appendChild(row);
+        });
+    }
+
     function setupMetaImport() {
         const btn = document.getElementById('btn-import-meta');
         const inp = document.getElementById('inp-import-meta');
@@ -11991,32 +12070,43 @@
                     fields.appendChild(row);
                 });
 
-                if (parsedData.loras?.length) {
+                const usedLoras = parsedData.loras || [];
+                const libraryLoras = parsedData.lorasLibrary || [];
+                const usedKeys = new Set(usedLoras.map(l => (l.fullName || l.name).toLowerCase()));
+                const hasLibraryExtra = libraryLoras.some(l => !usedKeys.has((l.fullName || l.name).toLowerCase()));
+
+                if (usedLoras.length || libraryLoras.length) {
+                    let showingAll = false;
                     const loraHeader = document.createElement('div');
                     loraHeader.className = 'meta-field meta-field-lora-header';
-                    loraHeader.innerHTML = `<span class="meta-field-label">LoRA</span><span class="meta-field-value">共 ${parsedData.loras.length} 个（仅查看，点击下方链接去 C 站下载）</span>`;
-                    fields.appendChild(loraHeader);
+                    const loraListHost = document.createElement('div');
+                    loraListHost.className = 'meta-lora-list';
 
-                    parsedData.loras.forEach((lora, idx) => {
-                        const row = document.createElement('div');
-                        row.className = 'meta-field meta-field-lora-item';
-                        const lbl = document.createElement('span');
-                        lbl.className = 'meta-field-label';
-                        lbl.textContent = `#${idx + 1}`;
-                        const val = document.createElement('span');
-                        val.className = 'meta-field-value';
-                        val.textContent = `${lora.name} (${lora.weight})`;
-                        val.title = lora.fullName || lora.name;
-                        const link = document.createElement('a');
-                        link.className = 'meta-civitai-link';
-                        link.href = civitaiSearchUrl(lora.fullName || lora.name, 'LORA');
-                        link.target = '_blank';
-                        link.rel = 'noopener noreferrer';
-                        link.textContent = 'C站下载';
-                        link.title = `在 Civitai 搜索 ${lora.name}`;
-                        row.append(lbl, val, link);
-                        fields.appendChild(row);
-                    });
+                    const syncLoraView = () => {
+                        const list = showingAll ? libraryLoras : usedLoras;
+                        const title = showingAll ? 'LoRA 库（作者全部）' : 'LoRA（当前图使用）';
+                        loraHeader.innerHTML = `<span class="meta-field-label">${title}</span><span class="meta-field-value">共 ${list.length} 个</span>`;
+                        renderMetaLoraRows(loraListHost, list, usedKeys, showingAll);
+                    };
+
+                    syncLoraView();
+                    fields.appendChild(loraHeader);
+                    fields.appendChild(loraListHost);
+
+                    if (libraryLoras.length > 0 && hasLibraryExtra) {
+                        const toggleBtn = document.createElement('button');
+                        toggleBtn.type = 'button';
+                        toggleBtn.className = 'btn-secondary btn-meta-lora-toggle';
+                        toggleBtn.textContent = `查看该作者所有 LoRA (${libraryLoras.length})`;
+                        toggleBtn.addEventListener('click', () => {
+                            showingAll = !showingAll;
+                            toggleBtn.textContent = showingAll
+                                ? `仅看当前图使用的 LoRA (${usedLoras.length})`
+                                : `查看该作者所有 LoRA (${libraryLoras.length})`;
+                            syncLoraView();
+                        });
+                        fields.appendChild(toggleBtn);
+                    }
                 }
 
                 if (downloads && (parsedData.comfyWorkflow || parsedData.comfyPrompt)) {
