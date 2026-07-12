@@ -4400,6 +4400,13 @@ body.inpaint-open {
         flex: 1;
         max-height: none;
         min-height: 44px;
+        align-items: flex-start;
+        align-content: flex-start;
+    }
+
+    .main.mobile-tab-create .prompt-tag {
+        align-self: flex-start;
+        height: auto;
     }
 
     .main.mobile-tab-create .result-area {
