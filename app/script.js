@@ -11252,6 +11252,11 @@
 
                 if (ct === 'Lora Loader (LoraManager)') {
                     addFromManager(inputs.loras?.__value__);
+                    if (typeof inputs.text === 'string' && inputs.text.includes('<lora:')) {
+                        const tmp = { loras: [], positive: inputs.text };
+                        this.extractLoras(tmp);
+                        (tmp.loras || []).forEach(l => loras.push(l));
+                    }
                 }
 
                 if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
@@ -11522,6 +11527,61 @@
             return score;
         },
 
+        applyComfyLiteralFallback(prompt, result) {
+            for (const node of Object.values(prompt)) {
+                const ct = node.class_type || '';
+                const inputs = node.inputs || {};
+
+                if (ct === 'KSampler' || ct === 'KSampler (Efficient)' || ct === 'KSamplerAdvanced') {
+                    if (!result.seed && inputs.seed != null && !this.isNodeRef(inputs.seed)) {
+                        result.seed = String(inputs.seed);
+                    }
+                    if (result.steps == null && typeof inputs.steps === 'number') result.steps = inputs.steps;
+                    if (result.cfg == null && typeof inputs.cfg === 'number') result.cfg = inputs.cfg;
+                    if (!result.sampler && typeof inputs.sampler_name === 'string') result.sampler = inputs.sampler_name;
+                    if (!result.scheduler && typeof inputs.scheduler === 'string') result.scheduler = inputs.scheduler;
+                    if (result.denoise == null && typeof inputs.denoise === 'number') result.denoise = inputs.denoise;
+                }
+
+                if (ct === 'CheckpointLoaderSimple' && !result.model && typeof inputs.ckpt_name === 'string') {
+                    result.model = inputs.ckpt_name;
+                }
+
+                if (ct === 'ResolutionMasterSimplify') {
+                    if (!result.width && typeof inputs.width === 'number') result.width = inputs.width;
+                    if (!result.height && typeof inputs.height === 'number') result.height = inputs.height;
+                }
+
+                if (ct === 'EmptyLatentImage') {
+                    if (!result.width && typeof inputs.width === 'number') result.width = inputs.width;
+                    if (!result.height && typeof inputs.height === 'number') result.height = inputs.height;
+                }
+
+                if (ct === 'PromptSelector' && typeof inputs.selected_prompts === 'string') {
+                    const extra = inputs.selected_prompts.trim();
+                    if (extra) {
+                        if (!result.positive) result.positive = extra;
+                        else if (!result.positive.includes(extra.slice(0, 32))) {
+                            result.positive = `${result.positive}, ${extra}`;
+                        }
+                    }
+                }
+
+                if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
+                    for (const k of ['positive', 'negative', 'temp_str']) {
+                        const raw = inputs[k];
+                        if (typeof raw !== 'string' || !raw.trim()) continue;
+                        const t = this.tokenJsonToText(raw).trim();
+                        if (/bad quality|worst quality|anatomical nonsense|bad_hands/i.test(t)) {
+                            if (!result.negative) result.negative = t;
+                        } else if (!result.positive || t.length > result.positive.length) {
+                            result.positive = t;
+                        }
+                    }
+                }
+            }
+        },
+
         parseComfyUI(promptStr, workflowStr) {
             const result = { source: 'ComfyUI' };
             try {
@@ -11549,9 +11609,16 @@
                         for (const [k, kind] of [['temp_str', 'pos'], ['positive', 'pos'], ['negative', 'neg']]) {
                             const t = inputs[k];
                             if (typeof t === 'string' && t.trim()) {
-                                textCandidates.push({ text: this.tokenJsonToText(t), kind, len: t.length });
+                                const text = this.tokenJsonToText(t);
+                                const isNeg = kind === 'neg' || /bad quality|worst quality|anatomical nonsense|bad_hands/i.test(text);
+                                textCandidates.push({ text, kind: isNeg ? 'neg' : 'pos', len: text.length });
                             }
                         }
+                    }
+
+                    if (ct === 'PromptSelector' && typeof inputs.selected_prompts === 'string' && inputs.selected_prompts.trim()) {
+                        const text = inputs.selected_prompts.trim();
+                        textCandidates.push({ text, kind: 'pos', len: text.length });
                     }
 
                     if (ct === 'CLIPTextEncode' && typeof inputs.text === 'string' && inputs.text.trim()) {
@@ -11660,6 +11727,8 @@
                         result.model = checkpoints.find(m => !/branch/i.test(m)) || checkpoints[0];
                     }
                 }
+
+                this.applyComfyLiteralFallback(prompt, result);
 
                 result.loras = this.extractComfyLoras(prompt, wfMap);
                 this.extractLoras(result);
