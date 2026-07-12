@@ -40,3 +40,14 @@ alwaysApply: true
 
 - 用户明确要求“更新完成后自动提交并推送”，默认执行，不重复询问是否推送。
 - 仅在存在高风险操作或明显冲突（如目标分支/远程不一致）时再中断并确认。
+
+## 6) 更新完成后自动发布流程（必须执行）
+
+凡完成前端/部署相关代码变更后，**同一回合内自动执行**以下步骤，无需再次询问用户：
+
+1. **同步 deploy**：`npm run sync:deploy`（等价于 `node scripts/sync-deploy.js`）。
+2. **版本号**：按 §4 递增 `app/`、`deploy/` 对应版本与静态资源 `?v=` 参数，并更新 `deploy-and-d1.mdc` 版本历史。
+3. **提交**：`git add` 相关变更（至少含 `app/`、`deploy/`、`.cursor/rules/deploy-and-d1.mdc`），写 concise commit message 后 `git commit`。
+4. **推送**：按 §3 默认代理命令 `git push origin main`；失败再用备用无代理命令。
+
+仅改资讯 Markdown 时改用 `npm run build`（含 build:news + sync:deploy），其余步骤同上。
