@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.110
+> **部署版本**: 1.113
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -326,5 +326,8 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.107 | 2026-07-10 | 局部重绘依赖与文案对齐 | 安装脚本与 Anima 节点清单对齐（含 FLS/CropAndStitch/essentials）；清理 Fooocus 残留 UI 文案（`app v4.26` / `script.js?v=421`）。 |
 | 1.108 | 2026-07-10 | 恢复生成过程采样预览 | `/prompt` 增加 `extra_data.preview_method=latent2rgb`、WS 协商 `supports_preview_metadata`；ComfyUI 启动脚本加 `--preview-method auto`（`app v4.27` / `script.js?v=422`）。 |
 | 1.109 | 2026-07-10 | 顶栏官方界面入口 | 新增「官方」按钮，一键新标签打开设置中的 ComfyUI 地址（默认 `127.0.0.1:8188`）（`app v4.28` / `style.css?v=422` / `script.js?v=423`）。 |
+| 1.113 | 2026-07-12 | 导入参数改为查看下载 | LoRA 仅展示并跳转 Civitai 搜索；工作流提供 JSON 下载按钮；一键填入不再自动导入 LoRA/工作流（`app v4.32` / `script.js?v=427` / `style.css?v=424`）。 |
+| 1.112 | 2026-07-12 | 导入参数 LoRA+工作流 | 元数据导入新增 LoRA 全量提取（LoraLoader/LoraManager/提示词标签）与完整 ComfyUI 工作流一键导入工作流模式（`app v4.31` / `script.js?v=426` / `style.css?v=423`）。 |
+| 1.111 | 2026-07-12 | ComfyUI 复杂工作流元数据解析 | 导入参数支持节点引用解析（Context/ParameterBreak/WeiLinPromptUI 等）+ workflow widgets_values 回退，修复复杂工作流只能读到 `477,0` 类引用的问题（`app v4.30` / `script.js?v=425`）。 |
 | 1.110 | 2026-07-10 | 按日期分文件夹存图 | SaveImage `filename_prefix` 自动加 `YYYY-MM-DD/` 子目录，主生成/后处理/局部重绘/ControlNet 预览均生效（`app v4.29` / `script.js?v=424`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |

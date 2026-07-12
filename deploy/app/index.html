@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.29</title>
-    <link rel="stylesheet" href="style.css?v=422">
+    <title>生图工具 · ComfyUI Web v4.31</title>
+    <link rel="stylesheet" href="style.css?v=423">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.29</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.31</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1434,11 +1434,13 @@
     <div id="modal-meta" class="modal hidden">
         <div class="modal-content modal-meta-content">
             <h2>图片参数解析</h2>
+            <p class="meta-hint">LoRA / 工作流仅查看与下载，不自动导入；「一键填入」只写入提示词与采样参数</p>
             <div id="meta-source" class="meta-source"></div>
             <div id="meta-preview" class="meta-preview">
                 <img id="meta-preview-img" alt="预览">
             </div>
             <div id="meta-fields" class="meta-fields"></div>
+            <div id="meta-downloads" class="meta-downloads"></div>
             <div id="meta-raw" class="meta-raw hidden">
                 <div class="meta-raw-toggle" id="meta-raw-toggle">▶ 原始数据</div>
                 <pre id="meta-raw-content" class="hidden"></pre>
@@ -1450,6 +1452,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=424"></script>
+    <script src="script.js?v=426"></script>
 </body>
 </html>

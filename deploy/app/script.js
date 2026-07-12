@@ -11189,19 +11189,99 @@
         },
 
         extractLoras(result) {
-            const loraRegex = /<lora:([^:>]+):([\d.]+)>/g;
-            const tiRegex = /\b(embedding:)?([a-zA-Z0-9_-]+\.(?:pt|safetensors))\b/g;
-            const loras = [];
+            const loraRegex = /<lora:([^:>]+):([\d.]+)>/gi;
+            const loras = result.loras ? [...result.loras] : [];
+            const seen = new Set(loras.map(l => (l.fullName || l.name).toLowerCase()));
+
+            const addLora = (name, weight, fullName) => {
+                if (!name) return;
+                const key = (fullName || name).toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                loras.push({
+                    name: name.split('/').pop() || name,
+                    fullName: fullName || name,
+                    weight: Number.isFinite(weight) ? weight : 1,
+                });
+            };
+
             for (const field of ['positive', 'negative']) {
                 const text = result[field];
                 if (!text) continue;
                 let match;
                 while ((match = loraRegex.exec(text)) !== null) {
-                    loras.push({ name: match[1], weight: parseFloat(match[2]) });
+                    addLora(match[1], parseFloat(match[2]), match[1]);
                 }
                 loraRegex.lastIndex = 0;
             }
+
             if (loras.length > 0) result.loras = loras;
+        },
+
+        extractComfyLoras(prompt, wfMap) {
+            const loras = [];
+
+            const addFromManager = (list) => {
+                if (!Array.isArray(list)) return;
+                list.forEach(l => {
+                    if (!l?.name || l.active === false) return;
+                    const w = parseFloat(l.strength ?? l.strength_model ?? l.clipStrength ?? 1);
+                    loras.push({
+                        name: l.name.split('/').pop() || l.name,
+                        fullName: l.name,
+                        weight: Number.isFinite(w) ? w : 1,
+                    });
+                });
+            };
+
+            for (const node of Object.values(prompt)) {
+                const ct = node.class_type || '';
+                const inputs = node.inputs || {};
+
+                if (ct === 'LoraLoader' || ct === 'LoraLoaderModelOnly') {
+                    const loraName = inputs.lora_name;
+                    const strength = parseFloat(inputs.strength_model ?? inputs.strength ?? 1);
+                    if (typeof loraName === 'string' && loraName) {
+                        loras.push({
+                            name: loraName.split('/').pop() || loraName,
+                            fullName: loraName,
+                            weight: Number.isFinite(strength) ? strength : 1,
+                        });
+                    }
+                }
+
+                if (ct === 'Lora Loader (LoraManager)') {
+                    addFromManager(inputs.loras?.__value__);
+                }
+
+                if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
+                    const loraStr = inputs.lora_str || inputs.temp_lora_str || '';
+                    if (typeof loraStr === 'string' && loraStr.includes('<lora:')) {
+                        const tmp = { loras: [], positive: loraStr };
+                        this.extractLoras(tmp);
+                        (tmp.loras || []).forEach(l => loras.push(l));
+                    }
+                }
+            }
+
+            if (wfMap) {
+                for (const wfNode of Object.values(wfMap)) {
+                    if (wfNode?.type !== 'Lora Loader (LoraManager)') continue;
+                    const wv = wfNode.widgets_values;
+                    if (!Array.isArray(wv) || !wv[0]?.__value__) continue;
+                    addFromManager(wv[0].__value__);
+                }
+            }
+
+            const deduped = [];
+            const seen = new Set();
+            for (const l of loras) {
+                const key = (l.fullName || l.name).toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                deduped.push(l);
+            }
+            return deduped;
         },
 
         tokenJsonToText(val) {
@@ -11218,47 +11298,356 @@
             } catch { return val; }
         },
 
-        parseComfyUI(promptStr, workflowStr) {
-            const result = { source: 'ComfyUI' };
-            const loras = [];
+        isNodeRef(val) {
+            return Array.isArray(val) && val.length === 2 && typeof val[0] === 'string';
+        },
+
+        buildWorkflowMap(workflowStr) {
+            if (!workflowStr) return null;
             try {
-                const prompt = JSON.parse(promptStr);
-                for (const [nodeId, node] of Object.entries(prompt)) {
-                    const ct = node.class_type;
-                    if (ct === 'CLIPTextEncode' || ct === 'WeiLinPromptUIWithoutLora') {
-                        let txt = node.inputs?.text || node.inputs?.temp_str || '';
-                        txt = this.tokenJsonToText(txt);
-                        if (!result.positive) result.positive = txt;
-                        else if (!result.negative) result.negative = txt;
+                const wf = JSON.parse(workflowStr);
+                const map = {};
+                for (const n of (wf.nodes || [])) map[String(n.id)] = n;
+                return map;
+            } catch { return null; }
+        },
+
+        getWorkflowNode(wfMap, nodeId) {
+            if (!wfMap || !nodeId) return null;
+            return wfMap[nodeId]
+                || wfMap[String(Number(nodeId))]
+                || wfMap[nodeId.split(':').pop()]
+                || null;
+        },
+
+        getWidgetValue(wfMap, nodeId, slot) {
+            const wfNode = this.getWorkflowNode(wfMap, nodeId);
+            const wv = wfNode?.widgets_values;
+            if (!Array.isArray(wv)) return null;
+            if (slot == null) return wv;
+            return slot < wv.length ? wv[slot] : null;
+        },
+
+        resolvePromptValue(val, prompt, wfMap, ctx = {}) {
+            const visited = ctx.visited || new Set();
+            const wantSlot = ctx.wantSlot;
+
+            if (val == null) return null;
+            if (!this.isNodeRef(val)) {
+                if (typeof val === 'string') return this.tokenJsonToText(val);
+                return val;
+            }
+
+            const [nodeId, slot] = val;
+            const effSlot = wantSlot != null ? wantSlot : slot;
+            const visitKey = `${nodeId}#${effSlot}`;
+            if (visited.has(visitKey)) return null;
+            visited.add(visitKey);
+
+            const node = prompt[nodeId] || prompt[nodeId.split(':').pop()];
+            if (!node) return this.getWidgetValue(wfMap, nodeId, effSlot);
+
+            const ct = node.class_type || '';
+            const inputs = node.inputs || {};
+
+            if (ct === 'KSampler Config (rgthree)') {
+                const keys = ['steps_total', 'refiner_step', 'cfg', 'sampler_name', 'scheduler'];
+                const key = keys[effSlot];
+                if (key && inputs[key] != null) {
+                    return this.resolvePromptValue(inputs[key], prompt, wfMap, { visited });
+                }
+            }
+
+            if (ct === 'ParameterBreak') {
+                if (inputs.parameters != null) {
+                    return this.resolvePromptValue(inputs.parameters, prompt, wfMap, { visited, wantSlot: effSlot });
+                }
+            }
+
+            if (ct === 'ParameterControlPanel') {
+                const wv = this.getWidgetValue(wfMap, nodeId, effSlot);
+                if (wv != null && wv !== '') return wv;
+            }
+
+            if (ct === 'Context (rgthree)') {
+                const ctxKeys = ['base_ctx', 'model', 'clip', 'vae', 'positive', 'negative', 'latent', 'images'];
+                const key = ctxKeys[effSlot];
+                if (key && inputs[key] != null) {
+                    const v = inputs[key];
+                    if (key === 'base_ctx') {
+                        return this.resolvePromptValue(v, prompt, wfMap, { visited, wantSlot: effSlot });
                     }
-                    if (ct === 'KSampler' || ct === 'KSampler (Efficient)' || ct === 'KSamplerAdvanced') {
-                        const seedVal = node.inputs?.seed ?? node.inputs?.noise_seed;
-                        if (seedVal != null && !Array.isArray(seedVal)) result.seed = String(seedVal);
-                        if (node.inputs?.steps && typeof node.inputs.steps === 'number') result.steps = node.inputs.steps;
-                        if (node.inputs?.cfg && typeof node.inputs.cfg === 'number') result.cfg = node.inputs.cfg;
-                        if (typeof node.inputs?.sampler_name === 'string') result.sampler = node.inputs.sampler_name;
-                        if (typeof node.inputs?.scheduler === 'string') result.scheduler = node.inputs.scheduler;
-                        if (node.inputs?.denoise && typeof node.inputs.denoise === 'number') result.denoise = node.inputs.denoise;
-                    }
-                    if (ct === 'EmptyLatentImage') {
-                        if (typeof node.inputs?.width === 'number') result.width = node.inputs.width;
-                        if (typeof node.inputs?.height === 'number') result.height = node.inputs.height;
-                    }
-                    if (ct === 'CheckpointLoaderSimple' || ct === 'UNETLoader') {
-                        result.model = node.inputs?.ckpt_name || node.inputs?.unet_name || '';
-                    }
-                    if (ct === 'LoraLoader' || ct === 'LoraLoaderModelOnly') {
-                        const loraName = node.inputs?.lora_name;
-                        const strength = node.inputs?.strength_model ?? node.inputs?.strength ?? 1;
-                        if (loraName) loras.push({ name: loraName, weight: strength });
+                    return this.resolvePromptValue(v, prompt, wfMap, { visited });
+                }
+                if (inputs.base_ctx != null) {
+                    return this.resolvePromptValue(inputs.base_ctx, prompt, wfMap, { visited, wantSlot: effSlot });
+                }
+            }
+
+            if (ct === 'Context Switch (rgthree)') {
+                for (const [k, v] of Object.entries(inputs)) {
+                    if (k.startsWith('ctx_')) {
+                        const r = this.resolvePromptValue(v, prompt, wfMap, { visited: new Set(visited), wantSlot: effSlot });
+                        if (this._looksLikePrompt(r)) return r;
                     }
                 }
-            } catch {}
-            if (loras.length > 0) result.loras = loras;
-            if (workflowStr) {
-                try { result.workflow = JSON.parse(workflowStr); } catch {}
             }
-            this.extractLoras(result);
+
+            if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
+                for (const k of ['temp_str', 'positive', 'negative']) {
+                    const t = inputs[k];
+                    if (typeof t === 'string' && t.trim()) return this.tokenJsonToText(t);
+                }
+            }
+
+            if (ct === 'CLIPTextEncode') {
+                if (inputs.text != null) {
+                    return this.resolvePromptValue(inputs.text, prompt, wfMap, { visited });
+                }
+            }
+
+            if (ct === 'easy promptConcat' || ct === 'PromptConcat') {
+                const p1 = this.resolvePromptValue(inputs.prompt1 || inputs.a, prompt, wfMap, { visited: new Set(visited) });
+                const p2 = this.resolvePromptValue(inputs.prompt2 || inputs.b, prompt, wfMap, { visited: new Set(visited) });
+                const sep = inputs.separator || ', ';
+                return [p1, p2].filter(v => v != null && v !== '').map(String).join(typeof sep === 'string' ? sep : ', ');
+            }
+
+            if (ct === 'easy ifElse') {
+                for (const k of ['on_true', 'on_false', 'true', 'false']) {
+                    if (inputs[k] != null) {
+                        const r = this.resolvePromptValue(inputs[k], prompt, wfMap, { visited: new Set(visited) });
+                        if (typeof r === 'string' && r.trim()) return r;
+                    }
+                }
+            }
+
+            if (ct === 'Any Switch (rgthree)') {
+                for (const [k, v] of Object.entries(inputs)) {
+                    if (k.startsWith('any_')) {
+                        const r = this.resolvePromptValue(v, prompt, wfMap, { visited: new Set(visited) });
+                        if (typeof r === 'string' && r.trim()) return r;
+                        if (typeof r === 'number') return r;
+                    }
+                }
+            }
+
+            if (ct === 'easy cleanGpuUsed' && inputs.anything != null) {
+                return this.resolvePromptValue(inputs.anything, prompt, wfMap, { visited });
+            }
+
+            if (ct === 'StringReplace' && inputs.replace != null) {
+                const r = this.resolvePromptValue(inputs.replace, prompt, wfMap, { visited: new Set(visited) });
+                if (typeof r === 'string' && r.trim()) return r;
+            }
+
+            if (ct.includes('PromptCleaning') && inputs.string != null) {
+                return this.resolvePromptValue(inputs.string, prompt, wfMap, { visited });
+            }
+
+            if (ct.includes('TriggerWord') || ct.includes('LoraManager')) {
+                const msg = inputs.orinalMessage || inputs.originalMessage;
+                if (typeof msg === 'string' && msg.trim()) return this.tokenJsonToText(msg);
+            }
+
+            if (ct === 'ResolutionMasterSimplify') {
+                if (effSlot === 0) return inputs.width;
+                if (effSlot === 1) return inputs.height;
+            }
+
+            if (ct.includes('String') || ct === 'Text' || ct.includes('Primitive')) {
+                for (const k of ['value', 'string', 'text']) {
+                    if (typeof inputs[k] === 'string' && inputs[k].trim()) return this.tokenJsonToText(inputs[k]);
+                }
+            }
+
+            for (const k of ['orinalMessage', 'originalMessage', 'text', 'string', 'value', 'positive', 'negative', 'temp_str', 'width', 'height', 'steps_total', 'cfg', 'sampler_name', 'scheduler']) {
+                if (inputs[k] != null && !this.isNodeRef(inputs[k])) {
+                    const v = inputs[k];
+                    if (typeof v === 'string') return this.tokenJsonToText(v);
+                    return v;
+                }
+            }
+
+            const wv = this.getWidgetValue(wfMap, nodeId, effSlot);
+            if (wv != null && wv !== '') return wv;
+
+            for (const v of Object.values(inputs)) {
+                if (this.isNodeRef(v)) {
+                    const resolved = this.resolvePromptValue(v, prompt, wfMap, { visited: new Set(visited) });
+                    if (resolved != null && resolved !== '' && !this.isNodeRef(resolved)) return resolved;
+                }
+            }
+
+            return null;
+        },
+
+        coerceNumber(val) {
+            if (typeof val === 'number' && Number.isFinite(val)) return val;
+            if (typeof val === 'string' && val.trim() && !isNaN(Number(val))) return Number(val);
+            return null;
+        },
+
+        _looksLikePrompt(val) {
+            if (typeof val !== 'string') return false;
+            const s = val.trim();
+            if (s.length < 8) return false;
+            if (/\.(safetensors|ckpt|pt)$/i.test(s)) return false;
+            if (s.includes(',') || s.includes('\n') || s.split(/\s+/).length >= 3) return true;
+            return s.length >= 20;
+        },
+
+        _samplerScore(data) {
+            let score = 0;
+            if (this._looksLikePrompt(data.positive)) score += 20;
+            if (this._looksLikePrompt(data.negative)) score += 8;
+            if (data.steps != null) score += 5;
+            if (data.cfg != null) score += 3;
+            if (data.sampler) score += 2;
+            if (data.seed) score += 1;
+            return score;
+        },
+
+        parseComfyUI(promptStr, workflowStr) {
+            const result = { source: 'ComfyUI' };
+            try {
+                const prompt = JSON.parse(promptStr);
+                const wfMap = this.buildWorkflowMap(workflowStr);
+                result.comfyPrompt = prompt;
+
+                if (workflowStr) {
+                    try {
+                        result.comfyWorkflow = JSON.parse(workflowStr);
+                        result.workflowNodeCount = result.comfyWorkflow?.nodes?.length || 0;
+                    } catch {}
+                }
+
+                const samplerNodes = [];
+                const textCandidates = [];
+
+                for (const [nodeId, node] of Object.entries(prompt)) {
+                    const ct = node.class_type;
+                    const inputs = node.inputs || {};
+
+                    if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
+                        for (const [k, kind] of [['temp_str', 'pos'], ['positive', 'pos'], ['negative', 'neg']]) {
+                            const t = inputs[k];
+                            if (typeof t === 'string' && t.trim()) {
+                                textCandidates.push({ text: this.tokenJsonToText(t), kind, len: t.length });
+                            }
+                        }
+                    }
+
+                    if (ct === 'CLIPTextEncode' && typeof inputs.text === 'string' && inputs.text.trim()) {
+                        textCandidates.push({ text: this.tokenJsonToText(inputs.text), kind: 'clip', len: inputs.text.length });
+                    }
+
+                    if (ct.includes('TriggerWord') || ct.includes('LoraManager')) {
+                        const msg = inputs.orinalMessage || inputs.originalMessage;
+                        if (typeof msg === 'string' && msg.trim()) {
+                            textCandidates.push({ text: this.tokenJsonToText(msg), kind: 'pos', len: msg.length });
+                        }
+                    }
+
+                    if (ct === 'KSampler' || ct === 'KSampler (Efficient)' || ct === 'KSamplerAdvanced') {
+                        samplerNodes.push({ nodeId, node });
+                    }
+
+                    if (ct === 'EmptyLatentImage') {
+                        const w = this.coerceNumber(this.resolvePromptValue(inputs.width, prompt, wfMap));
+                        const h = this.coerceNumber(this.resolvePromptValue(inputs.height, prompt, wfMap));
+                        if (w) result.width = w;
+                        if (h) result.height = h;
+                    }
+                }
+
+                samplerNodes.sort((a, b) => {
+                    const na = parseInt(String(a.nodeId).split(':').pop(), 10) || 0;
+                    const nb = parseInt(String(b.nodeId).split(':').pop(), 10) || 0;
+                    return nb - na;
+                });
+
+                let bestSampler = null;
+                let bestScore = -1;
+
+                for (const { node } of samplerNodes) {
+                    const inputs = node.inputs || {};
+                    const candidate = {};
+
+                    const seedVal = this.resolvePromptValue(inputs.seed ?? inputs.noise_seed, prompt, wfMap);
+                    if (seedVal != null && !this.isNodeRef(seedVal)) candidate.seed = String(seedVal);
+
+                    candidate.steps = this.coerceNumber(this.resolvePromptValue(inputs.steps, prompt, wfMap));
+                    candidate.cfg = this.coerceNumber(this.resolvePromptValue(inputs.cfg, prompt, wfMap));
+                    const sampler = this.resolvePromptValue(inputs.sampler_name, prompt, wfMap);
+                    const scheduler = this.resolvePromptValue(inputs.scheduler, prompt, wfMap);
+                    candidate.denoise = this.coerceNumber(this.resolvePromptValue(inputs.denoise, prompt, wfMap));
+
+                    if (typeof sampler === 'string' && sampler.trim() && !this.isNodeRef(sampler)) candidate.sampler = sampler.trim();
+                    if (typeof scheduler === 'string' && scheduler.trim() && !this.isNodeRef(scheduler)) candidate.scheduler = scheduler.trim();
+
+                    const pos = this.resolvePromptValue(inputs.positive, prompt, wfMap);
+                    const neg = this.resolvePromptValue(inputs.negative, prompt, wfMap);
+                    if (this._looksLikePrompt(pos)) candidate.positive = pos.trim();
+                    if (this._looksLikePrompt(neg)) candidate.negative = neg.trim();
+
+                    const score = this._samplerScore(candidate);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestSampler = candidate;
+                    }
+                }
+
+                if (bestSampler) {
+                    if (bestSampler.seed) result.seed = bestSampler.seed;
+                    if (bestSampler.steps != null) result.steps = bestSampler.steps;
+                    if (bestSampler.cfg != null) result.cfg = bestSampler.cfg;
+                    if (bestSampler.sampler) result.sampler = bestSampler.sampler;
+                    if (bestSampler.scheduler) result.scheduler = bestSampler.scheduler;
+                    if (bestSampler.denoise != null) result.denoise = bestSampler.denoise;
+                    if (bestSampler.positive) result.positive = bestSampler.positive;
+                    if (bestSampler.negative) result.negative = bestSampler.negative;
+                }
+
+                if (!result.positive && textCandidates.length) {
+                    const posCands = textCandidates.filter(t => this._looksLikePrompt(t.text));
+                    posCands.sort((a, b) => b.len - a.len);
+                    if (posCands[0]) result.positive = posCands[0].text;
+                }
+                if (!result.negative && textCandidates.length) {
+                    const negCands = textCandidates.filter(t => t.kind === 'neg' && this._looksLikePrompt(t.text));
+                    negCands.sort((a, b) => b.len - a.len);
+                    if (negCands[0]) result.negative = negCands[0].text;
+                }
+
+                if (result.positive && result.negative && result.positive === result.negative) {
+                    result.negative = '';
+                }
+                if (!result.negative && textCandidates.length) {
+                    const badQuality = textCandidates.filter(t =>
+                        /bad quality|worst quality|low quality/i.test(t.text)
+                    );
+                    badQuality.sort((a, b) => b.len - a.len);
+                    if (badQuality[0]) result.negative = badQuality[0].text;
+                }
+
+                if (!result.model) {
+                    const checkpoints = [];
+                    for (const node of Object.values(prompt)) {
+                        const ct = node.class_type;
+                        if (ct === 'CheckpointLoaderSimple' || ct === 'UNETLoader') {
+                            const m = node.inputs?.ckpt_name || node.inputs?.unet_name;
+                            if (typeof m === 'string' && m) checkpoints.push(m);
+                        }
+                    }
+                    if (checkpoints.length) {
+                        result.model = checkpoints.find(m => !/branch/i.test(m)) || checkpoints[0];
+                    }
+                }
+
+                result.loras = this.extractComfyLoras(prompt, wfMap);
+                this.extractLoras(result);
+            } catch {}
             return result;
         },
 
@@ -11403,6 +11792,26 @@
         }
     };
 
+    function civitaiSearchUrl(name, modelType = 'LORA') {
+        const q = String(name || '')
+            .replace(/\.(safetensors|ckpt|pt)$/i, '')
+            .replace(/_/g, ' ')
+            .trim();
+        return `https://civitai.com/search/models?modelType=${modelType}&query=${encodeURIComponent(q)}`;
+    }
+
+    function downloadJsonFile(filename, data) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
     function setupMetaImport() {
         const btn = document.getElementById('btn-import-meta');
         const inp = document.getElementById('inp-import-meta');
@@ -11411,6 +11820,7 @@
 
         let parsedData = null;
         let previewUrl = null;
+        let sourceFileName = 'image';
 
         btn.addEventListener('click', () => {
             inp.value = '';
@@ -11420,6 +11830,7 @@
         inp.addEventListener('change', async () => {
             const file = inp.files[0];
             if (!file) return;
+            sourceFileName = file.name.replace(/\.[^.]+$/, '') || 'image';
 
             const buffer = await file.arrayBuffer();
             const blob = new Blob([buffer], { type: file.type });
@@ -11439,14 +11850,15 @@
             source.className = 'meta-source' + (parsedData.noData ? ' meta-no-data' : '');
 
             const fields = document.getElementById('meta-fields');
+            const downloads = document.getElementById('meta-downloads');
             fields.innerHTML = '';
+            if (downloads) downloads.innerHTML = '';
 
             if (!parsedData.noData) {
-                const loraStr = parsedData.loras?.map(l => `${l.name} (${l.weight})`).join(', ');
                 const rows = [
                     ['正面提示词', parsedData.positive, 'positive'],
                     ['负面提示词', parsedData.negative, 'negative'],
-                    ['模型', parsedData.model, 'model'],
+                    ['模型', parsedData.model, 'model', 'Checkpoint'],
                     ['采样器', parsedData.sampler, 'sampler'],
                     ['调度器', parsedData.scheduler, 'scheduler'],
                     ['步数', parsedData.steps, 'steps'],
@@ -11455,7 +11867,10 @@
                     ['尺寸', parsedData.width && parsedData.height ? `${parsedData.width}×${parsedData.height}` : null, 'size'],
                     ['重绘强度', parsedData.denoise, 'denoise'],
                     ['Clip Skip', parsedData.clipSkip, 'clipSkip'],
-                    ['LoRA', loraStr, 'loras'],
+                    ['工作流', parsedData.comfyPrompt
+                        ? `${Object.keys(parsedData.comfyPrompt).length} 个执行节点` +
+                          (parsedData.workflowNodeCount ? ` / UI ${parsedData.workflowNodeCount} 节点` : '')
+                        : null, 'workflow'],
                     ['Refiner', parsedData.refinerModel, 'refiner'],
                     ['Refiner 切换', parsedData.refinerSwitch, 'refinerSwitch'],
                     ['ADetailer 模型', parsedData.adetailerModel, 'adetailer'],
@@ -11466,7 +11881,7 @@
                     ['SMEA', parsedData.smea !== undefined ? (parsedData.smea ? '开' : '关') : null, 'smea'],
                     ['SMEA Dyn', parsedData.smeaDyn !== undefined ? (parsedData.smeaDyn ? '开' : '关') : null, 'smeaDyn'],
                 ];
-                rows.forEach(([label, value, key]) => {
+                rows.forEach(([label, value, key, civitaiType]) => {
                     if (value == null || value === '') return;
                     const row = document.createElement('div');
                     row.className = 'meta-field';
@@ -11475,13 +11890,66 @@
                     lbl.textContent = label;
                     const val = document.createElement('span');
                     val.className = 'meta-field-value';
-                    val.textContent = String(value).length > 200
-                        ? String(value).substring(0, 200) + '...'
-                        : String(value);
-                    val.title = String(value);
+                    const text = String(value);
+                    val.textContent = text.length > 200 ? text.substring(0, 200) + '...' : text;
+                    val.title = text;
                     row.append(lbl, val);
+                    if (key === 'model' && parsedData.model) {
+                        const link = document.createElement('a');
+                        link.className = 'meta-civitai-link';
+                        link.href = civitaiSearchUrl(parsedData.model, civitaiType || 'Checkpoint');
+                        link.target = '_blank';
+                        link.rel = 'noopener noreferrer';
+                        link.textContent = 'C站';
+                        link.title = '在 Civitai 搜索此模型';
+                        row.appendChild(link);
+                    }
                     fields.appendChild(row);
                 });
+
+                if (parsedData.loras?.length) {
+                    const loraHeader = document.createElement('div');
+                    loraHeader.className = 'meta-field meta-field-lora-header';
+                    loraHeader.innerHTML = `<span class="meta-field-label">LoRA</span><span class="meta-field-value">共 ${parsedData.loras.length} 个（仅查看，点击下方链接去 C 站下载）</span>`;
+                    fields.appendChild(loraHeader);
+
+                    parsedData.loras.forEach((lora, idx) => {
+                        const row = document.createElement('div');
+                        row.className = 'meta-field meta-field-lora-item';
+                        const lbl = document.createElement('span');
+                        lbl.className = 'meta-field-label';
+                        lbl.textContent = `#${idx + 1}`;
+                        const val = document.createElement('span');
+                        val.className = 'meta-field-value';
+                        val.textContent = `${lora.name} (${lora.weight})`;
+                        val.title = lora.fullName || lora.name;
+                        const link = document.createElement('a');
+                        link.className = 'meta-civitai-link';
+                        link.href = civitaiSearchUrl(lora.fullName || lora.name, 'LORA');
+                        link.target = '_blank';
+                        link.rel = 'noopener noreferrer';
+                        link.textContent = 'C站下载';
+                        link.title = `在 Civitai 搜索 ${lora.name}`;
+                        row.append(lbl, val, link);
+                        fields.appendChild(row);
+                    });
+                }
+
+                if (downloads && parsedData.comfyPrompt) {
+                    const wfBtn = document.createElement('button');
+                    wfBtn.type = 'button';
+                    wfBtn.className = 'btn-secondary btn-meta-dl';
+                    wfBtn.textContent = '⬇ 下载工作流 JSON';
+                    wfBtn.addEventListener('click', () => {
+                        const payload = {
+                            prompt: parsedData.comfyPrompt,
+                            workflow: parsedData.comfyWorkflow || null,
+                        };
+                        downloadJsonFile(`${sourceFileName}-workflow.json`, payload);
+                        showToast('工作流 JSON 已开始下载');
+                    });
+                    downloads.appendChild(wfBtn);
+                }
             }
 
             const rawToggle = document.getElementById('meta-raw-toggle');
@@ -11489,9 +11957,15 @@
             const rawSection = document.getElementById('meta-raw');
             rawContent.classList.add('hidden');
             rawToggle.textContent = '▶ 原始数据';
-            if (parsedData.raw || parsedData.workflow) {
+            if (parsedData.raw || parsedData.comfyPrompt || parsedData.comfyWorkflow) {
                 rawSection.classList.remove('hidden');
-                rawContent.textContent = JSON.stringify(parsedData.raw || parsedData.workflow || parsedData, null, 2);
+                const rawPayload = parsedData.comfyPrompt || parsedData.comfyWorkflow
+                    ? {
+                        prompt: parsedData.comfyPrompt || null,
+                        workflow: parsedData.comfyWorkflow || null,
+                    }
+                    : (parsedData.raw || parsedData);
+                rawContent.textContent = JSON.stringify(rawPayload, null, 2);
             } else {
                 rawSection.classList.add('hidden');
             }
@@ -11508,6 +11982,7 @@
 
         document.getElementById('btn-meta-apply').addEventListener('click', () => {
             if (!parsedData || parsedData.noData) { modal.classList.add('hidden'); return; }
+
             if (parsedData.positive) {
                 dom.txtPositive.value = parsedData.positive;
                 dom.txtPositive.dispatchEvent(new Event('input', { bubbles: true }));
@@ -11532,8 +12007,10 @@
                 const opt = [...dom.selScheduler.options].find(o => o.value.toLowerCase() === parsedData.scheduler.toLowerCase());
                 if (opt) dom.selScheduler.value = opt.value;
             }
+
             modal.classList.add('hidden');
             if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+            showToast('已填入生成参数（LoRA / 工作流请自行下载）');
         });
 
         document.getElementById('btn-meta-cancel').addEventListener('click', () => {
