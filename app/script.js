@@ -12019,20 +12019,41 @@
                     });
                 }
 
-                if (downloads && parsedData.comfyPrompt) {
-                    const wfBtn = document.createElement('button');
-                    wfBtn.type = 'button';
-                    wfBtn.className = 'btn-secondary btn-meta-dl';
-                    wfBtn.textContent = '⬇ 下载工作流 JSON';
-                    wfBtn.addEventListener('click', () => {
-                        const payload = {
-                            prompt: parsedData.comfyPrompt,
-                            workflow: parsedData.comfyWorkflow || null,
-                        };
-                        downloadJsonFile(`${sourceFileName}-workflow.json`, payload);
-                        showToast('工作流 JSON 已开始下载');
-                    });
-                    downloads.appendChild(wfBtn);
+                if (downloads && (parsedData.comfyWorkflow || parsedData.comfyPrompt)) {
+                    const hasUiWorkflow = parsedData.comfyWorkflow?.nodes?.length > 0;
+
+                    if (hasUiWorkflow) {
+                        const wfBtn = document.createElement('button');
+                        wfBtn.type = 'button';
+                        wfBtn.className = 'btn-secondary btn-meta-dl';
+                        wfBtn.textContent = '⬇ 下载 ComfyUI 工作流';
+                        wfBtn.title = 'UI 格式，可在 ComfyUI 官方界面「加载」或拖入画布';
+                        wfBtn.addEventListener('click', () => {
+                            downloadJsonFile(`${sourceFileName}-comfyui-workflow.json`, parsedData.comfyWorkflow);
+                            showToast('已下载 UI 工作流，可在 ComfyUI 加载或拖入导入');
+                        });
+                        downloads.appendChild(wfBtn);
+                    }
+
+                    if (parsedData.comfyPrompt) {
+                        const apiBtn = document.createElement('button');
+                        apiBtn.type = 'button';
+                        apiBtn.className = 'btn-secondary btn-meta-dl';
+                        apiBtn.textContent = '⬇ 下载 API Prompt';
+                        apiBtn.title = '仅供 /prompt 接口调用，ComfyUI 界面无法直接打开';
+                        apiBtn.addEventListener('click', () => {
+                            downloadJsonFile(`${sourceFileName}-comfyui-api.json`, parsedData.comfyPrompt);
+                            showToast('已下载 API Prompt（接口用，不能拖进 ComfyUI 界面）');
+                        });
+                        downloads.appendChild(apiBtn);
+                    }
+
+                    const hint = document.createElement('p');
+                    hint.className = 'meta-hint';
+                    hint.textContent = hasUiWorkflow
+                        ? '导入 ComfyUI 请用「ComfyUI 工作流」，或直接拖原始 PNG 到 ComfyUI 画布。之前的 { prompt, workflow } 合并包界面打不开。'
+                        : '该图未嵌入 UI 布局，只有 API Prompt；请直接拖原始 PNG 到 ComfyUI，或用 API 提交。';
+                    downloads.appendChild(hint);
                 }
             }
 
