@@ -4425,47 +4425,44 @@ body.inpaint-open {
         font-size: 16px;
     }
 
-    /* 作品/子分类：单行横向滑动，不占多行高度 */
+    /* 大类/子分类：自动换行展示全部，不再横向滑动 */
     .tag-subtabs {
-        flex-wrap: nowrap !important;
-        overflow-x: auto;
-        overflow-y: hidden;
+        flex-wrap: wrap !important;
+        overflow-x: visible;
+        overflow-y: visible;
         max-height: none !important;
-        min-height: 44px;
+        min-height: 0;
         flex-shrink: 0;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
+        gap: 4px;
+        padding: 4px 0;
     }
-
-    .tag-subtabs::-webkit-scrollbar { display: none; }
 
     .tag-subtabs .tab {
         white-space: nowrap;
         flex-shrink: 0;
-        font-size: 12px;
-        padding: 8px 12px;
-        min-height: 36px;
+        font-size: 11px;
+        padding: 5px 8px;
+        min-height: 28px;
     }
 
     .tag-tabs {
-        flex-wrap: nowrap !important;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding-bottom: 4px;
+        flex-wrap: wrap !important;
+        overflow-x: visible;
+        overflow-y: visible;
+        gap: 4px;
+        padding: 4px 0;
     }
-
-    .tag-tabs::-webkit-scrollbar { display: none; }
 
     .tag-tabs .tab {
         white-space: nowrap;
         flex-shrink: 0;
-        padding: 8px 10px;
-        font-size: 11px;
+        padding: 5px 8px;
+        font-size: 10px;
+        min-height: 28px;
     }
 
     .tag-grid {
-        gap: 6px;
+        gap: 4px;
         flex: 1;
         min-height: 80px;
         max-height: none;
@@ -4473,9 +4470,38 @@ body.inpaint-open {
     }
 
     .tag-item {
+        padding: 5px 7px;
+        font-size: 11px;
+        min-height: 28px;
+        line-height: 1.2;
+    }
+
+    .tag-item .tag-text {
+        font-size: 0.62rem;
+        margin-top: 0;
+    }
+
+    .tag-item .tag-desc {
+        font-size: 0.56rem;
+        margin-top: 1px;
+    }
+
+    .tag-item .tag-weight,
+    .tag-item .tag-use-count {
+        font-size: 0.5rem;
+    }
+
+    .main.mobile-tab-tags .tag-picker {
+        max-height: none !important;
+    }
+
+    .main.mobile-tab-tags .tag-group-row {
+        gap: 4px;
+    }
+
+    .main.mobile-tab-tags .tag-search {
+        font-size: 14px;
         padding: 8px 10px;
-        font-size: 12px;
-        min-height: 36px;
     }
 
     /* 默认角色卡：非作品详情时 2 列 */
