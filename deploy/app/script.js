@@ -11302,14 +11302,28 @@
             return Array.isArray(val) && val.length === 2 && typeof val[0] === 'string';
         },
 
+        parseComfyJson(str) {
+            if (!str || typeof str !== 'string') return null;
+            try {
+                return JSON.parse(str);
+            } catch {
+                try {
+                    const sanitized = str
+                        .replace(/\b-Infinity\b/g, 'null')
+                        .replace(/\bInfinity\b/g, 'null')
+                        .replace(/\bNaN\b/g, 'null');
+                    return JSON.parse(sanitized);
+                } catch { return null; }
+            }
+        },
+
         buildWorkflowMap(workflowStr) {
             if (!workflowStr) return null;
-            try {
-                const wf = JSON.parse(workflowStr);
-                const map = {};
-                for (const n of (wf.nodes || [])) map[String(n.id)] = n;
-                return map;
-            } catch { return null; }
+            const wf = this.parseComfyJson(workflowStr);
+            if (!wf) return null;
+            const map = {};
+            for (const n of (wf.nodes || [])) map[String(n.id)] = n;
+            return map;
         },
 
         getWorkflowNode(wfMap, nodeId) {
@@ -11511,15 +11525,17 @@
         parseComfyUI(promptStr, workflowStr) {
             const result = { source: 'ComfyUI' };
             try {
-                const prompt = JSON.parse(promptStr);
+                const prompt = this.parseComfyJson(promptStr);
+                if (!prompt) return { source: 'ComfyUI', noData: true };
                 const wfMap = this.buildWorkflowMap(workflowStr);
                 result.comfyPrompt = prompt;
 
                 if (workflowStr) {
-                    try {
-                        result.comfyWorkflow = JSON.parse(workflowStr);
-                        result.workflowNodeCount = result.comfyWorkflow?.nodes?.length || 0;
-                    } catch {}
+                    const wf = this.parseComfyJson(workflowStr);
+                    if (wf) {
+                        result.comfyWorkflow = wf;
+                        result.workflowNodeCount = wf.nodes?.length || 0;
+                    }
                 }
 
                 const samplerNodes = [];
@@ -11745,10 +11761,9 @@
 
             // ComfyUI: has "prompt" key with JSON
             if (texts.prompt) {
-                try {
-                    JSON.parse(texts.prompt);
+                if (this.parseComfyJson(texts.prompt)) {
                     return this.parseComfyUI(texts.prompt, texts.workflow);
-                } catch {}
+                }
             }
 
             // A1111/Forge: has "parameters" key
