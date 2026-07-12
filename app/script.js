@@ -6932,9 +6932,9 @@
             picker.searchModeBtn.textContent = '标签';
             picker.searchModeBtn.classList.remove('mode-category');
         }
+        const sub = tagData[_artistGroupIdx]?.subgroups[picker.subIdx];
         picker.searchEl.placeholder = sub?._artistSort === 'chains' ? '搜索画师串...' : '搜索画师...';
         _artistPage = 1;
-        const sub = tagData[_artistGroupIdx]?.subgroups[picker.subIdx];
         if (sub?._artistSort) {
             _artistCurrentSort = sub._artistSort;
             _artistCurrentLetter = 'all';
@@ -9038,7 +9038,7 @@
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.24');
+        console.log('[ComfyUI Web] v4.42');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9544,7 +9544,7 @@
         document.body.classList.toggle('mobile-artist-nav-visible', tab === 'artists');
 
         const fab = document.getElementById('btn-generate-fab');
-        if (fab) fab.classList.toggle('hidden', tab === 'settings');
+        if (fab) fab.classList.toggle('hidden', tab !== 'create');
 
         if (tab === 'characters') renderMobileSeriesList(document.getElementById('char-series-search')?.value || '');
         if (tab === 'tags') {

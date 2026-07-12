@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.123
+> **部署版本**: 1.124
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -340,4 +340,5 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.121 | 2026-07-12 | deploy 版本角标同步 | 修复 `deploy/app/index.html` 角标仍为 v4.38、script 缓存 v433 未同步的问题（仍为 `app v4.39`）。 |
 | 1.122 | 2026-07-12 | SDXL/Anima 架构严格隔离 | Anima 下强制关闭并阻断 ControlNet/FreeU/IPA/加速/外部 VAE 进入工作流；面部修复链路审计通过（`app v4.40` / `script.js?v=435`）。 |
 | 1.123 | 2026-07-12 | 面部修复默认检测模型 | ADetailer 默认改 `bbox/face_yolov8m.pt`（人脸检测）；自动纠正 segm 分割模型误选（`app v4.41` / `script.js?v=436`）。 |
+| 1.124 | 2026-07-12 | 手机端画师/布局修复 | 修复画师 Tab `sub` 变量 TDZ 导致画师/热门/收藏/字母失效；压缩角色/创作页布局（`app v4.42` / `script.js?v=437` / `style.css?v=427`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |
