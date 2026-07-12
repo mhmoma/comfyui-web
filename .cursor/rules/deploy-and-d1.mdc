@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.117
+> **部署版本**: 1.118
 > **版本记录**: 见底部「版本历史」  
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -334,4 +334,5 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.110 | 2026-07-10 | 按日期分文件夹存图 | SaveImage `filename_prefix` 自动加 `YYYY-MM-DD/` 子目录，主生成/后处理/局部重绘/ControlNet 预览均生效（`app v4.29` / `script.js?v=424`）。 |
 | 1.116 | 2026-07-12 | 工作流下载格式修正 | 下载改为 UI 工作流与 API Prompt 分开；修复 `{ prompt, workflow }` 合并包无法在 ComfyUI 界面导入（`app v4.35` / `script.js?v=430`）。 |
 | 1.117 | 2026-07-12 | LoRA 解析分层 | 默认仅显示当前图使用的 LoRA；LoraManager 库内全部 LoRA 改按钮展开查看（`app v4.36` / `script.js?v=431` / `style.css?v=426`）。 |
+| 1.118 | 2026-07-12 | LoRA 启用项识别 | LoraManager 整库写入 text 时改读 active 启用项，修复「当前图使用」误显示 200+ LoRA（`app v4.37` / `script.js?v=432`）。 |
 | 1.83 | 2026-07-07 | 抠图边缘可调节 | 抠图后支持边缘收缩/透明阈值/羽化滑块，本地即时重算无需重跑 AI（`v4.10` / `script.js?v=406`）。 |

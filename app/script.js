@@ -11252,9 +11252,44 @@
             }
         },
 
+        countLoraTags(text) {
+            if (typeof text !== 'string') return 0;
+            return (text.match(/<lora:[^>]+>/gi) || []).length;
+        },
+
+        extractLorasFromManagerNode(inputs, out) {
+            const list = inputs?.loras?.__value__;
+            const activeList = Array.isArray(list)
+                ? list.filter(l => l?.name && l.active !== false)
+                : [];
+            const textCount = this.countLoraTags(inputs?.text);
+
+            // text 常含作者整库；若明显多于 active 条目，以 active 为准
+            if (activeList.length > 0 && textCount > 20 && textCount > activeList.length) {
+                activeList.forEach(l => {
+                    out.push(this.loraEntryFromName(
+                        l.name,
+                        l.strength ?? l.strength_model ?? l.clipStrength ?? 1
+                    ));
+                });
+                return;
+            }
+
+            if (typeof inputs?.text === 'string' && inputs.text.includes('<lora:')) {
+                this.extractLorasFromTextField(inputs.text, out);
+                return;
+            }
+
+            activeList.forEach(l => {
+                out.push(this.loraEntryFromName(
+                    l.name,
+                    l.strength ?? l.strength_model ?? l.clipStrength ?? 1
+                ));
+            });
+        },
+
         extractUsedComfyLoras(prompt, wfMap) {
             const loras = [];
-            let hasManagerTextLoras = false;
 
             for (const node of Object.values(prompt)) {
                 const ct = node.class_type || '';
@@ -11269,35 +11304,12 @@
                 }
 
                 if (ct === 'Lora Loader (LoraManager)') {
-                    if (typeof inputs.text === 'string' && inputs.text.includes('<lora:')) {
-                        hasManagerTextLoras = true;
-                        this.extractLorasFromTextField(inputs.text, loras);
-                    }
+                    this.extractLorasFromManagerNode(inputs, loras);
                 }
 
                 if (ct === 'WeiLinPromptUI' || ct === 'WeiLinPromptUIWithoutLora') {
                     const loraStr = inputs.lora_str || inputs.temp_lora_str || '';
                     this.extractLorasFromTextField(loraStr, loras);
-                }
-
-                if (ct.includes('TriggerWord') || ct.includes('LoraManager')) {
-                    const msg = inputs.orinalMessage || inputs.originalMessage;
-                    this.extractLorasFromTextField(msg, loras);
-                }
-            }
-
-            if (!hasManagerTextLoras) {
-                for (const node of Object.values(prompt)) {
-                    if (node.class_type !== 'Lora Loader (LoraManager)') continue;
-                    const list = node.inputs?.loras?.__value__;
-                    if (!Array.isArray(list)) continue;
-                    list.forEach(l => {
-                        if (!l?.name || l.active === false) return;
-                        loras.push(this.loraEntryFromName(
-                            l.name,
-                            l.strength ?? l.strength_model ?? l.clipStrength ?? 1
-                        ));
-                    });
                 }
             }
 
@@ -11778,7 +11790,6 @@
 
                 result.loras = this.extractUsedComfyLoras(prompt, wfMap);
                 result.lorasLibrary = this.extractLibraryComfyLoras(prompt, wfMap);
-                this.extractLoras(result);
             } catch {}
             return result;
         },
