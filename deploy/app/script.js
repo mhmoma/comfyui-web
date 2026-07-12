@@ -11313,6 +11313,19 @@
                 }
             }
 
+            for (const node of Object.values(prompt)) {
+                if (node.class_type === 'Lora Loader (LoraManager)') continue;
+                const scanVal = (val) => {
+                    if (typeof val === 'string' && val.includes('<lora:')) {
+                        const tc = this.countLoraTags(val);
+                        if (tc > 0 && tc <= 30) this.extractLorasFromTextField(val, loras);
+                    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+                        for (const v of Object.values(val)) scanVal(v);
+                    }
+                };
+                scanVal(node.inputs);
+            }
+
             return this.dedupeLoras(loras);
         },
 
@@ -11640,8 +11653,251 @@
             }
         },
 
+        UNIVERSAL_SAMPLER_FIELDS: {
+            seed: ['seed', 'noise_seed', 'rand_seed', 'random_seed'],
+            steps: ['steps', 'steps_total', 'step', 'sample_steps'],
+            cfg: ['cfg', 'cfg_scale', 'guidance', 'guidance_scale'],
+            sampler: ['sampler_name', 'sampler'],
+            scheduler: ['scheduler', 'scheduler_name', 'schedule_type'],
+            denoise: ['denoise', 'denoising_strength', 'strength'],
+        },
+
+        UNIVERSAL_MODEL_KEYS: [
+            'ckpt_name', 'unet_name', 'model_name', 'checkpoint_name',
+            'ckpt', 'model', 'model_path', 'diffusion_model', 'checkpoint',
+        ],
+
+        UNIVERSAL_POSITIVE_KEYS: [
+            'positive', 'prompt', 'text', 'string', 'value', 'selected_prompts',
+            'temp_str', 'positive_prompt', 'prompt_positive', 'orinalMessage', 'originalMessage',
+        ],
+
+        UNIVERSAL_NEGATIVE_KEYS: [
+            'negative', 'negative_prompt', 'prompt_negative', 'uc', 'bad_prompt',
+        ],
+
+        _isSamplerLikeNode(ct) {
+            if (!ct || typeof ct !== 'string') return false;
+            if (/^KSampler/i.test(ct)) return true;
+            if (/Sampler/i.test(ct) && !/Config|Select|Create|Preview|Cycle|Schedule|Switch|Input/i.test(ct)) {
+                return true;
+            }
+            return false;
+        },
+
+        _isNegativePromptText(text, key = '') {
+            if (/negative|neg_prompt|bad_prompt|\buc\b/i.test(key)) return true;
+            return /bad quality|worst quality|low quality|bad_hands|bad_anatomy|anatomical nonsense|jpeg artifacts/i.test(text);
+        },
+
+        _looksLikeModelName(val) {
+            if (typeof val !== 'string') return false;
+            const s = val.trim();
+            return /\.(safetensors|ckpt|pt|gguf|sft)$/i.test(s) || /^[\w.-]+\/[\w.-]+\.(safetensors|ckpt)$/i.test(s);
+        },
+
+        _promptCandidateScore(text, key, classType) {
+            if (!this._looksLikePrompt(text)) return -1;
+            if (this._looksLikeModelName(text)) return -1;
+            if (/<lora:/i.test(text) && this.countLoraTags(text) > 20) return -1;
+
+            let score = Math.min(text.length, 5000);
+            if (this.UNIVERSAL_POSITIVE_KEYS.some(k => key.toLowerCase().includes(k.toLowerCase()))) score += 800;
+            if (this.UNIVERSAL_NEGATIVE_KEYS.some(k => key.toLowerCase().includes(k.toLowerCase()))) score -= 900;
+            if (classType === 'CLIPTextEncode') score += 400;
+            if (/PromptSelector|WeiLin|CLIP|Text|Prompt/i.test(classType || '')) score += 250;
+            if (this._isNegativePromptText(text, key)) score -= 1200;
+            if (/^[\d\s.,:;+-]+$/.test(text)) score -= 500;
+            return score;
+        },
+
+        _collectUniversalStrings(prompt, wfMap) {
+            const items = [];
+            const seenText = new Set();
+
+            const addString = (text, key, nodeId, classType) => {
+                const normalized = this.tokenJsonToText(text).trim();
+                if (normalized.length < 8) return;
+                if (this._looksLikeModelName(normalized)) return;
+                const sig = normalized.slice(0, 120);
+                if (seenText.has(sig)) return;
+                seenText.add(sig);
+                items.push({ text: normalized, key, nodeId, classType });
+            };
+
+            const walk = (nodeId, val, key, classType, depth = 0) => {
+                if (val == null || depth > 10) return;
+                if (key === 'loras' || key.startsWith('__')) return;
+
+                if (typeof val === 'string') {
+                    addString(val, key, nodeId, classType);
+                    return;
+                }
+
+                if (this.isNodeRef(val)) {
+                    const resolved = this.resolvePromptValue(val, prompt, wfMap, { visited: new Set() });
+                    if (typeof resolved === 'string') addString(resolved, key, nodeId, classType);
+                    return;
+                }
+
+                if (Array.isArray(val)) return;
+
+                if (typeof val === 'object') {
+                    for (const [k, v] of Object.entries(val)) walk(nodeId, v, k, classType, depth + 1);
+                }
+            };
+
+            for (const [nodeId, node] of Object.entries(prompt)) {
+                walk(nodeId, node.inputs || {}, '', node.class_type || '', 0);
+            }
+
+            if (wfMap) {
+                for (const wfNode of Object.values(wfMap)) {
+                    const wv = wfNode?.widgets_values;
+                    if (!Array.isArray(wv)) continue;
+                    wv.forEach((v, idx) => {
+                        if (typeof v === 'string') addString(v, `widget_${idx}`, String(wfNode.id), wfNode.type || '');
+                    });
+                }
+            }
+
+            return items;
+        },
+
+        _extractUniversalSampler(prompt, wfMap) {
+            const candidates = [];
+
+            for (const [nodeId, node] of Object.entries(prompt)) {
+                const inputs = node.inputs || {};
+                const candidate = { nodeId, classType: node.class_type || '' };
+                let hits = 0;
+
+                for (const [field, aliases] of Object.entries(this.UNIVERSAL_SAMPLER_FIELDS)) {
+                    for (const alias of aliases) {
+                        if (inputs[alias] == null) continue;
+                        const raw = inputs[alias];
+                        const val = this.isNodeRef(raw)
+                            ? this.resolvePromptValue(raw, prompt, wfMap)
+                            : raw;
+                        if (val == null || val === '' || this.isNodeRef(val)) continue;
+                        if (field === 'seed') candidate.seed = String(val);
+                        else if (field === 'steps') candidate.steps = this.coerceNumber(val);
+                        else if (field === 'cfg') candidate.cfg = this.coerceNumber(val);
+                        else if (field === 'sampler' && typeof val === 'string') candidate.sampler = val.trim();
+                        else if (field === 'scheduler' && typeof val === 'string') candidate.scheduler = val.trim();
+                        else if (field === 'denoise') candidate.denoise = this.coerceNumber(val);
+                        hits++;
+                        break;
+                    }
+                }
+
+                if (hits > 0 || this._isSamplerLikeNode(candidate.classType)) {
+                    candidates.push(candidate);
+                }
+            }
+
+            candidates.sort((a, b) => this._samplerScore(b) - this._samplerScore(a));
+            return candidates[0] || null;
+        },
+
+        _extractUniversalModel(prompt) {
+            const models = [];
+            for (const node of Object.values(prompt)) {
+                const inputs = node.inputs || {};
+                for (const key of this.UNIVERSAL_MODEL_KEYS) {
+                    const val = inputs[key];
+                    if (typeof val === 'string' && val.trim()) models.push(val.trim());
+                }
+                for (const val of Object.values(inputs)) {
+                    if (typeof val === 'string' && this._looksLikeModelName(val)) models.push(val.trim());
+                }
+            }
+            if (!models.length) return null;
+            return models.find(m => !/branch|refiner|vae|lora/i.test(m)) || models[0];
+        },
+
+        _extractUniversalSize(prompt, wfMap) {
+            let width = null;
+            let height = null;
+
+            for (const node of Object.values(prompt)) {
+                const inputs = node.inputs || {};
+                const w = this.coerceNumber(this.resolvePromptValue(inputs.width ?? inputs.image_width ?? inputs.w, prompt, wfMap));
+                const h = this.coerceNumber(this.resolvePromptValue(inputs.height ?? inputs.image_height ?? inputs.h, prompt, wfMap));
+                if (w && h && w >= 64 && h >= 64 && w <= 8192 && h <= 8192) {
+                    width = w;
+                    height = h;
+                }
+            }
+
+            return width && height ? { width, height } : null;
+        },
+
+        applyUniversalComfyInference(prompt, wfMap, result) {
+            let touched = false;
+
+            const strings = this._collectUniversalStrings(prompt, wfMap);
+            const posCands = [];
+            const negCands = [];
+
+            for (const item of strings) {
+                const score = this._promptCandidateScore(item.text, item.key, item.classType);
+                if (score < 0) continue;
+                if (this._isNegativePromptText(item.text, item.key)) {
+                    negCands.push({ text: item.text, score: score + item.text.length });
+                } else {
+                    posCands.push({ text: item.text, score });
+                }
+            }
+
+            posCands.sort((a, b) => b.score - a.score);
+            negCands.sort((a, b) => b.score - a.score);
+
+            if (posCands[0] && (!result.positive || result.positive.length < posCands[0].text.length * 0.75)) {
+                result.positive = posCands[0].text;
+                touched = true;
+            }
+            if (negCands[0] && (!result.negative || result.negative.length < negCands[0].text.length * 0.75)) {
+                result.negative = negCands[0].text;
+                touched = true;
+            }
+
+            const sampler = this._extractUniversalSampler(prompt, wfMap);
+            if (sampler) {
+                if (!result.seed && sampler.seed) { result.seed = sampler.seed; touched = true; }
+                if (result.steps == null && sampler.steps != null) { result.steps = sampler.steps; touched = true; }
+                if (result.cfg == null && sampler.cfg != null) { result.cfg = sampler.cfg; touched = true; }
+                if (!result.sampler && sampler.sampler) { result.sampler = sampler.sampler; touched = true; }
+                if (!result.scheduler && sampler.scheduler) { result.scheduler = sampler.scheduler; touched = true; }
+                if (result.denoise == null && sampler.denoise != null) { result.denoise = sampler.denoise; touched = true; }
+                if (!result.positive && sampler.positive) { result.positive = sampler.positive; touched = true; }
+                if (!result.negative && sampler.negative) { result.negative = sampler.negative; touched = true; }
+            }
+
+            if (!result.model) {
+                const model = this._extractUniversalModel(prompt);
+                if (model) { result.model = model; touched = true; }
+            }
+
+            if (!result.width || !result.height) {
+                const size = this._extractUniversalSize(prompt, wfMap);
+                if (size) {
+                    if (!result.width) result.width = size.width;
+                    if (!result.height) result.height = size.height;
+                    touched = true;
+                }
+            }
+
+            if (result.positive && result.negative && result.positive === result.negative) {
+                result.negative = '';
+            }
+
+            if (touched) result.universalParse = true;
+            return touched;
+        },
+
         parseComfyUI(promptStr, workflowStr) {
-            const result = { source: 'ComfyUI' };
+            const result = { source: 'ComfyUI · 通用解析' };
             try {
                 const prompt = this.parseComfyJson(promptStr);
                 if (!prompt) return { source: 'ComfyUI', noData: true };
@@ -11690,7 +11946,7 @@
                         }
                     }
 
-                    if (ct === 'KSampler' || ct === 'KSampler (Efficient)' || ct === 'KSamplerAdvanced') {
+                    if (ct === 'KSampler' || ct === 'KSampler (Efficient)' || ct === 'KSamplerAdvanced' || this._isSamplerLikeNode(ct)) {
                         samplerNodes.push({ nodeId, node });
                     }
 
@@ -11787,10 +12043,14 @@
                 }
 
                 this.applyComfyLiteralFallback(prompt, result);
+                this.applyUniversalComfyInference(prompt, wfMap, result);
 
                 result.loras = this.extractUsedComfyLoras(prompt, wfMap);
                 result.lorasLibrary = this.extractLibraryComfyLoras(prompt, wfMap);
             } catch {}
+            if (!result.positive && !result.seed && !result.model && !result.loras?.length) {
+                result.source = 'ComfyUI';
+            }
             return result;
         },
 
