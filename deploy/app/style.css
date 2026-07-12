@@ -4799,8 +4799,10 @@ body.inpaint-open {
 
     .prompt-tag.prompt-tag-tap.active {
         border-color: var(--accent);
-        box-shadow: 0 0 8px rgba(233, 69, 96, 0.35);
-        background: rgba(233, 69, 96, 0.08);
+        box-shadow: 0 0 10px rgba(233, 69, 96, 0.45);
+        background: rgba(233, 69, 96, 0.14);
+        outline: 2px solid rgba(233, 69, 96, 0.55);
+        outline-offset: 1px;
     }
 
     .prompt-tag-mobile-sheet {

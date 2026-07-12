@@ -9045,7 +9045,7 @@
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.47');
+        console.log('[ComfyUI Web] v4.48');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -9627,6 +9627,14 @@
             });
         },
 
+        scrollActiveIntoView() {
+            if (!this.editor || this.idx < 0) return;
+            requestAnimationFrame(() => {
+                const el = this.editor.container.querySelector(`.prompt-tag[data-idx="${this.idx}"]`);
+                el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+            });
+        },
+
         open(editor, idx) {
             this.init();
             if (!this.sheet) return;
@@ -9637,6 +9645,7 @@
             this.sheet.setAttribute('aria-hidden', 'false');
             editor.render();
             this.updateUI();
+            this.scrollActiveIntoView();
         },
 
         close() {
@@ -9672,15 +9681,18 @@
             if (!this.editor || this.idx < 0) return;
             this.editor.changeWeight(this.idx, delta);
             this.updateUI();
+            this.scrollActiveIntoView();
         },
 
         moveTag(delta) {
             if (!this.editor || this.idx < 0) return;
-            const newIdx = this.idx + delta;
+            const oldIdx = this.idx;
+            const newIdx = oldIdx + delta;
             if (newIdx < 0 || newIdx >= this.editor.tags.length) return;
-            this.editor.moveTag(this.idx, delta);
             this.idx = newIdx;
+            this.editor.moveTag(oldIdx, delta);
             this.updateUI();
+            this.scrollActiveIntoView();
         },
 
         copyTag() {
@@ -9695,14 +9707,19 @@
 
         deleteTag() {
             if (!this.editor || this.idx < 0) return;
-            this.editor.removeTag(this.idx);
+            const removedIdx = this.idx;
+            this.editor.tags.splice(removedIdx, 1);
             if (this.editor.tags.length === 0) {
+                this.editor.syncToTextarea();
+                this.editor.render();
                 this.close();
                 return;
             }
-            this.idx = Math.min(this.idx, this.editor.tags.length - 1);
+            this.idx = Math.min(removedIdx, this.editor.tags.length - 1);
+            this.editor.syncToTextarea();
             this.editor.render();
             this.updateUI();
+            this.scrollActiveIntoView();
         },
 
         syncAfterRender(editor) {
@@ -9712,6 +9729,7 @@
                 return;
             }
             this.updateUI();
+            this.scrollActiveIntoView();
         }
     };
 
