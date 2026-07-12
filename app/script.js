@@ -566,6 +566,7 @@
             }
         });
         syncControlnetSpeedupGuard({ silent: true });
+        syncArchIsolation({ silent: true });
     }
 
     // ==================== LoRA 多选管理 ====================
@@ -917,6 +918,11 @@
     const _archState = { sdxl: null, anima: null };
     const _archModules = { sdxl: null, anima: null };
 
+    /** SDXL 专用：Anima 下 UI 隐藏，且不得进入 buildWorkflow */
+    const SDXL_ONLY_CHECKBOX_IDS = [
+        'chk-speedup', 'chk-vae', 'chk-freeu', 'chk-controlnet', 'chk-ipadapter',
+    ];
+
     const ARCH_MODULE_CHECKBOX_IDS = [
         'chk-speedup', 'chk-vae', 'chk-lora', 'chk-hires', 'chk-freeu',
         'chk-controlnet', 'chk-img2img', 'chk-regional', 'chk-post-preview', 'chk-adetailer', 'chk-ipadapter',
@@ -937,6 +943,28 @@
 
     function isAnimaMode() {
         return dom.selArch.value === 'anima';
+    }
+
+    function stripSdxlOnlyCheckboxes(checkboxes) {
+        if (!checkboxes) return;
+        SDXL_ONLY_CHECKBOX_IDS.forEach(id => { checkboxes[id] = false; });
+    }
+
+    function syncArchIsolation(opts = {}) {
+        if (!isAnimaMode()) return;
+
+        let changed = false;
+        SDXL_ONLY_CHECKBOX_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el?.checked) {
+                el.checked = false;
+                changed = true;
+            }
+        });
+        syncControlnetSpeedupGuard({ silent: true });
+        if (changed && !opts.silent) {
+            showToast('Anima 模式已自动关闭 SDXL 专用模块（ControlNet / FreeU / IP-Adapter 等）');
+        }
     }
 
     function captureArchState() {
@@ -1044,6 +1072,7 @@
 
     function applyArchModules(modules) {
         const data = modules || createEmptyArchModules();
+        if (isAnimaMode()) stripSdxlOnlyCheckboxes(data.checkboxes);
         _profileWriteMap(data.checkboxes);
         _profileWriteMap(data.selects);
         _profileWriteMap(data.inputs);
@@ -1066,6 +1095,7 @@
             if (prompt) prompt.value = r.prompt || '';
         });
         drawRegionCanvas();
+        syncArchIsolation({ silent: true });
         _profileRefreshTogglePanels();
     }
 
@@ -1085,10 +1115,13 @@
         });
         modules.loras = data.loras || [];
         modules.regions = data.regions || [];
+        const otherModules = createEmptyArchModules();
+        if (other === 'anima') stripSdxlOnlyCheckboxes(otherModules.checkboxes);
         data.archModules = {
             [arch]: modules,
-            [other]: createEmptyArchModules(),
+            [other]: otherModules,
         };
+        if (arch === 'anima') stripSdxlOnlyCheckboxes(data.archModules.anima.checkboxes);
         data.v = 2;
         return data;
     }
@@ -2056,10 +2089,8 @@
         const speedupLabel = speedupCheckbox?.closest('label');
         if (speedupCheckbox && speedupLabel) {
             speedupLabel.classList.toggle('arch-hidden', isAnima);
-            if (isAnima) {
-                speedupCheckbox.checked = false;
-            }
         }
+        syncArchIsolation({ silent: true });
         _inpaintUpdateArchPanels();
     }
 
@@ -2076,17 +2107,17 @@
         let nextId = 10;
         const id = () => String(nextId++);
 
-        const useVae = dom.chkVae.checked;
+        const isAnima = isAnimaMode();
+        const useVae = dom.chkVae.checked && !isAnima;
         const useLora = dom.chkLora.checked;
         const useHires = dom.chkHires.checked && stage !== 'base';
-        const useControlnet = dom.chkControlnet.checked && uploadedImages.controlnet;
+        const useControlnet = dom.chkControlnet.checked && uploadedImages.controlnet && !isAnima;
         const useImg2img = dom.chkImg2img.checked && (uploadedImages.img2img || refImageUrl) && stage !== 'post';
         const useAdetailer = dom.chkAdetailer.checked && stage !== 'base';
         const useRegional = dom.chkRegional.checked;
-        const useIpadapter = dom.chkIpadapter?.checked && uploadedImages.ipadapter && !isAnimaMode();
+        const useIpadapter = dom.chkIpadapter?.checked && uploadedImages.ipadapter && !isAnima;
 
         let modelOut, clipOut, vaeOut;
-        const isAnima = dom.selArch.value === 'anima';
 
         if (isAnima) {
             const unetId = id();
@@ -2335,8 +2366,8 @@
             }
         }
 
-        // FreeU (quality enhancement)
-        const useFreeu = document.getElementById('chk-freeu')?.checked;
+        // FreeU (quality enhancement, SDXL only)
+        const useFreeu = document.getElementById('chk-freeu')?.checked && !isAnima;
         if (useFreeu) {
             const freeuId = id();
             nodes[freeuId] = {
@@ -2352,8 +2383,8 @@
             modelOut = [freeuId, 0];
         }
 
-        // PatchModelAddDownscale (speed boost) — 与 ControlNet 不兼容
-        const useSpeedup = document.getElementById('chk-speedup')?.checked && !dom.chkControlnet.checked;
+        // PatchModelAddDownscale (speed boost, SDXL only) — 与 ControlNet 不兼容
+        const useSpeedup = document.getElementById('chk-speedup')?.checked && !dom.chkControlnet.checked && !isAnima;
         if (useSpeedup) {
             const downscaleId = id();
             nodes[downscaleId] = {
@@ -5773,7 +5804,7 @@
     async function collectUploadedImages() {
         const uploadedImages = {};
 
-        if (dom.chkControlnet.checked && dom.inpCnImage.files[0]) {
+        if (dom.chkControlnet.checked && !isAnimaMode() && dom.inpCnImage.files[0]) {
             const res = await uploadImage(dom.inpCnImage.files[0]);
             uploadedImages.controlnet = res.name;
         }
