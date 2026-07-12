@@ -526,6 +526,48 @@
         });
     }
 
+    function syncControlnetSpeedupGuard(opts = {}) {
+        const speedup = document.getElementById('chk-speedup');
+        if (!speedup || !dom.chkControlnet) return;
+
+        const cnOn = dom.chkControlnet.checked;
+        const speedupLabel = speedup.closest('label');
+
+        if (cnOn) {
+            if (speedup.checked) {
+                speedup.checked = false;
+                if (!opts.silent) {
+                    showToast('ControlNet 已开启，已自动关闭加速模式（二者不兼容）');
+                }
+            }
+            speedup.disabled = true;
+            if (speedupLabel) {
+                speedupLabel.title = 'ControlNet 开启时不可用：加速模式会破坏线稿/姿势控制';
+                speedupLabel.style.opacity = '0.55';
+            }
+        } else {
+            speedup.disabled = false;
+            if (speedupLabel) {
+                speedupLabel.title = '';
+                speedupLabel.style.opacity = '';
+            }
+        }
+    }
+
+    function setupControlnetSpeedupGuard() {
+        const speedup = document.getElementById('chk-speedup');
+        if (!speedup || !dom.chkControlnet) return;
+
+        dom.chkControlnet.addEventListener('change', () => syncControlnetSpeedupGuard());
+        speedup.addEventListener('change', () => {
+            if (speedup.checked && dom.chkControlnet.checked) {
+                speedup.checked = false;
+                showToast('ControlNet 开启时无法使用加速模式');
+            }
+        });
+        syncControlnetSpeedupGuard({ silent: true });
+    }
+
     // ==================== LoRA 多选管理 ====================
     let loraOptions = [];
     let loraCount = 0;
@@ -1192,6 +1234,7 @@
             dom.chkVae, dom.chkLora, dom.chkHires, dom.chkControlnet, dom.chkImg2img,
             dom.chkAdetailer, dom.chkRegional, $('#chk-freeu'), dom.chkIpadapter,
         ].forEach(chk => chk?.dispatchEvent(new Event('change')));
+        syncControlnetSpeedupGuard({ silent: true });
     }
 
     function _profileCaptureLoras() {
@@ -2309,8 +2352,8 @@
             modelOut = [freeuId, 0];
         }
 
-        // PatchModelAddDownscale (speed boost)
-        const useSpeedup = document.getElementById('chk-speedup')?.checked;
+        // PatchModelAddDownscale (speed boost) — 与 ControlNet 不兼容
+        const useSpeedup = document.getElementById('chk-speedup')?.checked && !dom.chkControlnet.checked;
         if (useSpeedup) {
             const downscaleId = id();
             nodes[downscaleId] = {
@@ -13114,6 +13157,7 @@
 
     setupTheme();
     setupToggles();
+    setupControlnetSpeedupGuard();
     setupArchSwitch();
     setupIPAdapter();
     setupPanelGroups();
