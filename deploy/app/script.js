@@ -9038,7 +9038,7 @@
     });
 
     async function init() {
-        console.log('[ComfyUI Web] v4.42');
+        console.log('[ComfyUI Web] v4.43');
         await loadTags();
         renderHistory();
         setupTagPickers();

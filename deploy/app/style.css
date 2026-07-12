@@ -3303,13 +3303,22 @@ body.inpaint-open {
     }
 
     .header h1 {
-        flex: 1 0 100%;
-        width: 100%;
+        flex: 1 1 auto;
+        width: auto;
         min-width: 0;
-        font-size: 1.05rem;
+        font-size: 1rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        margin: 0;
+    }
+
+    .header .site-home-link {
+        width: 32px;
+        height: 32px;
+        margin-right: 6px;
+        font-size: 1rem;
+        flex-shrink: 0;
     }
 
     .header .version-badge {
@@ -3703,9 +3712,10 @@ body.inpaint-open {
         width: 100%;
     }
 
-    /* 画师 Tab：三列紧凑卡片（布局见上方 .tag-grid flex 滚动） */
-        width: calc((100% - 12px) / 3) !important;
-        flex: 0 0 calc((100% - 12px) / 3) !important;
+    /* 画师 Tab：四列紧凑卡片 */
+    .main.mobile-tab-artists .tag-grid .tag-item.tag-char {
+        width: calc((100% - 18px) / 4) !important;
+        flex: 0 0 calc((100% - 18px) / 4) !important;
         min-width: 0 !important;
         max-width: none !important;
         padding: 0;
@@ -3714,7 +3724,7 @@ body.inpaint-open {
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-char .tag-thumb {
-        height: 120px !important;
+        height: 88px !important;
         width: 100%;
         object-fit: cover !important;
         object-position: top center !important;
@@ -3723,7 +3733,7 @@ body.inpaint-open {
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-char .thumb-skeleton {
-        height: 120px !important;
+        height: 88px !important;
         width: 100%;
     }
 
@@ -3738,23 +3748,23 @@ body.inpaint-open {
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-artist {
-        width: calc((100% - 12px) / 3) !important;
-        flex: 0 0 calc((100% - 12px) / 3) !important;
+        width: calc((100% - 18px) / 4) !important;
+        flex: 0 0 calc((100% - 18px) / 4) !important;
         min-width: 0 !important;
-        padding: 6px 3px;
+        padding: 4px 2px;
         box-sizing: border-box;
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-artist .tag-text {
-        font-size: 0.62rem;
+        font-size: 0.58rem;
     }
 
     .main.mobile-tab-artists .tag-grid .tag-item.tag-artist .tag-desc {
-        font-size: 0.55rem;
+        font-size: 0.5rem;
     }
 
     .main.mobile-tab-artists .artist-chain-card {
-        width: calc(33.333% - 6px);
+        width: calc(25% - 5px);
     }
 
     .main.mobile-tab-tags .mobile-tags-switch {
@@ -4308,8 +4318,7 @@ body.inpaint-open {
     }
 
     .main.mobile-tab-create .result-area {
-        order: 2;
-        flex: 0 0 auto;
+        display: none !important;
     }
 
     .main.mobile-tab-create .action-bar {
@@ -4650,17 +4659,9 @@ body.inpaint-open {
         transition: max-height 0.3s ease;
     }
 
-    /* 创作页：未出图时缩小结果区，避免挤压提示词 */
+    /* 创作页：手机端隐藏结果区，出图后去「历史」Tab 查看 */
     .main.mobile-tab-create .result-wrapper {
-        min-height: 36vh;
-        max-height: 40vh;
-    }
-
-    .main.mobile-tab-create .result-wrapper.expanded,
-    .main.mobile-tab-create .result-wrapper:has(#result-image:not(.hidden)),
-    .main.mobile-tab-create .result-wrapper:has(#result-live-preview:not(.hidden)) {
-        min-height: 52vh;
-        max-height: 58vh;
+        display: none;
     }
 
     .main.mobile-tab-create .prompt-block textarea {
