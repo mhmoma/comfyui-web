@@ -59,11 +59,18 @@ export async function onRequest(context) {
   if (sub === 'status' && method === 'GET') {
     return json({
       ok: true,
-      available: false,
+      available: true,
+      mode: 'cloud',
       bridge: 'cloudflare',
       civitai_configured: Boolean(env.CIVITAI_API_KEY),
       civitai_host: env.CIVITAI_HOST || DEFAULT_HOST,
-      hint: '完整 LoRA 库（扫描/下载/预览）需运行本地 python server.py；云端提供 C 站元数据代理',
+      capabilities: {
+        sync_civitai: true,
+        search_civitai: true,
+        local_scan: false,
+        download_to_comfyui: false,
+      },
+      hint: '云端模式：可浏览本地 LoRA 列表（需 ComfyUI 在线）、C 站同步元数据/预览/触发词；下载到 models/loras 需本地 python server.py',
     });
   }
 

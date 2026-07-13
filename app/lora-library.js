@@ -70,7 +70,7 @@
         const { res, data } = await tryFetch('/api/lora/status');
         if (res.ok && data?.ok) {
             _apiOrigin = '';
-            _mode = 'cloud';
+            _mode = data.mode === 'cloud' || data.capabilities?.sync_civitai ? 'cloud' : 'object_info';
             _status = data;
             return _status;
         }
@@ -82,6 +82,136 @@
     function getMode() { return _mode; }
     function getStatus() { return _status; }
     function hasFullLibrary() { return _mode === 'full' || _mode === 'bridge'; }
+    function canCloudSync() { return !hasFullLibrary(); }
+
+    function _mergeCivitaiMeta(rel, model, version, extra = {}) {
+        const trained = version?.trainedWords || [];
+        const tags = (model?.tags || []).map(t => (typeof t === 'object' ? t.name : t)).filter(Boolean);
+        const images = (version?.images || []).map(img => img.url).filter(Boolean);
+        return {
+            model_name: model?.name || rel.split('/').pop(),
+            base_model: version?.baseModel || '',
+            tags,
+            trigger_words: Array.isArray(trained) ? trained : [trained].filter(Boolean),
+            from_civitai: true,
+            preview_url: images[0] || '',
+            example_images: images,
+            civitai: {
+                id: version?.id,
+                modelId: model?.id || version?.modelId,
+                name: version?.name,
+                downloadUrl: version?.downloadUrl,
+            },
+            ...extra,
+        };
+    }
+
+    function _saveCacheEntry(rel, merged) {
+        const cache = loadMetaCache();
+        cache[rel] = { ...(cache[rel] || {}), ...merged };
+        saveMetaCache(cache);
+        return { rel_path: rel, name: rel, ...merged };
+    }
+
+    function _parseCivitaiId(input) {
+        const s = String(input || '').trim();
+        if (!s) return null;
+        if (/^\d+$/.test(s)) return parseInt(s, 10);
+        const m = s.match(/models\/(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+    }
+
+    function _pickSearchMatch(rel, items) {
+        if (!items?.length) return null;
+        const base = rel.split('/').pop().replace(/\.(safetensors|pt|ckpt)$/i, '').toLowerCase();
+        let best = null;
+        let bestScore = 0;
+        items.forEach((m) => {
+            let score = 0;
+            const name = (m.name || '').toLowerCase();
+            if (name.includes(base) || base.includes(name.replace(/\s+/g, ''))) score += 8;
+            (m.modelVersions || []).forEach((v) => {
+                (v.files || []).forEach((f) => {
+                    const fn = (f.name || '').toLowerCase().replace(/\.(safetensors|pt|ckpt)$/i, '');
+                    if (fn === base) score += 30;
+                    else if (fn.includes(base) || base.includes(fn)) score += 15;
+                });
+            });
+            if (score > bestScore) {
+                bestScore = score;
+                best = m;
+            }
+        });
+        return bestScore >= 8 ? best : items[0];
+    }
+
+    async function fetchCivitaiModel(modelId) {
+        const { res, data } = await tryFetch(`${apiUrl('/api/lora/civitai/model')}/${modelId}`);
+        if (!res.ok || !data?.ok) throw new Error(data?.error || 'C 站模型查询失败');
+        return data.data;
+    }
+
+    async function syncCivitaiByModelId(rel, modelId) {
+        const model = await fetchCivitaiModel(modelId);
+        const versions = model.modelVersions || [];
+        if (!versions.length) throw new Error('该模型没有可用版本');
+        const base = rel.split('/').pop().replace(/\.(safetensors|pt|ckpt)$/i, '').toLowerCase();
+        let version = versions[0];
+        for (const v of versions) {
+            const hit = (v.files || []).some((f) => {
+                const fn = (f.name || '').toLowerCase().replace(/\.(safetensors|pt|ckpt)$/i, '');
+                return fn === base || fn.includes(base);
+            });
+            if (hit) { version = v; break; }
+        }
+        return _saveCacheEntry(rel, _mergeCivitaiMeta(rel, model, version));
+    }
+
+    async function syncCivitaiCloudBySearch(rel) {
+        const baseName = rel.split('/').pop().replace(/\.(safetensors|pt|ckpt)$/i, '');
+        const queries = [
+            baseName,
+            baseName.replace(/[_-]+/g, ' '),
+            baseName.replace(/([a-z])([A-Z])/g, '$1 $2'),
+        ];
+        let lastErr = null;
+        for (const q of queries) {
+            try {
+                const result = await searchCivitai(q, 15);
+                const items = result.items || [];
+                const pick = _pickSearchMatch(rel, items);
+                if (!pick?.id) continue;
+                return await syncCivitaiByModelId(rel, pick.id);
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+        throw lastErr || new Error('C 站搜索无匹配结果，请手动填写模型 ID');
+    }
+
+    async function syncCivitaiCloud(rel, civitaiModelId) {
+        const names = await listFromObjectInfo();
+        if (!names.includes(rel)) throw new Error('ComfyUI 中未找到该 LoRA（请确认 ComfyUI 已启动）');
+        if (civitaiModelId) {
+            return syncCivitaiByModelId(rel, civitaiModelId);
+        }
+        const cache = loadMetaCache();
+        const hash = cache[rel]?.sha256;
+        if (hash) {
+            try {
+                const { res, data } = await tryFetch(`${apiUrl('/api/lora/civitai/hash')}/${encodeURIComponent(hash)}`);
+                if (res.ok && data?.ok) {
+                    const version = data.data;
+                    let model = {};
+                    if (version.modelId) {
+                        try { model = await fetchCivitaiModel(version.modelId); } catch (_) { /* partial */ }
+                    }
+                    return _saveCacheEntry(rel, _mergeCivitaiMeta(rel, model, version, { sha256: hash }));
+                }
+            } catch (_) { /* fallback search */ }
+        }
+        return syncCivitaiCloudBySearch(rel);
+    }
 
     function loadMetaCache() {
         try {
@@ -189,7 +319,7 @@
         return urls[i] || '';
     }
 
-    async function syncCivitai(rel) {
+    async function syncCivitai(rel, civitaiModelId) {
         if (hasFullLibrary()) {
             const { res, data } = await tryFetch(apiUrl('/api/lora/sync-civitai'), {
                 method: 'POST',
@@ -205,43 +335,10 @@
             }
             return data.item;
         }
-        return syncCivitaiCloud(rel);
-    }
-
-    async function syncCivitaiCloud(rel) {
-        const server = getComfyServer();
-        const names = await listFromObjectInfo();
-        if (!names.includes(rel)) throw new Error('ComfyUI 中未找到该 LoRA');
-        const cache = loadMetaCache();
-        let hash = cache[rel]?.sha256;
-        if (!hash) {
-            throw new Error('降级模式需先在本地桥接服务同步一次以计算哈希，或粘贴 C 站版本 ID');
-        }
-        const { res, data } = await tryFetch(`${apiUrl('/api/lora/civitai/hash')}/${encodeURIComponent(hash)}`);
-        if (!res.ok || !data?.ok) throw new Error(data?.error || 'C 站查询失败');
-        const version = data.data;
-        let model = {};
-        if (version.modelId) {
-            const mr = await tryFetch(`${apiUrl('/api/lora/civitai/model')}/${version.modelId}`);
-            if (mr.res.ok && mr.data?.ok) model = mr.data.data;
-        }
-        const trained = version.trainedWords || [];
-        const tags = (model.tags || []).map(t => (typeof t === 'object' ? t.name : t)).filter(Boolean);
-        const images = (version.images || []).map(img => img.url).filter(Boolean);
-        const merged = {
-            model_name: model.name || rel.split('/').pop(),
-            base_model: version.baseModel || '',
-            tags,
-            trigger_words: trained,
-            from_civitai: true,
-            preview_url: images[0] || '',
-            example_images: images,
-            civitai: { id: version.id, modelId: version.modelId, name: version.name },
-            sha256: hash,
-        };
-        cache[rel] = { ...(cache[rel] || {}), ...merged };
-        saveMetaCache(cache);
-        return { rel_path: rel, name: rel, ...merged };
+        const modelId = typeof civitaiModelId === 'number'
+            ? civitaiModelId
+            : _parseCivitaiId(civitaiModelId);
+        return syncCivitaiCloud(rel, modelId);
     }
 
     async function fetchExamples(rel) {
@@ -315,6 +412,8 @@
         previewUrl,
         exampleUrl,
         syncCivitai,
+        syncCivitaiByModelId,
+        parseCivitaiId: _parseCivitaiId,
         fetchExamples,
         downloadCivitai,
         downloadProgress,
@@ -369,20 +468,23 @@
             const map = {
                 full: '本地完整',
                 bridge: '桥接服务',
-                cloud: '云端+C站',
+                cloud: '云端模式',
                 object_info: '基础列表',
             };
             badge.textContent = map[mode] || mode;
             badge.title = LoraLibrary.hasFullLibrary()
                 ? '支持预览、C站同步、下载'
-                : '需运行 python server.py 本地桥接';
+                : '云端：可 C 站同步元数据；下载到本地需 python server.py';
             if (hint) {
                 if (LoraLibrary.hasFullLibrary()) {
                     hint.classList.add('hidden');
                     hint.textContent = '';
+                } else if (mode === 'cloud') {
+                    hint.classList.remove('hidden');
+                    hint.innerHTML = '☁️ <strong>云端模式</strong>：可浏览本机 LoRA（需 ComfyUI 在线）、<strong>同步 C 站</strong>触发词/预览/示例图。下载 .safetensors 到 <code>models/loras</code> 仍需运行 <code>python server.py</code>。镜像站请设 <code>civitai.red</code>。';
                 } else {
                     hint.classList.remove('hidden');
-                    hint.innerHTML = '⚠️ 当前为<strong>降级模式</strong>，无法同步/下载。请双击运行 <code>启动本地预览.bat</code>（或 <code>python server.py</code>），然后打开 <a href="http://127.0.0.1:8080/app/" target="_blank" rel="noopener">http://127.0.0.1:8080/app/</a>。国内 C 站镜像请在设置里填 <code>civitai.red</code>。';
+                    hint.innerHTML = '⚠️ 请确认 ComfyUI 已启动；设置里 Civitai 镜像填 <code>civitai.red</code>。同步将按文件名搜索 C 站匹配。';
                 }
             }
         },
@@ -516,7 +618,7 @@
                 const hint = document.getElementById('lora-detail-hint');
                 hint.textContent = LoraLibrary.hasFullLibrary()
                     ? ''
-                    : '完整预览/C站下载请运行：python server.py（本地桥接）';
+                    : '云端模式：元数据/预览来自 C 站；下载模型文件需 python server.py';
             } catch (e) {
                 document.getElementById('lora-detail-title').textContent = '加载失败';
                 document.getElementById('lora-detail-hint').textContent = e.message;
@@ -559,14 +661,17 @@
         async syncCurrent() {
             if (!this.currentItem) return;
             const rel = this.currentItem.rel_path || this.currentItem.name;
+            const manualId = document.getElementById('lora-detail-civitai-id')?.value.trim();
             const btn = document.getElementById('lora-detail-sync');
             if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
             try {
-                const item = await LoraLibrary.syncCivitai(rel);
+                const parsedId = manualId ? LoraLibrary.parseCivitaiId(manualId) : null;
+                const item = await LoraLibrary.syncCivitai(rel, parsedId || manualId);
                 this.currentItem = { ...this.currentItem, ...item };
                 await this.openDetail(rel);
+                this.renderGrid();
             } catch (e) {
-                alert(`同步失败：${e.message}\n\n常见原因：\n1. 未运行本地服务 → 请运行 启动本地预览.bat\n2. 国内网络 → 设置里 Civitai 镜像填 civitai.red\n3. 直接开 pages.dev 无法写本地文件`);
+                alert(`同步失败：${e.message}\n\n云端可自动按文件名搜 C 站；不准时可填 C 站模型链接/ID 再点同步。`);
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '同步 C 站'; }
             }
