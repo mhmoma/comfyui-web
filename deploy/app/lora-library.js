@@ -402,6 +402,17 @@
         return localStorage.getItem('lora_civitai_host') || 'civitai.red';
     }
 
+    function getTriggerWordsForLora(name) {
+        const cache = loadMetaCache();
+        const key = String(name || '').replace(/\\/g, '/').toLowerCase();
+        for (const [k, v] of Object.entries(cache)) {
+            if (k.replace(/\\/g, '/').toLowerCase() === key) {
+                return (v.trigger_words || []).filter(Boolean);
+            }
+        }
+        return [];
+    }
+
     global.LoraLibrary = {
         init,
         getMode,
@@ -420,6 +431,7 @@
         searchCivitai,
         saveCivitaiConfig,
         getCivitaiHost,
+        getTriggerWordsForLora,
         apiUrl,
     };
 
@@ -653,7 +665,8 @@
         useCurrent() {
             if (!this.currentItem || typeof this.onUseLora !== 'function') return;
             const name = this.currentItem.name || this.currentItem.rel_path;
-            this.onUseLora(name, 1.0);
+            const triggers = this.currentItem.trigger_words || [];
+            this.onUseLora(name, 1.0, triggers);
             this.closeDetail();
             this.close();
         },

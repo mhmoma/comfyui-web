@@ -600,12 +600,92 @@
         return fuzzy || name;
     }
 
-    function addLoraRow(presetName, presetStrength) {
+    function _parsePromptParts(text) {
+        return String(text || '').split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    function _promptPartName(part) {
+        const m = part.match(/^\((.+?):[\d.]+\)$/);
+        return (m ? m[1] : part).trim();
+    }
+
+    function _getLoraTriggerWords(loraName) {
+        if (window.LoraLibrary?.getTriggerWordsForLora) {
+            return LoraLibrary.getTriggerWordsForLora(loraName);
+        }
+        return [];
+    }
+
+    function _appendTriggersToPrompt(triggers) {
+        if (!triggers?.length || !dom.txtPositive) return;
+        const existing = new Set(_parsePromptParts(dom.txtPositive.value).map(p => _promptPartName(p).toLowerCase()));
+        const toAdd = [];
+        triggers.forEach((t) => {
+            const w = String(t).trim();
+            if (w && !existing.has(w.toLowerCase())) {
+                toAdd.push(w);
+                existing.add(w.toLowerCase());
+            }
+        });
+        if (!toAdd.length) return;
+        const cur = dom.txtPositive.value.trim();
+        dom.txtPositive.value = cur ? `${cur}, ${toAdd.join(', ')}` : toAdd.join(', ');
+        dom.txtPositive.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function _removeTriggersFromPrompt(triggers) {
+        if (!triggers?.length || !dom.txtPositive) return;
+        const removeSet = new Set(triggers.map(t => String(t).trim().toLowerCase()).filter(Boolean));
+        if (!removeSet.size) return;
+        const parts = _parsePromptParts(dom.txtPositive.value).filter(
+            p => !removeSet.has(_promptPartName(p).toLowerCase())
+        );
+        dom.txtPositive.value = parts.join(', ');
+        dom.txtPositive.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function _bindLoraRowEvents(row) {
+        const sel = row.querySelector('.lora-select');
+        const removeBtn = row.querySelector('.lora-remove');
+        if (sel) {
+            sel.addEventListener('change', () => {
+                const oldTriggers = JSON.parse(row.dataset.loraTriggers || '[]');
+                _removeTriggersFromPrompt(oldTriggers);
+                const name = resolveLoraNameForComfy(sel.value);
+                const newTriggers = _getLoraTriggerWords(name);
+                row.dataset.loraTriggers = JSON.stringify(newTriggers);
+                _appendTriggersToPrompt(newTriggers);
+            });
+        }
+        if (removeBtn) {
+            removeBtn.addEventListener('click', () => {
+                const triggers = JSON.parse(row.dataset.loraTriggers || '[]');
+                _removeTriggersFromPrompt(triggers);
+                row.remove();
+            });
+        }
+    }
+
+    function clearLoraRows(removeTriggers = false) {
+        if (removeTriggers) {
+            dom.loraList.querySelectorAll('.lora-row').forEach((row) => {
+                _removeTriggersFromPrompt(JSON.parse(row.dataset.loraTriggers || '[]'));
+            });
+        }
+        dom.loraList.innerHTML = '';
+        loraCount = 0;
+    }
+
+    function addLoraRow(presetName, presetStrength, presetTriggers, syncTriggers = true) {
         const resolvedName = presetName ? resolveLoraNameForComfy(presetName) : presetName;
+        const triggers = presetTriggers?.length
+            ? presetTriggers.filter(Boolean)
+            : (resolvedName ? _getLoraTriggerWords(resolvedName) : []);
         loraCount++;
         const row = document.createElement('div');
         row.className = 'lora-row';
         row.dataset.id = loraCount;
+        row.dataset.loraTriggers = JSON.stringify(syncTriggers ? triggers : []);
         let options = loraOptions.map(l => `<option value="${l}">${l}</option>`).join('');
         if (resolvedName && !loraOptions.includes(resolvedName)) {
             options = `<option value="${resolvedName}">${resolvedName}</option>` + options;
@@ -619,8 +699,11 @@
             const sel = row.querySelector('.lora-select');
             if (sel) sel.value = resolvedName;
         }
-        row.querySelector('.lora-remove').addEventListener('click', () => row.remove());
+        _bindLoraRowEvents(row);
         dom.loraList.appendChild(row);
+        if (syncTriggers && triggers.length) {
+            _appendTriggersToPrompt(triggers);
+        }
     }
 
     function getLoraSelections() {
@@ -1150,15 +1233,9 @@
             setSelectIfExists(dom.selAdetailerModel, ADETAILER_DEFAULT_MODEL);
         }
         ensureAdetailerDefaultModel();
-        dom.loraList.innerHTML = '';
-        loraCount = 0;
+        clearLoraRows(false);
         (data.loras || []).forEach(l => {
-            addLoraRow();
-            const row = dom.loraList.lastElementChild;
-            if (!row) return;
-            setSelectIfExists(row.querySelector('.lora-select'), l.name);
-            const strength = row.querySelector('.lora-strength');
-            if (strength && l.strength !== undefined) strength.value = l.strength;
+            addLoraRow(l.name, l.strength, undefined, false);
         });
         dom.regionalList.innerHTML = '';
         regionCount = 0;
@@ -1349,15 +1426,9 @@
     }
 
     function _profileApplyLoras(loras) {
-        dom.loraList.innerHTML = '';
-        loraCount = 0;
+        clearLoraRows(false);
         (loras || []).forEach(l => {
-            addLoraRow();
-            const row = dom.loraList.lastElementChild;
-            if (!row) return;
-            setSelectIfExists(row.querySelector('.lora-select'), l.name);
-            const strength = row.querySelector('.lora-strength');
-            if (strength && l.strength !== undefined) strength.value = l.strength;
+            addLoraRow(l.name, l.strength, undefined, false);
         });
     }
 
@@ -9110,7 +9181,7 @@
 
     function setupLoraLibrary() {
         if (!window.LoraLibraryUI) return;
-        LoraLibraryUI.onUseLora = async (name, strength) => {
+        LoraLibraryUI.onUseLora = async (name, strength, triggers) => {
             await loadLoRAs();
             const resolved = resolveLoraNameForComfy(name);
             if (resolved !== name && normalizeLoraKey(resolved) === normalizeLoraKey(name)) {
@@ -9120,13 +9191,14 @@
                 dom.chkLora.checked = true;
                 dom.chkLora.dispatchEvent(new Event('change'));
             }
-            addLoraRow(resolved, strength);
+            const words = triggers?.length ? triggers : _getLoraTriggerWords(resolved);
+            addLoraRow(resolved, strength, words, true);
         };
         LoraLibraryUI.bind();
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.54');
+        console.log('[ComfyUI Web] v4.55');
         await loadTags();
         renderHistory();
         setupTagPickers();
