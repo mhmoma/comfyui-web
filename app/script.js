@@ -577,23 +577,47 @@
     let loraOptions = [];
     let loraCount = 0;
 
+    /** ComfyUI 在 Windows 下 lora_name 用反斜杠，统一比对后取 object_info 里的原始值 */
+    function normalizeLoraKey(name) {
+        return String(name || '').replace(/\\/g, '/').toLowerCase();
+    }
+
+    function resolveLoraNameForComfy(name) {
+        if (!name) return name;
+        if (loraOptions.includes(name)) return name;
+        const key = normalizeLoraKey(name);
+        const exact = loraOptions.find(l => normalizeLoraKey(l) === key);
+        if (exact) return exact;
+        const parts = name.replace(/\\/g, '/').split('/');
+        const base = (parts.pop() || '').toLowerCase();
+        const folder = parts.join('/').toLowerCase();
+        const fuzzy = loraOptions.find(l => {
+            const lp = l.replace(/\\/g, '/').split('/');
+            const lb = (lp.pop() || '').toLowerCase();
+            const lf = lp.join('/').toLowerCase();
+            return lb === base && (!folder || lf === folder);
+        });
+        return fuzzy || name;
+    }
+
     function addLoraRow(presetName, presetStrength) {
+        const resolvedName = presetName ? resolveLoraNameForComfy(presetName) : presetName;
         loraCount++;
         const row = document.createElement('div');
         row.className = 'lora-row';
         row.dataset.id = loraCount;
         let options = loraOptions.map(l => `<option value="${l}">${l}</option>`).join('');
-        if (presetName && !loraOptions.includes(presetName)) {
-            options = `<option value="${presetName}">${presetName}</option>` + options;
+        if (resolvedName && !loraOptions.includes(resolvedName)) {
+            options = `<option value="${resolvedName}">${resolvedName}</option>` + options;
         }
         row.innerHTML = `
             <select class="lora-select">${options}</select>
             <input type="number" class="lora-strength" value="${presetStrength ?? 1}" min="0" max="2" step="0.05" title="强度">
             <button class="btn-icon lora-remove" title="移除">✕</button>
         `;
-        if (presetName) {
+        if (resolvedName) {
             const sel = row.querySelector('.lora-select');
-            if (sel) sel.value = presetName;
+            if (sel) sel.value = resolvedName;
         }
         row.querySelector('.lora-remove').addEventListener('click', () => row.remove());
         dom.loraList.appendChild(row);
@@ -602,7 +626,7 @@
     function getLoraSelections() {
         const rows = dom.loraList.querySelectorAll('.lora-row');
         return Array.from(rows).map(row => ({
-            name: row.querySelector('.lora-select').value,
+            name: resolveLoraNameForComfy(row.querySelector('.lora-select').value),
             strength: parseFloat(row.querySelector('.lora-strength').value),
         })).filter(l => l.name);
     }
@@ -9086,18 +9110,23 @@
 
     function setupLoraLibrary() {
         if (!window.LoraLibraryUI) return;
-        LoraLibraryUI.onUseLora = (name, strength) => {
+        LoraLibraryUI.onUseLora = async (name, strength) => {
+            await loadLoRAs();
+            const resolved = resolveLoraNameForComfy(name);
+            if (resolved !== name && normalizeLoraKey(resolved) === normalizeLoraKey(name)) {
+                console.log('[LoRA] 路径已对齐 ComfyUI:', name, '→', resolved);
+            }
             if (dom.chkLora && !dom.chkLora.checked) {
                 dom.chkLora.checked = true;
                 dom.chkLora.dispatchEvent(new Event('change'));
             }
-            addLoraRow(name, strength);
+            addLoraRow(resolved, strength);
         };
         LoraLibraryUI.bind();
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.53');
+        console.log('[ComfyUI Web] v4.54');
         await loadTags();
         renderHistory();
         setupTagPickers();
