@@ -1,0 +1,593 @@
+/**
+ * ComfyUI Web 自研 LoRA 库
+ * - 本地：server.py /api/lora/*
+ * - 云端：/api/lora/*（Civitai 代理）+ ComfyUI object_info 降级列表
+ */
+(function (global) {
+    'use strict';
+
+    const BRIDGE_PORTS = [8080, 8765];
+    const LS_KEY = 'lora_lib_meta_cache_v1';
+
+    let _apiOrigin = '';
+    let _mode = 'unknown'; // full | bridge | cloud | object_info
+    let _status = null;
+
+    function isLocalProxy() {
+        if (global.isLocalProxy) return global.isLocalProxy();
+        if (window.location.protocol === 'file:') return false;
+        const host = window.location.hostname;
+        return (host === 'localhost' || host === '127.0.0.1') && window.location.port !== '8188';
+    }
+
+    function getComfyServer() {
+        if (global.getComfyUIAddress) return global.getComfyUIAddress();
+        return localStorage.getItem('comfyui_address') || 'http://127.0.0.1:8188';
+    }
+
+    function apiUrl(path) {
+        const base = _apiOrigin || '';
+        return `${base}${path}`;
+    }
+
+    async function tryFetch(url, opts = {}) {
+        const res = await fetch(url, { ...opts, cache: 'no-store' });
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+            const data = await res.json();
+            return { res, data };
+        }
+        return { res, data: null };
+    }
+
+    async function detectBridge() {
+        for (const port of BRIDGE_PORTS) {
+            try {
+                const url = `http://127.0.0.1:${port}/api/lora/status`;
+                const { res, data } = await tryFetch(url);
+                if (res.ok && data?.ok && data.available) {
+                    _apiOrigin = `http://127.0.0.1:${port}`;
+                    _mode = 'bridge';
+                    _status = data;
+                    return true;
+                }
+            } catch (_) { /* next port */ }
+        }
+        return false;
+    }
+
+    async function init() {
+        if (isLocalProxy()) {
+            const { res, data } = await tryFetch('/api/lora/status');
+            if (res.ok && data?.ok) {
+                _apiOrigin = '';
+                _mode = data.available ? 'full' : 'cloud';
+                _status = data;
+                return _status;
+            }
+        }
+        if (await detectBridge()) return _status;
+        const { res, data } = await tryFetch('/api/lora/status');
+        if (res.ok && data?.ok) {
+            _apiOrigin = '';
+            _mode = 'cloud';
+            _status = data;
+            return _status;
+        }
+        _mode = 'object_info';
+        _status = { ok: true, available: false, mode: 'object_info' };
+        return _status;
+    }
+
+    function getMode() { return _mode; }
+    function getStatus() { return _status; }
+    function hasFullLibrary() { return _mode === 'full' || _mode === 'bridge'; }
+
+    function loadMetaCache() {
+        try {
+            return JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        } catch {
+            return {};
+        }
+    }
+
+    function saveMetaCache(cache) {
+        try {
+            localStorage.setItem(LS_KEY, JSON.stringify(cache));
+        } catch (_) { /* quota */ }
+    }
+
+    async function list({ page = 1, pageSize = 40, q = '', baseModel = '', folder = '' } = {}) {
+        if (hasFullLibrary()) {
+            const params = new URLSearchParams({
+                page: String(page),
+                page_size: String(pageSize),
+            });
+            if (q) params.set('q', q);
+            if (baseModel) params.set('base_model', baseModel);
+            if (folder) params.set('folder', folder);
+            const { res, data } = await tryFetch(`${apiUrl('/api/lora/list')}?${params}`);
+            if (!res.ok) throw new Error(data?.error || '列表加载失败');
+            return data;
+        }
+        const names = await listFromObjectInfo();
+        const cache = loadMetaCache();
+        let items = names.map(name => {
+            const c = cache[name] || {};
+            return {
+                model_name: c.model_name || name.split('/').pop(),
+                name,
+                rel_path: name,
+                folder: name.includes('/') ? name.split('/').slice(0, -1).join('/') : '',
+                base_model: c.base_model || '',
+                tags: c.tags || [],
+                trigger_words: c.trigger_words || [],
+                from_civitai: !!c.from_civitai,
+                preview_url: c.preview_url || '',
+                has_preview: !!c.preview_url,
+            };
+        });
+        const qq = (q || '').toLowerCase();
+        if (qq) {
+            items = items.filter(it => (
+                it.model_name.toLowerCase().includes(qq)
+                || it.name.toLowerCase().includes(qq)
+            ));
+        }
+        if (baseModel) {
+            items = items.filter(it => (it.base_model || '').toLowerCase() === baseModel.toLowerCase());
+        }
+        const total = items.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const start = (page - 1) * pageSize;
+        return {
+            items: items.slice(start, start + pageSize),
+            total,
+            page,
+            page_size: pageSize,
+            total_pages: totalPages,
+        };
+    }
+
+    async function listFromObjectInfo() {
+        const server = getComfyServer();
+        const res = await fetch(`${server}/object_info/LoraLoader`, { cache: 'no-store' });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data?.LoraLoader?.input?.required?.lora_name?.[0] || [];
+    }
+
+    async function detail(rel) {
+        if (hasFullLibrary()) {
+            const { res, data } = await tryFetch(`${apiUrl('/api/lora/detail')}?rel=${encodeURIComponent(rel)}`);
+            if (!res.ok) throw new Error(data?.error || '详情加载失败');
+            return data.item;
+        }
+        const cache = loadMetaCache();
+        return {
+            name: rel,
+            rel_path: rel,
+            model_name: rel.split('/').pop(),
+            ...(cache[rel] || {}),
+        };
+    }
+
+    function previewUrl(rel) {
+        if (hasFullLibrary()) {
+            return `${apiUrl('/api/lora/preview')}?rel=${encodeURIComponent(rel)}`;
+        }
+        const cache = loadMetaCache();
+        return cache[rel]?.preview_url || '';
+    }
+
+    function exampleUrl(rel, i) {
+        if (hasFullLibrary()) {
+            return `${apiUrl('/api/lora/example')}?rel=${encodeURIComponent(rel)}&i=${i}`;
+        }
+        const cache = loadMetaCache();
+        const urls = cache[rel]?.example_images || [];
+        return urls[i] || '';
+    }
+
+    async function syncCivitai(rel) {
+        if (hasFullLibrary()) {
+            const { res, data } = await tryFetch(apiUrl('/api/lora/sync-civitai'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rel }),
+            });
+            if (!res.ok) throw new Error(data?.error || '同步失败');
+            return data.item;
+        }
+        return syncCivitaiCloud(rel);
+    }
+
+    async function syncCivitaiCloud(rel) {
+        const server = getComfyServer();
+        const names = await listFromObjectInfo();
+        if (!names.includes(rel)) throw new Error('ComfyUI 中未找到该 LoRA');
+        const cache = loadMetaCache();
+        let hash = cache[rel]?.sha256;
+        if (!hash) {
+            throw new Error('降级模式需先在本地桥接服务同步一次以计算哈希，或粘贴 C 站版本 ID');
+        }
+        const { res, data } = await tryFetch(`${apiUrl('/api/lora/civitai/hash')}/${encodeURIComponent(hash)}`);
+        if (!res.ok || !data?.ok) throw new Error(data?.error || 'C 站查询失败');
+        const version = data.data;
+        let model = {};
+        if (version.modelId) {
+            const mr = await tryFetch(`${apiUrl('/api/lora/civitai/model')}/${version.modelId}`);
+            if (mr.res.ok && mr.data?.ok) model = mr.data.data;
+        }
+        const trained = version.trainedWords || [];
+        const tags = (model.tags || []).map(t => (typeof t === 'object' ? t.name : t)).filter(Boolean);
+        const images = (version.images || []).map(img => img.url).filter(Boolean);
+        const merged = {
+            model_name: model.name || rel.split('/').pop(),
+            base_model: version.baseModel || '',
+            tags,
+            trigger_words: trained,
+            from_civitai: true,
+            preview_url: images[0] || '',
+            example_images: images,
+            civitai: { id: version.id, modelId: version.modelId, name: version.name },
+            sha256: hash,
+        };
+        cache[rel] = { ...(cache[rel] || {}), ...merged };
+        saveMetaCache(cache);
+        return { rel_path: rel, name: rel, ...merged };
+    }
+
+    async function fetchExamples(rel) {
+        if (hasFullLibrary()) {
+            const { res, data } = await tryFetch(apiUrl('/api/lora/fetch-examples'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rel }),
+            });
+            if (!res.ok) throw new Error(data?.error || '示例图拉取失败');
+            return data;
+        }
+        await syncCivitai(rel);
+        const cache = loadMetaCache();
+        return { ok: true, urls: cache[rel]?.example_images || [] };
+    }
+
+    async function downloadCivitai(versionId, subfolder = '', filename = '') {
+        if (!hasFullLibrary()) {
+            throw new Error('下载到本地需运行 python server.py 本地桥接服务');
+        }
+        const { res, data } = await tryFetch(apiUrl('/api/lora/download-civitai'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version_id: versionId, subfolder, filename }),
+        });
+        if (!res.ok) throw new Error(data?.error || '下载启动失败');
+        return data;
+    }
+
+    async function downloadProgress(jobId) {
+        const { res, data } = await tryFetch(`${apiUrl('/api/lora/download-progress')}?job_id=${encodeURIComponent(jobId)}`);
+        if (!res.ok) return { ok: false };
+        return data;
+    }
+
+    async function searchCivitai(q, limit = 20) {
+        const { res, data } = await tryFetch(`${apiUrl('/api/lora/civitai/search')}?q=${encodeURIComponent(q)}&limit=${limit}`);
+        if (!res.ok || !data?.ok) throw new Error(data?.error || '搜索失败');
+        return data.data;
+    }
+
+    global.LoraLibrary = {
+        init,
+        getMode,
+        getStatus,
+        hasFullLibrary,
+        list,
+        detail,
+        previewUrl,
+        exampleUrl,
+        syncCivitai,
+        fetchExamples,
+        downloadCivitai,
+        downloadProgress,
+        searchCivitai,
+        apiUrl,
+    };
+
+    // ==================== UI ====================
+    const LoraLibraryUI = {
+        page: 1,
+        totalPages: 1,
+        q: '',
+        baseModel: '',
+        currentItem: null,
+        onUseLora: null,
+
+        async open() {
+            await LoraLibrary.init();
+            this.updateModeBadge();
+            this.page = 1;
+            const overlay = document.getElementById('portal-lora-overlay');
+            if (!overlay) return;
+            document.querySelectorAll('.portal-overlay').forEach(el => {
+                el.classList.add('hidden');
+                el.setAttribute('aria-hidden', 'true');
+            });
+            overlay.classList.remove('hidden');
+            overlay.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('portal-overlay-open');
+            const search = document.getElementById('portal-lora-search');
+            if (search) search.value = '';
+            this.q = '';
+            await this.renderGrid();
+        },
+
+        close() {
+            const overlay = document.getElementById('portal-lora-overlay');
+            if (overlay) {
+                overlay.classList.add('hidden');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+            document.body.classList.remove('portal-overlay-open');
+        },
+
+        updateModeBadge() {
+            const badge = document.getElementById('portal-lora-mode-badge');
+            if (!badge) return;
+            const mode = LoraLibrary.getMode();
+            const map = {
+                full: '本地完整',
+                bridge: '桥接服务',
+                cloud: '云端+C站',
+                object_info: '基础列表',
+            };
+            badge.textContent = map[mode] || mode;
+            badge.title = LoraLibrary.hasFullLibrary()
+                ? '支持预览、C站同步、下载'
+                : '运行 python server.py 可启用完整功能';
+        },
+
+        async renderGrid() {
+            const grid = document.getElementById('portal-lora-grid');
+            if (!grid) return;
+            grid.innerHTML = '<div class="portal-lora-empty">加载中…</div>';
+            try {
+                const data = await LoraLibrary.list({
+                    page: this.page,
+                    pageSize: 40,
+                    q: this.q,
+                    baseModel: this.baseModel,
+                });
+                this.totalPages = data.total_pages || 1;
+                grid.innerHTML = '';
+                if (!data.items?.length) {
+                    grid.innerHTML = '<div class="portal-lora-empty">暂无 LoRA</div>';
+                    this.renderPagination(data.total || 0);
+                    return;
+                }
+                const bases = new Set();
+                data.items.forEach(item => {
+                    if (item.base_model) bases.add(item.base_model);
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'portal-lora-card';
+                    const img = document.createElement('img');
+                    img.className = 'portal-lora-thumb';
+                    img.alt = item.model_name || item.name;
+                    const prev = item.preview_url
+                        ? (item.preview_url.startsWith('http') ? item.preview_url : LoraLibrary.apiUrl(item.preview_url))
+                        : '';
+                    if (prev) img.src = prev;
+                    else {
+                        img.style.display = 'none';
+                        card.classList.add('no-thumb');
+                    }
+                    const title = document.createElement('span');
+                    title.className = 'portal-lora-name';
+                    title.textContent = item.model_name || item.name;
+                    const sub = document.createElement('span');
+                    sub.className = 'portal-lora-sub';
+                    sub.textContent = [item.base_model, item.folder].filter(Boolean).join(' · ') || item.name;
+                    card.append(img, title, sub);
+                    card.addEventListener('click', () => this.openDetail(item.rel_path || item.name));
+                    grid.appendChild(card);
+                });
+                this.updateBaseFilter(Array.from(bases));
+                this.renderPagination(data.total || 0);
+            } catch (e) {
+                grid.innerHTML = `<div class="portal-lora-empty">加载失败：${e.message}</div>`;
+            }
+        },
+
+        updateBaseFilter(bases) {
+            const sel = document.getElementById('portal-lora-base-filter');
+            if (!sel || sel.dataset.filled === '1') return;
+            bases.sort().forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                sel.appendChild(opt);
+            });
+            sel.dataset.filled = '1';
+        },
+
+        renderPagination(total) {
+            const nav = document.getElementById('portal-lora-pagination');
+            if (!nav) return;
+            nav.innerHTML = '';
+            if (this.totalPages <= 1) return;
+            const prev = document.createElement('button');
+            prev.type = 'button';
+            prev.textContent = '← 上一页';
+            prev.disabled = this.page <= 1;
+            prev.onclick = () => { this.page--; this.renderGrid(); };
+            const info = document.createElement('span');
+            info.className = 'page-info';
+            info.textContent = `第 ${this.page} / ${this.totalPages} 页（共 ${total} 个）`;
+            const next = document.createElement('button');
+            next.type = 'button';
+            next.textContent = '下一页 →';
+            next.disabled = this.page >= this.totalPages;
+            next.onclick = () => { this.page++; this.renderGrid(); };
+            nav.append(prev, info, next);
+        },
+
+        async openDetail(rel) {
+            const modal = document.getElementById('modal-lora-detail');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            document.getElementById('lora-detail-title').textContent = '加载中…';
+            try {
+                const item = await LoraLibrary.detail(rel);
+                this.currentItem = item;
+                document.getElementById('lora-detail-title').textContent = item.model_name || rel;
+                document.getElementById('lora-detail-path').textContent = item.name || rel;
+                document.getElementById('lora-detail-base').textContent = item.base_model
+                    ? `基础模型：${item.base_model}` : '';
+                const triggers = document.getElementById('lora-detail-triggers');
+                triggers.innerHTML = '';
+                (item.trigger_words || []).forEach(w => {
+                    const chip = document.createElement('span');
+                    chip.className = 'lora-trigger-chip';
+                    chip.textContent = w;
+                    triggers.appendChild(chip);
+                });
+                const tags = document.getElementById('lora-detail-tags');
+                tags.innerHTML = '';
+                (item.tags || []).forEach(t => {
+                    const chip = document.createElement('span');
+                    chip.className = 'lora-tag-chip';
+                    chip.textContent = t;
+                    tags.appendChild(chip);
+                });
+                const prevImg = document.getElementById('lora-detail-preview');
+                const purl = LoraLibrary.previewUrl(rel);
+                if (purl) {
+                    prevImg.src = purl.startsWith('http') ? purl : LoraLibrary.apiUrl(purl);
+                    prevImg.style.display = '';
+                } else if (item.preview_url) {
+                    prevImg.src = item.preview_url;
+                    prevImg.style.display = '';
+                } else {
+                    prevImg.style.display = 'none';
+                }
+                this.renderExamples(rel, item);
+                const hint = document.getElementById('lora-detail-hint');
+                hint.textContent = LoraLibrary.hasFullLibrary()
+                    ? ''
+                    : '完整预览/C站下载请运行：python server.py（本地桥接）';
+            } catch (e) {
+                document.getElementById('lora-detail-title').textContent = '加载失败';
+                document.getElementById('lora-detail-hint').textContent = e.message;
+            }
+        },
+
+        renderExamples(rel, item) {
+            const wrap = document.getElementById('lora-detail-examples');
+            if (!wrap) return;
+            wrap.innerHTML = '';
+            const urls = item.example_images || [];
+            const count = Math.max(urls.length, item.example_images_local?.length || 0, 0);
+            const max = Math.max(count, urls.length);
+            for (let i = 0; i < max && i < 8; i++) {
+                const img = document.createElement('img');
+                img.className = 'lora-example-thumb';
+                const u = LoraLibrary.exampleUrl(rel, i) || urls[i];
+                if (u) img.src = u.startsWith('http') ? u : LoraLibrary.apiUrl(u);
+                wrap.appendChild(img);
+            }
+        },
+
+        closeDetail() {
+            const modal = document.getElementById('modal-lora-detail');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+            this.currentItem = null;
+        },
+
+        useCurrent() {
+            if (!this.currentItem || typeof this.onUseLora !== 'function') return;
+            const name = this.currentItem.name || this.currentItem.rel_path;
+            this.onUseLora(name, 1.0);
+            this.closeDetail();
+            this.close();
+        },
+
+        async syncCurrent() {
+            if (!this.currentItem) return;
+            const rel = this.currentItem.rel_path || this.currentItem.name;
+            const btn = document.getElementById('lora-detail-sync');
+            if (btn) { btn.disabled = true; btn.textContent = '同步中…'; }
+            try {
+                const item = await LoraLibrary.syncCivitai(rel);
+                this.currentItem = { ...this.currentItem, ...item };
+                await this.openDetail(rel);
+            } catch (e) {
+                alert('同步失败：' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '同步 C 站'; }
+            }
+        },
+
+        async fetchExamplesCurrent() {
+            if (!this.currentItem) return;
+            const rel = this.currentItem.rel_path || this.currentItem.name;
+            const btn = document.getElementById('lora-detail-examples-btn');
+            if (btn) { btn.disabled = true; btn.textContent = '拉取中…'; }
+            try {
+                await LoraLibrary.fetchExamples(rel);
+                const item = await LoraLibrary.detail(rel);
+                this.currentItem = item;
+                this.renderExamples(rel, item);
+            } catch (e) {
+                alert('拉取失败：' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '拉取示例图'; }
+            }
+        },
+
+        copyTriggers() {
+            const words = (this.currentItem?.trigger_words || []).join(', ');
+            if (!words) { alert('暂无触发词，请先同步 C 站'); return; }
+            navigator.clipboard.writeText(words).then(() => alert('已复制触发词')).catch(() => alert(words));
+        },
+
+        bind() {
+            document.getElementById('btn-browse-lora')?.addEventListener('click', () => this.open());
+            document.getElementById('portal-lora-close')?.addEventListener('click', () => this.close());
+            document.getElementById('lora-detail-close')?.addEventListener('click', () => this.closeDetail());
+            document.getElementById('lora-detail-use')?.addEventListener('click', () => this.useCurrent());
+            document.getElementById('lora-detail-sync')?.addEventListener('click', () => this.syncCurrent());
+            document.getElementById('lora-detail-examples-btn')?.addEventListener('click', () => this.fetchExamplesCurrent());
+            document.getElementById('lora-detail-copy-triggers')?.addEventListener('click', () => this.copyTriggers());
+            document.getElementById('portal-lora-refresh')?.addEventListener('click', () => {
+                this.page = 1;
+                this.renderGrid();
+            });
+            const search = document.getElementById('portal-lora-search');
+            if (search) {
+                let t;
+                search.addEventListener('input', () => {
+                    clearTimeout(t);
+                    t = setTimeout(() => {
+                        this.q = search.value.trim();
+                        this.page = 1;
+                        this.renderGrid();
+                    }, 250);
+                });
+            }
+            const baseFilter = document.getElementById('portal-lora-base-filter');
+            baseFilter?.addEventListener('change', () => {
+                this.baseModel = baseFilter.value;
+                this.page = 1;
+                this.renderGrid();
+            });
+        },
+    };
+
+    global.LoraLibraryUI = LoraLibraryUI;
+})(window);

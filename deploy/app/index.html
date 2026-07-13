@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.50</title>
-    <link rel="stylesheet" href="style.css?v=435">
+    <title>生图工具 · ComfyUI Web v4.51</title>
+    <link rel="stylesheet" href="style.css?v=436">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.50</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.51</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -126,6 +126,7 @@
                             </div>
                             <div class="panel-body" id="panel-lora">
                                 <div id="lora-list"></div>
+                                <button id="btn-browse-lora" class="btn-secondary" style="width:100%;margin-top:8px" type="button">📚 浏览 LoRA 库</button>
                                 <button id="btn-add-lora" class="btn-secondary" style="width:100%;margin-top:8px">+ 添加 LoRA</button>
                             </div>
                         </section>
@@ -897,7 +898,58 @@
         <nav id="portal-artist-pagination" class="portal-pagination" aria-label="画师分页"></nav>
     </div>
 
-    <!-- 手机端：全屏角色浏览浮层 -->
+    <!-- LoRA 库浮层 -->
+    <div id="portal-lora-overlay" class="portal-overlay hidden" aria-hidden="true">
+        <header class="portal-overlay-header">
+            <button type="button" id="portal-lora-close" class="portal-overlay-back">← 返回创作</button>
+            <h2 class="portal-overlay-title">LoRA 库</h2>
+            <span id="portal-lora-mode-badge" class="lora-mode-badge"></span>
+        </header>
+        <div class="portal-overlay-toolbar lora-toolbar">
+            <input type="text" id="portal-lora-search" class="portal-search" placeholder="搜索 LoRA 名称、标签、触发词…">
+            <div class="lora-toolbar-row">
+                <select id="portal-lora-base-filter" class="lora-filter-select" title="基础模型">
+                    <option value="">全部架构</option>
+                </select>
+                <button type="button" id="portal-lora-refresh" class="btn-secondary btn-sm">刷新</button>
+            </div>
+        </div>
+        <div id="portal-lora-scroll" class="portal-lora-scroll">
+            <div id="portal-lora-grid" class="portal-lora-grid"></div>
+        </div>
+        <nav id="portal-lora-pagination" class="portal-pagination" aria-label="LoRA 分页"></nav>
+    </div>
+
+    <!-- LoRA 详情 -->
+    <div id="modal-lora-detail" class="modal hidden" aria-hidden="true">
+        <div class="modal-content modal-lora-detail">
+            <div class="modal-header">
+                <h3 id="lora-detail-title">LoRA 详情</h3>
+                <button type="button" id="lora-detail-close" class="modal-close">✕</button>
+            </div>
+            <div class="lora-detail-body">
+                <div class="lora-detail-preview-wrap">
+                    <img id="lora-detail-preview" class="lora-detail-preview" alt="">
+                    <div id="lora-detail-examples" class="lora-detail-examples"></div>
+                </div>
+                <div class="lora-detail-info">
+                    <p id="lora-detail-path" class="lora-detail-path"></p>
+                    <p id="lora-detail-base" class="lora-detail-meta"></p>
+                    <div id="lora-detail-triggers" class="lora-detail-triggers"></div>
+                    <div id="lora-detail-tags" class="lora-detail-tags"></div>
+                    <div class="lora-detail-actions">
+                        <button type="button" id="lora-detail-use" class="btn-primary">加入生图</button>
+                        <button type="button" id="lora-detail-copy-triggers" class="btn-secondary">复制触发词</button>
+                        <button type="button" id="lora-detail-sync" class="btn-secondary">同步 C 站</button>
+                        <button type="button" id="lora-detail-examples-btn" class="btn-secondary">拉取示例图</button>
+                    </div>
+                    <p id="lora-detail-hint" class="lora-detail-hint"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 首页深链：桌面端角色库浮层 -->
     <div id="char-browser-overlay" class="char-browser-overlay hidden" aria-hidden="true">
         <header class="char-browser-header">
             <button type="button" id="char-browser-back" class="char-browser-back">← 作品</button>
@@ -1474,6 +1526,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=444"></script>
+    <script src="lora-library.js?v=1"></script>
+    <script src="script.js?v=445"></script>
 </body>
 </html>

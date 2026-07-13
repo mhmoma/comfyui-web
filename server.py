@@ -22,7 +22,7 @@ import io
 import urllib.request
 from collections import deque
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 import mimetypes
 from PIL import Image
 from PIL import ImageFilter
@@ -37,6 +37,14 @@ def _get_base_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 STATIC_DIR = _get_base_dir()
+SCRIPTS_DIR = os.path.join(STATIC_DIR, 'scripts')
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+try:
+    import lora_library as _lora_library
+except ImportError:
+    _lora_library = None
 
 API_PREFIXES = (
     '/object_info', '/prompt', '/history', '/view',
@@ -636,7 +644,66 @@ class Handler(BaseHTTPRequestHandler):
                     'hint': 'Install dependencies: pip install torch torchvision segment-anything ultralytics numpy pillow',
                 })
             return True
+        if self.path.startswith('/api/lora'):
+            return self._handle_lora_api(method)
         return False
+
+    def _parse_query(self):
+        parsed = urlparse(self.path)
+        q = {}
+        if parsed.query:
+            for part in parsed.query.split('&'):
+                if '=' in part:
+                    k, v = part.split('=', 1)
+                    q[unquote(k)] = unquote(v)
+                elif part:
+                    q[part] = ''
+        return parsed.path, q
+
+    def _read_json_body(self):
+        length = int(self.headers.get('Content-Length', 0))
+        raw = self.rfile.read(length) if length > 0 else b'{}'
+        try:
+            return json.loads(raw.decode('utf-8'))
+        except Exception:
+            return {}
+
+    def _serve_file(self, filepath):
+        mime, _ = mimetypes.guess_type(filepath)
+        if mime is None:
+            mime = 'application/octet-stream'
+        with open(filepath, 'rb') as f:
+            content = f.read()
+        self.send_response(200)
+        self.send_header('Content-Type', mime)
+        self.send_header('Content-Length', str(len(content)))
+        self.send_header('Cache-Control', 'public, max-age=3600')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _handle_lora_api(self, method):
+        if _lora_library is None:
+            self._error(500, 'lora_library 模块未加载')
+            return True
+        path, query = self._parse_query()
+        body = self._read_json_body() if method == 'POST' else {}
+        try:
+            code, data = _lora_library.handle_api(method, path, query, body, COMFYUI_URL)
+            if code == 0 and isinstance(data, dict) and data.get('__file__'):
+                self._serve_file(data['__file__'])
+                return True
+            if code == 302 and isinstance(data, dict) and data.get('__redirect__'):
+                self.send_response(302)
+                self.send_header('Location', data['__redirect__'])
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                return True
+            _json_response(self, code, data)
+        except Exception as e:
+            traceback.print_exc()
+            _json_response(self, 500, {'ok': False, 'error': str(e)})
+        return True
 
     def _serve_static(self):
         path = self.path.split('?')[0]

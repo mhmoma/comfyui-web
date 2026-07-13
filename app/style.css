@@ -7143,3 +7143,158 @@ body.composite-open {
         height: 180px;
     }
 }
+
+/* LoRA 库浮层 */
+.lora-mode-badge {
+    margin-left: auto;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+.lora-toolbar-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+}
+.lora-filter-select {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+.portal-lora-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px 16px;
+}
+.portal-lora-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+.portal-lora-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+}
+.portal-lora-card:hover {
+    border-color: var(--accent);
+}
+.portal-lora-card.no-thumb {
+    min-height: 120px;
+    padding: 12px;
+}
+.portal-lora-thumb {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    background: var(--bg-secondary);
+}
+.portal-lora-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 8px 2px;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.portal-lora-sub {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    padding: 0 8px 8px;
+    line-height: 1.2;
+}
+.portal-lora-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 40px 16px;
+}
+.modal-lora-detail {
+    max-width: 920px;
+    width: min(96vw, 920px);
+}
+.lora-detail-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+.lora-detail-preview {
+    width: 100%;
+    max-height: 360px;
+    object-fit: contain;
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+}
+.lora-detail-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.lora-example-thumb {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+.lora-detail-path {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+.lora-detail-triggers,
+.lora-detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+.lora-trigger-chip,
+.lora-tag-chip {
+    font-size: 0.72rem;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+}
+.lora-trigger-chip {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.lora-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.lora-detail-hint {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-top: 10px;
+}
+@media (max-width: 720px) {
+    .lora-detail-body {
+        grid-template-columns: 1fr;
+    }
+    .portal-lora-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

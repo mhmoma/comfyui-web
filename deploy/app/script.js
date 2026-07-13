@@ -26,6 +26,9 @@
         localStorage.setItem('comfyui_address', url.replace(/\/+$/, ''));
     }
 
+    window.isLocalProxy = isLocalProxy;
+    window.getComfyUIAddress = getComfyUIAddress;
+
     /** 本地日期文件夹 YYYY-MM-DD（ComfyUI output 子目录） */
     function getLocalDateFolder(date = new Date()) {
         const y = date.getFullYear();
@@ -574,16 +577,24 @@
     let loraOptions = [];
     let loraCount = 0;
 
-    function addLoraRow() {
+    function addLoraRow(presetName, presetStrength) {
         loraCount++;
         const row = document.createElement('div');
         row.className = 'lora-row';
         row.dataset.id = loraCount;
+        let options = loraOptions.map(l => `<option value="${l}">${l}</option>`).join('');
+        if (presetName && !loraOptions.includes(presetName)) {
+            options = `<option value="${presetName}">${presetName}</option>` + options;
+        }
         row.innerHTML = `
-            <select class="lora-select">${loraOptions.map(l => `<option value="${l}">${l}</option>`).join('')}</select>
-            <input type="number" class="lora-strength" value="1" min="0" max="2" step="0.05" title="强度">
+            <select class="lora-select">${options}</select>
+            <input type="number" class="lora-strength" value="${presetStrength ?? 1}" min="0" max="2" step="0.05" title="强度">
             <button class="btn-icon lora-remove" title="移除">✕</button>
         `;
+        if (presetName) {
+            const sel = row.querySelector('.lora-select');
+            if (sel) sel.value = presetName;
+        }
         row.querySelector('.lora-remove').addEventListener('click', () => row.remove());
         dom.loraList.appendChild(row);
     }
@@ -8762,7 +8773,7 @@
     }
 
     function _closePortalOverlays() {
-        ['portal-char-overlay', 'portal-artist-overlay'].forEach(id => {
+        ['portal-char-overlay', 'portal-artist-overlay', 'portal-lora-overlay'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.classList.add('hidden');
@@ -9060,12 +9071,25 @@
         }
     });
 
+    function setupLoraLibrary() {
+        if (!window.LoraLibraryUI) return;
+        LoraLibraryUI.onUseLora = (name, strength) => {
+            if (dom.chkLora && !dom.chkLora.checked) {
+                dom.chkLora.checked = true;
+                dom.chkLora.dispatchEvent(new Event('change'));
+            }
+            addLoraRow(name, strength);
+        };
+        LoraLibraryUI.bind();
+    }
+
     async function init() {
-        console.log('[ComfyUI Web] v4.48');
+        console.log('[ComfyUI Web] v4.51');
         await loadTags();
         renderHistory();
         setupTagPickers();
         setupPortalOverlays();
+        setupLoraLibrary();
         setupMobileTagsMount();
         setupMobileArtistNav();
         setupMobileCharBrowser();
