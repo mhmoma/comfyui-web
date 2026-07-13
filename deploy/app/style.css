@@ -323,8 +323,18 @@ body {
     gap: 8px;
 }
 
+.compact-row-size {
+    grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+}
+
 .compact-row label {
     margin-bottom: 4px;
+}
+
+.btn-size-swap {
+    white-space: nowrap;
+    min-height: 36px;
 }
 
 /* Sidebar Resizer */
@@ -4696,6 +4706,14 @@ body.inpaint-open {
         flex-direction: column;
         gap: 8px;
         grid-template-columns: 1fr;
+    }
+
+    .compact-row-size {
+        grid-template-columns: 1fr;
+    }
+
+    .btn-size-swap {
+        width: 100%;
     }
 
     .compact-row label {

@@ -61,6 +61,7 @@
         inpCfg: $('#inp-cfg'),
         inpWidth: $('#inp-width'),
         inpHeight: $('#inp-height'),
+        btnSwapSize: $('#btn-swap-size'),
         inpSeed: $('#inp-seed'),
         btnRandomSeed: $('#btn-random-seed'),
         txtPositive: $('#txt-positive'),
@@ -1025,6 +1026,19 @@
         setSelectIfExists(dom.selScheduler, state.scheduler);
     }
 
+    function swapCurrentSize() {
+        if (!dom.inpWidth || !dom.inpHeight) return;
+        const width = dom.inpWidth.value;
+        const height = dom.inpHeight.value;
+        dom.inpWidth.value = height;
+        dom.inpHeight.value = width;
+        dom.inpWidth.dispatchEvent(new Event('input', { bubbles: true }));
+        dom.inpHeight.dispatchEvent(new Event('input', { bubbles: true }));
+        const arch = dom.selArch?.value || 'sdxl';
+        _archState[arch] = captureArchState();
+        ProfileManager.scheduleAutosave();
+    }
+
     function formatAnimaArtistTag(tag) {
         let name = tag.replace(/_/g, ' ');
         if (!name.startsWith('@')) name = '@' + name;
@@ -1057,6 +1071,8 @@
             }
             ProfileManager.scheduleAutosave();
         });
+
+        dom.btnSwapSize?.addEventListener('click', swapCurrentSize);
     }
 
     function createEmptyArchModules() {
