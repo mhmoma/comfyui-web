@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.51</title>
-    <link rel="stylesheet" href="style.css?v=436">
+    <title>生图工具 · ComfyUI Web v4.52</title>
+    <link rel="stylesheet" href="style.css?v=437">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.51</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.52</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -905,6 +905,7 @@
             <h2 class="portal-overlay-title">LoRA 库</h2>
             <span id="portal-lora-mode-badge" class="lora-mode-badge"></span>
         </header>
+        <div id="portal-lora-setup-hint" class="portal-lora-setup-hint hidden"></div>
         <div class="portal-overlay-toolbar lora-toolbar">
             <input type="text" id="portal-lora-search" class="portal-search" placeholder="搜索 LoRA 名称、标签、触发词…">
             <div class="lora-toolbar-row">
@@ -969,6 +970,16 @@
             <label>ComfyUI 服务器地址
                 <input type="text" id="inp-server" placeholder="http://127.0.0.1:8188">
             </label>
+            <hr class="settings-divider">
+            <h3 class="settings-section-title">LoRA 库 / C 站</h3>
+            <label>Civitai 镜像站
+                <input type="text" id="inp-civitai-host" placeholder="civitai.red" value="civitai.red">
+            </label>
+            <small class="profile-hint">国内推荐 <code>civitai.red</code>；官方站 <code>civitai.com</code> 可能无法连接。</small>
+            <label>Civitai API Key（可选）
+                <input type="password" id="inp-civitai-key" placeholder="用于下载/部分模型查询">
+            </label>
+            <small class="profile-hint">完整 LoRA 库（预览、同步、下载）需运行 <code>python server.py</code> 后访问 <code>http://127.0.0.1:8080/app/</code></small>
             <label>标签翻译服务
                 <select id="sel-translate-provider">
                     <option value="local">仅本地（tags.json）</option>
@@ -1526,7 +1537,7 @@
         </div>
     </div>
 
-    <script src="lora-library.js?v=1"></script>
-    <script src="script.js?v=445"></script>
+    <script src="lora-library.js?v=2"></script>
+    <script src="script.js?v=446"></script>
 </body>
 </html>

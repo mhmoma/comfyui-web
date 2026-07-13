@@ -7145,6 +7145,21 @@ body.composite-open {
 }
 
 /* LoRA 库浮层 */
+.portal-lora-setup-hint {
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    background: rgba(233, 69, 96, 0.12);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+.portal-lora-setup-hint.hidden {
+    display: none;
+}
+.portal-lora-setup-hint code {
+    font-size: 0.85em;
+}
 .lora-mode-badge {
     margin-left: auto;
     font-size: 0.7rem;

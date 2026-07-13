@@ -196,7 +196,13 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rel }),
             });
-            if (!res.ok) throw new Error(data?.error || '同步失败');
+            if (!res.ok) {
+                const msg = data?.error || `HTTP ${res.status}`;
+                if (res.status === 404) {
+                    throw new Error('未找到同步接口。请用 http://127.0.0.1:8080/app/ 打开（需先运行 python server.py）');
+                }
+                throw new Error(msg);
+            }
             return data.item;
         }
         return syncCivitaiCloud(rel);
@@ -278,6 +284,27 @@
         return data.data;
     }
 
+    async function saveCivitaiConfig(apiKey, host) {
+        const h = (host || 'civitai.red').trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+        localStorage.setItem('lora_civitai_host', h);
+        if (apiKey !== undefined) {
+            if (apiKey) localStorage.setItem('lora_civitai_key', apiKey);
+            else localStorage.removeItem('lora_civitai_key');
+        }
+        if (hasFullLibrary()) {
+            await tryFetch(apiUrl('/api/lora/config'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ civitai_api_key: apiKey || '', civitai_host: h }),
+            });
+        }
+        return { host: h };
+    }
+
+    function getCivitaiHost() {
+        return localStorage.getItem('lora_civitai_host') || 'civitai.red';
+    }
+
     global.LoraLibrary = {
         init,
         getMode,
@@ -292,6 +319,8 @@
         downloadCivitai,
         downloadProgress,
         searchCivitai,
+        saveCivitaiConfig,
+        getCivitaiHost,
         apiUrl,
     };
 
@@ -334,6 +363,7 @@
 
         updateModeBadge() {
             const badge = document.getElementById('portal-lora-mode-badge');
+            const hint = document.getElementById('portal-lora-setup-hint');
             if (!badge) return;
             const mode = LoraLibrary.getMode();
             const map = {
@@ -345,7 +375,16 @@
             badge.textContent = map[mode] || mode;
             badge.title = LoraLibrary.hasFullLibrary()
                 ? '支持预览、C站同步、下载'
-                : '运行 python server.py 可启用完整功能';
+                : '需运行 python server.py 本地桥接';
+            if (hint) {
+                if (LoraLibrary.hasFullLibrary()) {
+                    hint.classList.add('hidden');
+                    hint.textContent = '';
+                } else {
+                    hint.classList.remove('hidden');
+                    hint.innerHTML = '⚠️ 当前为<strong>降级模式</strong>，无法同步/下载。请双击运行 <code>启动本地预览.bat</code>（或 <code>python server.py</code>），然后打开 <a href="http://127.0.0.1:8080/app/" target="_blank" rel="noopener">http://127.0.0.1:8080/app/</a>。国内 C 站镜像请在设置里填 <code>civitai.red</code>。';
+                }
+            }
         },
 
         async renderGrid() {
@@ -527,7 +566,7 @@
                 this.currentItem = { ...this.currentItem, ...item };
                 await this.openDetail(rel);
             } catch (e) {
-                alert('同步失败：' + e.message);
+                alert(`同步失败：${e.message}\n\n常见原因：\n1. 未运行本地服务 → 请运行 启动本地预览.bat\n2. 国内网络 → 设置里 Civitai 镜像填 civitai.red\n3. 直接开 pages.dev 无法写本地文件`);
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '同步 C 站'; }
             }

@@ -118,7 +118,7 @@ def get_civitai_settings() -> Dict[str, str]:
     cfg = _load_config()
     return {
         'api_key': cfg.get('civitai_api_key') or os.environ.get('CIVITAI_API_KEY', ''),
-        'host': (cfg.get('civitai_host') or 'civitai.com').strip().rstrip('/'),
+        'host': (cfg.get('civitai_host') or 'civitai.red').strip().rstrip('/'),
     }
 
 

@@ -6332,14 +6332,27 @@
             const admStatus = document.getElementById('admin-status');
             if (admInput) admInput.value = sessionStorage.getItem('_adm') || '';
             if (admStatus) admStatus.style.display = sessionStorage.getItem('_adm') ? 'block' : 'none';
+            const civHost = document.getElementById('inp-civitai-host');
+            const civKey = document.getElementById('inp-civitai-key');
+            if (civHost) civHost.value = localStorage.getItem('lora_civitai_host') || 'civitai.red';
+            if (civKey) civKey.value = localStorage.getItem('lora_civitai_key') || '';
             dom.modalSettings.classList.remove('hidden');
         });
 
-        dom.btnSaveSettings.addEventListener('click', () => {
+        dom.btnSaveSettings.addEventListener('click', async () => {
             const url = dom.inpServer.value.trim();
             if (!url) return;
             setComfyUIAddress(url);
             ProfileManager.saveSessionFromUI();
+            const civHost = document.getElementById('inp-civitai-host')?.value.trim();
+            const civKey = document.getElementById('inp-civitai-key')?.value.trim();
+            if (window.LoraLibrary?.saveCivitaiConfig) {
+                try {
+                    await LoraLibrary.saveCivitaiConfig(civKey || '', civHost || 'civitai.red');
+                } catch (e) {
+                    console.warn('[LoRA] civitai config save:', e);
+                }
+            }
             const admKey = document.getElementById('inp-admin-key')?.value.trim();
             if (admKey) {
                 sessionStorage.setItem('_adm', admKey);
@@ -9084,7 +9097,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.51');
+        console.log('[ComfyUI Web] v4.52');
         await loadTags();
         renderHistory();
         setupTagPickers();
