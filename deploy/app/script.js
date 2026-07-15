@@ -583,7 +583,14 @@
     }
 
     function resolveLoraNameForComfy(name) {
-        if (!name) return name;
+        if (name == null || name === '') return name;
+        // 点击「添加 LoRA」时若误传入 Event，直接忽略
+        if (typeof name !== 'string') {
+            if (typeof name === 'object' && (name instanceof Event || typeof name.preventDefault === 'function')) {
+                return '';
+            }
+            name = String(name);
+        }
         if (loraOptions.includes(name)) return name;
         const key = normalizeLoraKey(name);
         const exact = loraOptions.find(l => normalizeLoraKey(l) === key);
@@ -592,7 +599,7 @@
         const base = (parts.pop() || '').toLowerCase();
         const folder = parts.join('/').toLowerCase();
         const fuzzy = loraOptions.find(l => {
-            const lp = l.replace(/\\/g, '/').split('/');
+            const lp = String(l).replace(/\\/g, '/').split('/');
             const lb = (lp.pop() || '').toLowerCase();
             const lf = lp.join('/').toLowerCase();
             return lb === base && (!folder || lf === folder);
@@ -677,6 +684,12 @@
     }
 
     function addLoraRow(presetName, presetStrength, presetTriggers, syncTriggers = true) {
+        // 作为 click 回调时第一个参数是 Event，不能当成 LoRA 名
+        if (presetName && typeof presetName === 'object' && (presetName instanceof Event || typeof presetName.preventDefault === 'function')) {
+            presetName = undefined;
+            presetStrength = undefined;
+            presetTriggers = undefined;
+        }
         const resolvedName = presetName ? resolveLoraNameForComfy(presetName) : presetName;
         const triggers = presetTriggers?.length
             ? presetTriggers.filter(Boolean)
@@ -6539,7 +6552,7 @@
         });
 
         // LoRA add button
-        dom.btnAddLora.addEventListener('click', addLoraRow);
+        dom.btnAddLora.addEventListener('click', () => addLoraRow());
 
         // ControlNet model description
         dom.selControlnet.addEventListener('change', updateCnDesc);
@@ -9198,7 +9211,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.55');
+        console.log('[ComfyUI Web] v4.56');
         await loadTags();
         renderHistory();
         setupTagPickers();
