@@ -6,7 +6,7 @@ alwaysApply: true
 
 # ComfyUI-Web 部署与 D1 数据库操作规范
 
-> **部署版本**: 1.139
+> **部署版本**: 1.140
 > **版本记录**: 见底部「版本历史」 
 > **重要**: 每次修改代码后，必须更新本文件的**部署版本号**和**版本历史**。凡前端相关代码变更（`index.html` / `script.js` / `style.css` 及 `deploy/` 对应文件），必须递增前端版本号与静态资源版本参数。
 
@@ -348,6 +348,7 @@ D1 绑定在 Settings → Functions → D1 database bindings：
 | 1.129 | 2026-07-12 | 手机标签调节面板修复 | 修复点标签时 blur 重绘吞掉点击；改 pointerdown 委托；面板移出 app 壳层（`app v4.47` / `script.js?v=442` / `style.css?v=432`）。 |
 | 1.130 | 2026-07-12 | 手机标签选中跟随 | 前移/后移时先更新选中 idx 再重绘，高亮常亮跟随标签并自动滚入视区（`app v4.48` / `script.js?v=443` / `style.css?v=433`）。 |
 | 1.131 | 2026-07-12 | 手机标签单行高度修复 | 拆分栏剩一行时标签不再被 flex 拉伸变高，保持紧凑 chip 尺寸（`app v4.49` / `style.css?v=434`）。 |
+| 1.140 | 2026-07-17 | 角色缩略图竖向 3:4 | 角色库详情浮层缩略图改为 aspect-ratio 3/4 + cover/top，桌面 6–8 列，避免矮宽裁切导致全身图变窄条（`app v4.58` / `style.css?v=441` / `script.js?v=452`）。 |
 | 1.139 | 2026-07-17 | 桌面角色库可点开作品 | 修复主页深链进入角色库后点击作品无反应：桌面端启用 char-browser 浮层并高于门户层（`app v4.57` / `style.css?v=440` / `script.js?v=451`）。 |
 | 1.138 | 2026-07-15 | 修复添加 LoRA 崩溃 | 点击「添加 LoRA」不再把 MouseEvent 当文件名；`resolveLoraNameForComfy` 兼容非字符串（`app v4.56` / `script.js?v=450`）。 |
 | 1.137 | 2026-07-14 | LoRA 触发词自动同步 | 加入/切换 LoRA 自动写入正向提示词，移除 LoRA 自动删除对应触发词（`app v4.55` / `script.js?v=449`）。 |

@@ -6679,7 +6679,7 @@ body.char-browser-open {
     width: calc((100% - 12px) / 3) !important;
     flex: 0 0 calc((100% - 12px) / 3) !important;
     min-width: 0;
-    min-height: 168px !important;
+    min-height: 0 !important;
     padding: 0;
     overflow: hidden;
     border-radius: 8px;
@@ -6697,8 +6697,9 @@ body.char-browser-open {
 .char-browser-overlay .char-browser-thumb {
     position: relative;
     width: 100%;
-    height: 128px !important;
-    min-height: 128px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: 3 / 4;
     flex-shrink: 0;
     background: #2a2a42;
     overflow: hidden;
@@ -6816,13 +6817,22 @@ body.char-browser-open {
 
 @media (min-width: 768px) {
     .char-browser-overlay .char-browser-card {
-        width: calc((100% - 24px) / 4) !important;
-        flex: 0 0 calc((100% - 24px) / 4) !important;
+        width: calc((100% - 36px) / 6) !important;
+        flex: 0 0 calc((100% - 36px) / 6) !important;
+        min-height: 0 !important;
     }
 
     .char-browser-overlay .char-browser-thumb {
-        height: 150px !important;
-        min-height: 150px !important;
+        height: auto !important;
+        min-height: 0 !important;
+        aspect-ratio: 3 / 4;
+    }
+}
+
+@media (min-width: 1200px) {
+    .char-browser-overlay .char-browser-card {
+        width: calc((100% - 48px) / 8) !important;
+        flex: 0 0 calc((100% - 48px) / 8) !important;
     }
 }
 
