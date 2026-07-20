@@ -1431,7 +1431,15 @@ textarea {
 .action-bar {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.action-bar-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .btn-dzmm {
@@ -1456,6 +1464,53 @@ textarea {
     box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
 }
 
+.btn-dzmm:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* PC：模型/尺寸/配额靠右紧凑 */
+.dzmm-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    margin-left: auto;
+}
+
+.dzmm-select {
+    background: var(--bg-input, #1a1a22);
+    color: var(--text, #eee);
+    border: 1px solid var(--border, #333);
+    border-radius: var(--radius, 8px);
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    max-width: 132px;
+    min-width: 0;
+}
+
+.dzmm-quota-badge {
+    font-size: 11px;
+    color: var(--muted, #9aa3b5);
+    padding: 5px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border, #333);
+    background: var(--bg-input, rgba(255,255,255,0.04));
+    white-space: nowrap;
+}
+
+.dzmm-quota-badge.empty {
+    color: #f0a0a0;
+    border-color: rgba(240, 120, 120, 0.35);
+}
+
+.dzmm-quota-badge.ok {
+    color: #a8f0ce;
+    border-color: rgba(62, 207, 142, 0.35);
+}
 
 .progress-container {
     flex: 1;
@@ -4757,12 +4812,60 @@ body.char-browser-open {
         box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.22);
     }
 
+    .main.mobile-tab-create .action-bar-main {
+        order: 1;
+    }
+
+    .main.mobile-tab-create .dzmm-controls {
+        order: 2;
+    }
+
+    .main.mobile-tab-create .progress-container {
+        order: 3;
+    }
+
+    .action-bar-main {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .action-bar-main .btn-primary,
+    .action-bar-main .btn-dzmm {
+        width: 100%;
+        justify-content: center;
+    }
+
     .btn-dzmm {
         width: 100%;
         justify-content: center;
         padding: 10px;
         min-height: 40px;
         font-size: 14px;
+    }
+
+    /* 移动端保持原纵向堆叠，不做 PC 右侧布局 */
+    .dzmm-controls {
+        width: 100%;
+        margin-left: 0;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .dzmm-select {
+        flex: 1;
+        max-width: none;
+        min-width: 0;
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+
+    .dzmm-quota-badge {
+        width: 100%;
+        text-align: center;
+        font-size: 12px;
+        padding: 6px 10px;
     }
 
     .action-bar {

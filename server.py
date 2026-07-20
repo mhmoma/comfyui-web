@@ -46,6 +46,11 @@ try:
 except ImportError:
     _lora_library = None
 
+try:
+    import dzmm_draw as _dzmm_draw
+except ImportError:
+    _dzmm_draw = None
+
 API_PREFIXES = (
     '/object_info', '/prompt', '/history', '/view',
     '/upload', '/ws', '/queue', '/interrupt',
@@ -646,6 +651,8 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if self.path.startswith('/api/lora'):
             return self._handle_lora_api(method)
+        if self.path.split('?')[0].startswith('/api/dzmm'):
+            return self._handle_dzmm_api(method)
         return False
 
     def _parse_query(self):
@@ -698,6 +705,31 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header('Location', data['__redirect__'])
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
+                return True
+            _json_response(self, code, data)
+        except Exception as e:
+            traceback.print_exc()
+            _json_response(self, 500, {'ok': False, 'error': str(e)})
+        return True
+
+    def _handle_dzmm_api(self, method):
+        if _dzmm_draw is None:
+            self._error(500, 'dzmm_draw 模块未加载（请用 python server.py 启动本地服务）')
+            return True
+        path, query = self._parse_query()
+        body = self._read_json_body() if method == 'POST' else {}
+        # 请求头 Cookie 优先（与线上一致）；不写入云端，仅本机配置文件可选持久化
+        hdr = self.headers.get('X-Dzmm-Cookie') or self.headers.get('x-dzmm-cookie') or ''
+        if hdr and isinstance(body, dict):
+            body = {**body, '_requestCookie': hdr}
+        elif hdr:
+            body = {'_requestCookie': hdr}
+            if method == 'GET':
+                query = {**query, '_requestCookie': hdr}
+        try:
+            code, data = _dzmm_draw.handle_api(method, path, query, body)
+            if code == 0 and isinstance(data, dict) and data.get('__file__'):
+                self._serve_file(data['__file__'])
                 return True
             _json_response(self, code, data)
         except Exception as e:

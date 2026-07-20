@@ -11,3 +11,13 @@ artists_raw.json
 .wrangler/cache/
 .wrangler/state/
 .wrangler/tmp/
+
+# DZMM 本地代理（含登录 Cookie）— 永不提交
+dzmm_config.json
+outputs_dzmm/
+*_dzmm_cookie*.txt
+_dzmm_cookie.txt
+.env
+.env.*
+!.env.example
+

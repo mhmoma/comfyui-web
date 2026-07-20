@@ -6444,6 +6444,10 @@
             const civKey = document.getElementById('inp-civitai-key');
             if (civHost) civHost.value = localStorage.getItem('lora_civitai_host') || 'civitai.red';
             if (civKey) civKey.value = localStorage.getItem('lora_civitai_key') || '';
+            const dzmmInp = document.getElementById('inp-dzmm-cookie');
+            if (dzmmInp && !dzmmInp.value.trim()) {
+                dzmmInp.value = localStorage.getItem('dzmm_cookie') || '';
+            }
             dom.modalSettings.classList.remove('hidden');
         });
 
@@ -6460,6 +6464,29 @@
                 } catch (e) {
                     console.warn('[LoRA] civitai config save:', e);
                 }
+            }
+            const dzmmCookie = document.getElementById('inp-dzmm-cookie')?.value.trim();
+            if (dzmmCookie) {
+                // 个人凭证只留本机：浏览器 localStorage；本地服务另写 dzmm_config.json
+                try {
+                    localStorage.setItem('dzmm_cookie', dzmmCookie);
+                } catch (e) {
+                    console.warn('[DZMM] localStorage cookie:', e);
+                }
+                try {
+                    const r = await fetch('/api/dzmm/cookie', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cookie: dzmmCookie }),
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok) throw new Error(d.error || r.statusText);
+                } catch (e) {
+                    // 线上无本地代理时，仅 localStorage 即可
+                    console.warn('[DZMM] cookie save (local API):', e.message || e);
+                }
+            } else {
+                try { localStorage.removeItem('dzmm_cookie'); } catch { /* ignore */ }
             }
             const admKey = document.getElementById('inp-admin-key')?.value.trim();
             if (admKey) {
@@ -9211,7 +9238,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.58');
+        console.log('[ComfyUI Web] v4.59');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -13047,17 +13074,293 @@
         const btn = document.getElementById('btn-dzmm');
         if (!btn) return;
         const DZMM_URL = 'https://www.dzmm.ai/draw/generate/create';
-        btn.addEventListener('click', async () => {
-            const positive = document.getElementById('txt-positive').value.trim();
-            if (positive) {
-                try {
-                    await navigator.clipboard.writeText(positive);
-                    showToast('正向提示词已复制到剪贴板，请在 dzmm 中粘贴');
-                } catch {
-                    showToast('复制失败，请手动复制提示词');
-                }
+        const DZMM_COOKIE_KEY = 'dzmm_cookie';
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const modelSel = document.getElementById('sel-dzmm-model');
+        const dimSel = document.getElementById('sel-dzmm-dimension');
+        const quotaBadge = document.getElementById('dzmm-quota-badge');
+
+        function getLocalDzmmCookie() {
+            const fromInput = document.getElementById('inp-dzmm-cookie')?.value.trim();
+            if (fromInput) return fromInput;
+            try { return localStorage.getItem(DZMM_COOKIE_KEY) || ''; } catch { return ''; }
+        }
+
+        function dzmmFetch(url, options = {}) {
+            const headers = new Headers(options.headers || {});
+            const cookie = getLocalDzmmCookie();
+            if (cookie) headers.set('X-Dzmm-Cookie', cookie);
+            if (options.body && !headers.has('Content-Type')) {
+                headers.set('Content-Type', 'application/json');
             }
+            return fetch(url, { ...options, headers });
+        }
+
+        const FALLBACK_MODELS = [
+            {
+                id: 'anime', label: 'Anime 动漫', quotaType: 'draw', defaultDimension: '1:1',
+                dimensions: [
+                    { value: '1:1', label: '1:1 方形', pixels: '2048×2048' },
+                    { value: '2:3', label: '2:3 竖图', pixels: '1664×2496' },
+                    { value: '3:2', label: '3:2 横图', pixels: '2496×1664' },
+                ],
+            },
+            {
+                id: 'iroha', label: 'Iroha', quotaType: 'draw', defaultDimension: '9:16',
+                dimensions: [
+                    { value: '9:16', label: '9:16 竖屏', pixels: '1440×2560' },
+                    { value: '1:1', label: '1:1 方形', pixels: '2048×2048' },
+                    { value: '2:3', label: '2:3 竖拍', pixels: '1664×2496' },
+                    { value: '3:4', label: '3:4 竖照', pixels: '1728×2304' },
+                    { value: '3:2', label: '3:2 横图', pixels: '2496×1664' },
+                    { value: '4:3', label: '4:3 传统', pixels: '2304×1728' },
+                    { value: '16:9', label: '16:9 宽屏', pixels: '2560×1440' },
+                ],
+            },
+            {
+                id: 'z-image', label: 'Z-Image', quotaType: 'edit', defaultDimension: '4:3',
+                dimensions: [
+                    { value: '1:1', label: '1:1 方形', pixels: '2048×2048' },
+                    { value: '4:3', label: '4:3 传统', pixels: '2304×1728' },
+                    { value: '3:4', label: '3:4 竖照', pixels: '1728×2304' },
+                    { value: '16:9', label: '16:9 宽屏', pixels: '2560×1440' },
+                    { value: '9:16', label: '9:16 竖屏', pixels: '1440×2560' },
+                    { value: '3:2', label: '3:2 经典', pixels: '2496×1664' },
+                    { value: '2:3', label: '2:3 竖拍', pixels: '1664×2496' },
+                    { value: '21:9', label: '21:9 超宽', pixels: '3024×1296' },
+                ],
+            },
+        ];
+
+        const state = {
+            models: FALLBACK_MODELS,
+            quotas: { draw: null, edit: null },
+            user: null,
+        };
+
+        function currentModel() {
+            const id = modelSel?.value || 'anime';
+            return state.models.find((m) => m.id === id) || state.models[0];
+        }
+
+        function formatQuota(q) {
+            if (!q || typeof q.remaining !== 'number') return '配额 --';
+            let t = `剩余 ${q.remaining}/${q.limit ?? '?'}`;
+            if (typeof q.hoursUntilReset === 'number' && q.hoursUntilReset >= 0) {
+                t += ` · ${q.hoursUntilReset}h后重置`;
+            }
+            return t;
+        }
+
+        function updateQuotaBadge() {
+            if (!quotaBadge) return;
+            const model = currentModel();
+            const qType = model?.quotaType || 'draw';
+            const q = state.quotas?.[qType] || null;
+            const typeLabel = qType === 'edit' ? 'Z配额' : '日配额';
+            quotaBadge.textContent = `${typeLabel} ${formatQuota(q).replace(/^配额 /, '')}`;
+            quotaBadge.classList.remove('empty', 'ok');
+            if (q && typeof q.remaining === 'number') {
+                quotaBadge.classList.add(q.remaining <= 0 ? 'empty' : 'ok');
+            }
+            const empty = q && q.remaining <= 0;
+            if (empty) btn.title = '免费配额已用完，仍可用积分继续生成';
+            else btn.title = '使用本地代理调用 dzmm.ai 生图（需配置 Cookie）';
+        }
+
+        function fillDimensions(keepValue) {
+            if (!dimSel) return;
+            const model = currentModel();
+            const dims = model?.dimensions || [];
+            const prev = keepValue || dimSel.value;
+            dimSel.innerHTML = dims.map((d) => {
+                const tip = d.pixels ? ` (${d.pixels})` : '';
+                return `<option value="${d.value}">${d.label || d.value}${tip}</option>`;
+            }).join('');
+            const allowed = new Set(dims.map((d) => d.value));
+            if (prev && allowed.has(prev)) dimSel.value = prev;
+            else dimSel.value = model?.defaultDimension || dims[0]?.value || '';
+        }
+
+        function applyModels(models) {
+            if (Array.isArray(models) && models.length) state.models = models;
+            if (modelSel) {
+                const prev = modelSel.value || localStorage.getItem('dzmm_model') || 'anime';
+                modelSel.innerHTML = state.models.map((m) =>
+                    `<option value="${m.id}">${m.label || m.id}</option>`
+                ).join('');
+                modelSel.value = state.models.some((m) => m.id === prev) ? prev : state.models[0].id;
+            }
+            fillDimensions();
+            updateQuotaBadge();
+        }
+
+        async function refreshDzmmStatus() {
+            const el = document.getElementById('dzmm-status');
+            try {
+                const res = await dzmmFetch('/api/dzmm/status');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                if (data.models) applyModels(data.models);
+                if (data.quotas) state.quotas = data.quotas;
+                else if (data.quota) state.quotas = { draw: data.quota, edit: state.quotas.edit };
+                state.user = data.user || null;
+                updateQuotaBadge();
+
+                if (!el) return data;
+                if (!data.hasCookie) {
+                    el.textContent = '状态：未配置 Cookie';
+                    return data;
+                }
+                if (data.error) {
+                    el.textContent = `状态：校验失败 — ${data.error}`;
+                    return data;
+                }
+                const name = data.user?.fullName || data.user?.email || '已登录';
+                const dq = formatQuota(data.quotas?.draw || data.quota);
+                const eq = formatQuota(data.quotas?.edit);
+                el.textContent = `状态：${name} · 日配额 ${dq.replace(/^配额 /, '')} · Z配额 ${eq.replace(/^配额 /, '')}`;
+                return data;
+            } catch (e) {
+                if (el) el.textContent = `状态：代理不可用 — ${e.message}`;
+                applyModels(FALLBACK_MODELS);
+                return null;
+            }
+        }
+
+        modelSel?.addEventListener('change', () => {
+            localStorage.setItem('dzmm_model', modelSel.value);
+            const saved = localStorage.getItem('dzmm_dimension_' + modelSel.value);
+            fillDimensions(saved || undefined);
+            updateQuotaBadge();
+        });
+        dimSel?.addEventListener('change', () => {
+            localStorage.setItem('dzmm_dimension_' + (modelSel?.value || 'anime'), dimSel.value);
+        });
+
+        // 初次填充（本地兜底），再拉服务端配置
+        applyModels(FALLBACK_MODELS);
+        const savedDim = localStorage.getItem('dzmm_dimension_' + (modelSel?.value || 'anime'));
+        if (savedDim) fillDimensions(savedDim);
+        refreshDzmmStatus();
+
+        document.getElementById('btn-dzmm-test')?.addEventListener('click', async () => {
+            const cookie = getLocalDzmmCookie();
+            if (cookie) {
+                try { localStorage.setItem(DZMM_COOKIE_KEY, cookie); } catch { /* ignore */ }
+                await dzmmFetch('/api/dzmm/cookie', {
+                    method: 'POST',
+                    body: JSON.stringify({ cookie }),
+                }).catch(() => null);
+            }
+            const data = await refreshDzmmStatus();
+            if (data?.hasCookie && !data.error) showToast('DZMM 登录有效');
+            else showToast(data?.error || '请检查 Cookie');
+        });
+
+        document.getElementById('btn-dzmm-open-site')?.addEventListener('click', () => {
             window.open(DZMM_URL, 'dzmm_window', 'width=1280,height=900,menubar=no,toolbar=no,location=yes,status=no');
+        });
+
+        btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            window.open(DZMM_URL, 'dzmm_window', 'width=1280,height=900,menubar=no,toolbar=no,location=yes,status=no');
+            showToast('已打开 dzmm 官网生图页');
+        });
+
+        btn.addEventListener('click', async () => {
+            const positive = document.getElementById('txt-positive')?.value.trim() || '';
+            const negative = document.getElementById('txt-negative')?.value.trim() || '';
+            if (!positive) {
+                showToast('请先填写正向提示词');
+                return;
+            }
+
+            const model = currentModel();
+            const q = state.quotas?.[model.quotaType || 'draw'];
+            if (q && typeof q.remaining === 'number' && q.remaining <= 0) {
+                // 仅提醒：免费配额用完后仍可走积分，不做拦截
+                showToast(`${model.label} 免费配额已用完，将尝试使用积分继续生成`);
+            }
+
+            const payload = {
+                prompt: positive,
+                negativePrompt: negative,
+                model: model.id,
+                dimension: dimSel?.value || model.defaultDimension,
+                poll: true,
+            };
+
+            btn.disabled = true;
+            if (progressContainer) progressContainer.classList.remove('hidden');
+            if (progressBar) progressBar.style.width = '8%';
+            if (progressText) progressText.textContent = 'DZMM 提交中…';
+
+            try {
+                const statusRes = await dzmmFetch('/api/dzmm/status');
+                const status = await statusRes.json().catch(() => ({}));
+                if (!statusRes.ok) throw new Error(status.error || 'DZMM 代理不可用');
+                if (!status.hasCookie || status.error) {
+                    showToast(status.error || '请先在设置中配置有效的 DZMM Cookie');
+                    document.getElementById('btn-settings')?.click();
+                    return;
+                }
+                if (status.quotas) {
+                    state.quotas = status.quotas;
+                    updateQuotaBadge();
+                }
+
+                if (progressText) progressText.textContent = `DZMM ${model.label} 生成中…`;
+                if (progressBar) progressBar.style.width = '35%';
+
+                const res = await dzmmFetch('/api/dzmm/generate', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.ok) {
+                    const msg = data.error || data.detail || `生成失败 (${res.status})`;
+                    if (/Cookie|UNAUTHORIZED|登录/i.test(String(msg))) {
+                        document.getElementById('btn-settings')?.click();
+                    }
+                    throw new Error(msg);
+                }
+                if (!data.imageUrl) throw new Error('生成完成但未返回图片');
+
+                if (progressBar) progressBar.style.width = '100%';
+                if (progressText) progressText.textContent = '完成';
+                if (typeof showResult === 'function') {
+                    showResult(data.imageUrl, false);
+                } else {
+                    const img = document.getElementById('result-image');
+                    const ph = document.getElementById('result-placeholder');
+                    const actions = document.getElementById('result-actions');
+                    if (img) {
+                        img.src = data.imageUrl;
+                        img.classList.remove('hidden');
+                    }
+                    ph?.classList.add('hidden');
+                    actions?.classList.remove('hidden');
+                }
+                showToast('DZMM 生图完成');
+                await refreshDzmmStatus();
+            } catch (e) {
+                console.error('[DZMM]', e);
+                showToast(`DZMM 失败: ${e.message}`);
+                try { await navigator.clipboard.writeText(positive); } catch { /* ignore */ }
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => {
+                    progressContainer?.classList.add('hidden');
+                    if (progressBar) progressBar.style.width = '0%';
+                }, 800);
+            }
+        });
+
+        document.getElementById('btn-settings')?.addEventListener('click', () => {
+            setTimeout(() => { refreshDzmmStatus(); }, 50);
         });
     }
 
