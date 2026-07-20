@@ -68,9 +68,27 @@ export function jsonResponse(status, data) {
 }
 
 export function normalizeCookie(raw) {
-  const text = String(raw || '').trim().replace(/^["']|["']$/g, '');
+  let text = String(raw || '').trim().replace(/^["']|["']$/g, '');
   if (!text) return '';
-  if (text.includes('sb-rls-auth-token=') || text.includes(';')) return text;
+
+  const lines = text.split(/\r?\n/).map((ln) => ln.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+  if (lines.length >= 2) {
+    const kv = [];
+    const bare = [];
+    for (const ln of lines) {
+      if (ln.includes('sb-rls-auth-token.') && ln.includes('=')) {
+        kv.push(ln.split(';', 1)[0].trim());
+      } else if (ln.startsWith('base64-') || ln.startsWith('eyJ') || (ln.length > 40 && !ln.includes('='))) {
+        bare.push(ln);
+      }
+    }
+    if (kv.length) return kv.join('; ');
+    if (bare.length) {
+      return bare.map((v, i) => `sb-rls-auth-token.${i}=${v}`).join('; ');
+    }
+  }
+
+  if (text.includes('sb-rls-auth-token') || text.includes(';')) return text;
   if (text.startsWith('base64-') || text.startsWith('eyJ')) {
     return `sb-rls-auth-token=${text}`;
   }

@@ -9238,7 +9238,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.59');
+        console.log('[ComfyUI Web] v4.60');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -13258,6 +13258,82 @@
             const data = await refreshDzmmStatus();
             if (data?.hasCookie && !data.error) showToast('DZMM 登录有效');
             else showToast(data?.error || '请检查 Cookie');
+        });
+
+        function normalizeDzmmCookieClient(raw) {
+            let text = String(raw || '').trim().replace(/^["']|["']$/g, '');
+            if (!text) return '';
+            const lines = text.split(/\r?\n/).map((ln) => ln.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+            if (lines.length >= 2) {
+                const kv = [];
+                const bare = [];
+                for (const ln of lines) {
+                    if (ln.includes('sb-rls-auth-token.') && ln.includes('=')) {
+                        kv.push(ln.split(';', 1)[0].trim());
+                    } else if (ln.startsWith('base64-') || ln.startsWith('eyJ') || (ln.length > 40 && !ln.includes('='))) {
+                        bare.push(ln);
+                    }
+                }
+                if (kv.length) return kv.join('; ');
+                if (bare.length) {
+                    return bare.map((v, i) => `sb-rls-auth-token.${i}=${v}`).join('; ');
+                }
+            }
+            if (text.includes('sb-rls-auth-token') || text.includes(';')) return text;
+            if (text.startsWith('base64-') || text.startsWith('eyJ')) return `sb-rls-auth-token=${text}`;
+            return text;
+        }
+
+        async function applyDzmmCookie(raw, { silent } = {}) {
+            const cookie = normalizeDzmmCookieClient(raw);
+            if (!cookie) {
+                if (!silent) showToast('未识别到有效 Cookie');
+                return false;
+            }
+            const inp = document.getElementById('inp-dzmm-cookie');
+            if (inp) inp.value = cookie;
+            try { localStorage.setItem(DZMM_COOKIE_KEY, cookie); } catch { /* ignore */ }
+            await dzmmFetch('/api/dzmm/cookie', {
+                method: 'POST',
+                body: JSON.stringify({ cookie }),
+            }).catch(() => null);
+            if (!silent) showToast('Cookie 已导入本机');
+            await refreshDzmmStatus();
+            return true;
+        }
+
+        // 书签：必须在 dzmm.ai 页面执行；可读非 HttpOnly 的分段 Cookie
+        const DZMM_BOOKMARKLET = "javascript:(function(){function g(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n.replace(/\\./g,'\\\\.')+'=([^;]*)'));return m?decodeURIComponent(m[1]):'';}var c=[],i,v;for(i=0;i<10;i++){v=g('sb-rls-auth-token.'+i);if(!v)break;c.push(v);}var s=g('sb-rls-auth-token'),out='';if(c.length){out=c.map(function(x,i){return 'sb-rls-auth-token.'+i+'='+x;}).join('; ');}else if(s){out='sb-rls-auth-token='+s;}if(!out){alert('读不到 Cookie（可能是 HttpOnly）。请在 F12→Application→Cookies 复制 sb-rls-auth-token.0/.1/.2');return;}try{if(window.opener)window.opener.postMessage({type:'dzmm-cookie-import',cookie:out},'*');}catch(e){}navigator.clipboard.writeText(out).then(function(){alert('已复制 Cookie（'+Math.max(c.length,s?1:0)+' 段）。回到 ComfyUI 点「从剪贴板导入」。');}).catch(function(){prompt('请复制：',out);});})();";
+
+        const bmLink = document.getElementById('dzmm-cookie-bookmarklet');
+        if (bmLink) bmLink.setAttribute('href', DZMM_BOOKMARKLET);
+
+        document.getElementById('btn-dzmm-pull-cookie')?.addEventListener('click', () => {
+            const helper = document.getElementById('dzmm-cookie-helper');
+            if (helper) helper.style.display = 'block';
+            window.open('https://www.dzmm.ai/', 'dzmm_cookie_pull', 'width=1100,height=800,menubar=no,toolbar=no,location=yes,status=no');
+            showToast('请登录官网后，用书签「复制DZMM Cookie」');
+        });
+
+        document.getElementById('btn-dzmm-paste-cookie')?.addEventListener('click', async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                const ok = await applyDzmmCookie(text);
+                if (!ok) showToast('剪贴板里没有可用的 Cookie');
+            } catch (e) {
+                showToast('无法读剪贴板，请手动粘贴到输入框后保存');
+                document.getElementById('inp-dzmm-cookie')?.focus();
+            }
+        });
+
+        window.addEventListener('message', async (e) => {
+            const data = e?.data;
+            if (!data || data.type !== 'dzmm-cookie-import' || !data.cookie) return;
+            // 仅接受看起来像 token 的内容
+            if (!String(data.cookie).includes('sb-rls-auth-token')) return;
+            await applyDzmmCookie(data.cookie);
+            const helper = document.getElementById('dzmm-cookie-helper');
+            if (helper) helper.style.display = 'none';
         });
 
         document.getElementById('btn-dzmm-open-site')?.addEventListener('click', () => {

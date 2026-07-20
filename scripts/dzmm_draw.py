@@ -144,17 +144,34 @@ def save_config(cfg: Dict[str, Any]) -> None:
 
 
 def normalize_cookie(raw: str) -> str:
-    """Accept full Cookie header, or just sb-rls-auth-token / base64-... token value."""
+    """Accept full Cookie header, chunked sb-rls-auth-token.N, or bare base64 token."""
     text = (raw or "").strip().strip('"').strip("'")
     if not text:
         return ""
-    # Already a cookie header
-    if "sb-rls-auth-token=" in text or ";" in text:
+
+    # Multi-line paste: either name=value per line, or bare chunk values in order
+    lines = [ln.strip().strip('"').strip("'") for ln in text.splitlines() if ln.strip()]
+    if len(lines) >= 2:
+        kv_chunks = []
+        bare_chunks = []
+        for ln in lines:
+            if "sb-rls-auth-token." in ln and "=" in ln:
+                kv_chunks.append(ln.split(";", 1)[0].strip())
+            elif ln.startswith("base64-") or ln.startswith("eyJ") or (
+                len(ln) > 40 and "=" not in ln[:20]
+            ):
+                bare_chunks.append(ln)
+        if kv_chunks:
+            return "; ".join(kv_chunks)
+        if bare_chunks:
+            return "; ".join(f"sb-rls-auth-token.{i}={v}" for i, v in enumerate(bare_chunks))
+
+    # Already a cookie header (incl. chunked .0/.1/.2)
+    if "sb-rls-auth-token" in text or ";" in text:
         return text
     # Bare supabase session JSON / base64 token value
     if text.startswith("base64-") or text.startswith("eyJ"):
         return f"sb-rls-auth-token={text}"
-    # Cookie value pasted with name only missing? keep as-is
     return text
 
 

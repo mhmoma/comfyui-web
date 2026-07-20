@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.59</title>
-    <link rel="stylesheet" href="style.css?v=444">
+    <title>生图工具 · ComfyUI Web v4.60</title>
+    <link rel="stylesheet" href="style.css?v=445">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.59</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.60</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1009,13 +1009,22 @@
             <hr class="settings-divider">
             <h3 class="settings-section-title">DZMM 生图</h3>
             <label>登录 Cookie / Token
-                <textarea id="inp-dzmm-cookie" rows="3" placeholder="可粘贴完整 Cookie，或只粘贴 sb-rls-auth-token 的值（base64-eyJ...）"></textarea>
+                <textarea id="inp-dzmm-cookie" rows="3" placeholder="可粘贴完整 Cookie；分段时贴 sb-rls-auth-token.0/.1/.2 整段；或点下方「拉取 Cookie」"></textarea>
             </label>
-            <small class="profile-hint">个人登录凭证<strong>只保存在本机</strong>（浏览器 localStorage + 本地 <code>dzmm_config.json</code>），不会提交到 Git，也不会上传到 Cloudflare。支持整段 Cookie，也支持只贴 <code>base64-...</code> 那段 token。</small>
+            <small class="profile-hint">个人登录凭证<strong>只保存在本机</strong>（浏览器 localStorage + 本地 <code>dzmm_config.json</code>），不会上传。浏览器禁止跨站直接读 Cookie，因此用「拉取」打开官网 + 书签一键复制（若 Cookie 为 HttpOnly 则需在 F12 里手动复制三段）。</small>
             <div id="dzmm-status" class="profile-hint" style="margin-top:6px">状态：未检测</div>
-            <div class="profile-actions" style="margin-top:8px">
+            <div class="profile-actions" style="margin-top:8px;flex-wrap:wrap">
+                <button type="button" id="btn-dzmm-pull-cookie" class="btn-primary">拉取 Cookie</button>
+                <button type="button" id="btn-dzmm-paste-cookie" class="btn-secondary">从剪贴板导入</button>
                 <button type="button" id="btn-dzmm-test" class="btn-secondary">检测登录/配额</button>
                 <button type="button" id="btn-dzmm-open-site" class="btn-secondary">打开官网生图页</button>
+            </div>
+            <div id="dzmm-cookie-helper" class="profile-hint" style="margin-top:8px;display:none">
+                <div>① 已打开 dzmm 官网，请先登录</div>
+                <div>② 把此链接拖到书签栏，在<strong>官网标签页</strong>点一下：
+                    <a id="dzmm-cookie-bookmarklet" href="#">📋 复制DZMM Cookie</a>
+                </div>
+                <div>③ 回到这里点「从剪贴板导入」（书签若检测到本页会自动填入）</div>
             </div>
             <hr class="settings-divider">
             <h3 class="settings-section-title">配置方案</h3>
@@ -1564,6 +1573,6 @@
     </div>
 
     <script src="lora-library.js?v=4"></script>
-    <script src="script.js?v=457"></script>
+    <script src="script.js?v=459"></script>
 </body>
 </html>
