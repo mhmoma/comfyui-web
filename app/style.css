@@ -1732,6 +1732,17 @@ textarea {
     box-shadow: var(--shadow);
 }
 
+/* 设置项增多后需可滚动（PC 原先无 max-height） */
+#modal-settings .modal-content {
+    width: min(520px, 92vw);
+    max-height: 85vh;
+    max-height: 85dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
 .modal-content h2 {
     margin-bottom: 16px;
     font-size: 1.2rem;
