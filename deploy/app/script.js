@@ -9275,7 +9275,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.63');
+        console.log('[ComfyUI Web] v4.64');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -13297,14 +13297,14 @@
                 const edit = a.quotas?.edit;
                 const dq = typeof draw?.remaining === 'number' ? `${draw.remaining}/${draw.limit ?? '?'}` : '--';
                 const eq = typeof edit?.remaining === 'number' ? `${edit.remaining}/${edit.limit ?? '?'}` : '--';
-                const title = a.fullName || a.email || a.label || a.id;
+                const title = a.fullName || a.email || a.label || '账号';
+                const mark = a.id === activeId ? ' ·当前' : '';
                 const active = a.id === activeId ? ' active' : '';
-                return `<div class="dzmm-account-item${active}" data-id="${a.id}">
-                    <div class="meta">
-                        <strong>${title}${a.id === activeId ? ' · 当前' : ''}</strong>
-                        <span>日 ${dq} · Z ${eq}</span>
-                    </div>
-                    <button type="button" class="btn-secondary" data-act="use">使用</button>
+                // 单行：超长省略，不撑开容器
+                const line = `${title}${mark} · 日${dq} · Z${eq}`;
+                return `<div class="dzmm-account-item${active}" data-id="${a.id}" title="${line.replace(/"/g, '&quot;')}">
+                    <div class="meta"><span class="name">${title}${mark}</span> · 日${dq} · Z${eq}</div>
+                    <button type="button" class="btn-secondary" data-act="use">用</button>
                     <button type="button" class="btn-danger" data-act="del">删</button>
                 </div>`;
             }).join('');
