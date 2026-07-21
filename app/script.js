@@ -6445,8 +6445,14 @@
             if (civHost) civHost.value = localStorage.getItem('lora_civitai_host') || 'civitai.red';
             if (civKey) civKey.value = localStorage.getItem('lora_civitai_key') || '';
             const dzmmInp = document.getElementById('inp-dzmm-cookie');
-            if (dzmmInp && !dzmmInp.value.trim()) {
-                dzmmInp.value = localStorage.getItem('dzmm_cookie') || '';
+            if (dzmmInp) {
+                const saved = localStorage.getItem('dzmm_cookie') || '';
+                if (!dzmmInp.value.trim() && saved) dzmmInp.value = saved;
+            }
+            const rotateChk = document.getElementById('chk-dzmm-auto-rotate');
+            if (rotateChk) {
+                const v = localStorage.getItem('dzmm_auto_rotate');
+                rotateChk.checked = v === null ? true : v !== '0';
             }
             const dewmarkChk = document.getElementById('chk-dzmm-dewmark');
             if (dewmarkChk && window.DzmmDewmark) {
@@ -6471,9 +6477,31 @@
             }
             const dzmmCookie = document.getElementById('inp-dzmm-cookie')?.value.trim();
             if (dzmmCookie) {
-                // 个人凭证只留本机：浏览器 localStorage；本地服务另写 dzmm_config.json
                 try {
                     localStorage.setItem('dzmm_cookie', dzmmCookie);
+                    // 写入账号池（去重）
+                    const idHash = (() => {
+                        let h = 0;
+                        for (let i = 0; i < dzmmCookie.length; i++) h = ((h << 5) - h + dzmmCookie.charCodeAt(i)) | 0;
+                        return `a_${Math.abs(h).toString(36)}_${dzmmCookie.length}`;
+                    })();
+                    let accounts = [];
+                    try { accounts = JSON.parse(localStorage.getItem('dzmm_accounts') || '[]'); } catch { accounts = []; }
+                    if (!Array.isArray(accounts)) accounts = [];
+                    const idx = accounts.findIndex((a) => a && a.id === idHash);
+                    const row = {
+                        id: idHash,
+                        cookie: dzmmCookie,
+                        label: (idx >= 0 && accounts[idx].label) || `账号 ${accounts.length + (idx >= 0 ? 0 : 1)}`,
+                        email: idx >= 0 ? accounts[idx].email : '',
+                        fullName: idx >= 0 ? accounts[idx].fullName : '',
+                        quotas: idx >= 0 ? accounts[idx].quotas : null,
+                        updatedAt: Date.now(),
+                    };
+                    if (idx >= 0) accounts[idx] = { ...accounts[idx], ...row };
+                    else accounts.push(row);
+                    localStorage.setItem('dzmm_accounts', JSON.stringify(accounts));
+                    localStorage.setItem('dzmm_active_id', idHash);
                 } catch (e) {
                     console.warn('[DZMM] localStorage cookie:', e);
                 }
@@ -6486,11 +6514,12 @@
                     const d = await r.json().catch(() => ({}));
                     if (!r.ok) throw new Error(d.error || r.statusText);
                 } catch (e) {
-                    // 线上无本地代理时，仅 localStorage 即可
                     console.warn('[DZMM] cookie save (local API):', e.message || e);
                 }
-            } else {
-                try { localStorage.removeItem('dzmm_cookie'); } catch { /* ignore */ }
+            }
+            const rotateChkSave = document.getElementById('chk-dzmm-auto-rotate');
+            if (rotateChkSave) {
+                localStorage.setItem('dzmm_auto_rotate', rotateChkSave.checked ? '1' : '0');
             }
             const dewmarkChk = document.getElementById('chk-dzmm-dewmark');
             if (dewmarkChk && window.DzmmDewmark) {
@@ -9246,7 +9275,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.62');
+        console.log('[ComfyUI Web] v4.63');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -13083,17 +13112,202 @@
         if (!btn) return;
         const DZMM_URL = 'https://www.dzmm.ai/draw/generate/create';
         const DZMM_COOKIE_KEY = 'dzmm_cookie';
+        const DZMM_ACCOUNTS_KEY = 'dzmm_accounts';
+        const DZMM_ACTIVE_ID_KEY = 'dzmm_active_id';
+        const DZMM_AUTO_ROTATE_KEY = 'dzmm_auto_rotate';
         const progressContainer = document.getElementById('progress-container');
         const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
         const modelSel = document.getElementById('sel-dzmm-model');
         const dimSel = document.getElementById('sel-dzmm-dimension');
         const quotaBadge = document.getElementById('dzmm-quota-badge');
+        const accountListEl = document.getElementById('dzmm-account-list');
+
+        function cookieFingerprint(cookie) {
+            const s = String(cookie || '');
+            let h = 0;
+            for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+            return `a_${Math.abs(h).toString(36)}_${s.length}`;
+        }
+
+        function loadAccounts() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(DZMM_ACCOUNTS_KEY) || '[]');
+                return Array.isArray(raw) ? raw.filter((a) => a && a.cookie) : [];
+            } catch {
+                return [];
+            }
+        }
+
+        function saveAccounts(list) {
+            localStorage.setItem(DZMM_ACCOUNTS_KEY, JSON.stringify(list));
+        }
+
+        function isAutoRotateEnabled() {
+            const el = document.getElementById('chk-dzmm-auto-rotate');
+            if (el) return !!el.checked;
+            const v = localStorage.getItem(DZMM_AUTO_ROTATE_KEY);
+            return v === null ? true : v !== '0';
+        }
+
+        function getActiveAccountId() {
+            return localStorage.getItem(DZMM_ACTIVE_ID_KEY) || '';
+        }
+
+        function getActiveAccount() {
+            const list = loadAccounts();
+            const id = getActiveAccountId();
+            return list.find((a) => a.id === id) || list[0] || null;
+        }
 
         function getLocalDzmmCookie() {
+            const active = getActiveAccount();
+            if (active?.cookie) return active.cookie;
             const fromInput = document.getElementById('inp-dzmm-cookie')?.value.trim();
             if (fromInput) return fromInput;
             try { return localStorage.getItem(DZMM_COOKIE_KEY) || ''; } catch { return ''; }
+        }
+
+        function migrateLegacyCookie() {
+            let list = loadAccounts();
+            if (list.length) return list;
+            const legacy = localStorage.getItem(DZMM_COOKIE_KEY) || '';
+            if (!legacy) return list;
+            const id = cookieFingerprint(legacy);
+            list = [{ id, cookie: legacy, label: '账号 1', email: '', fullName: '', quotas: null, updatedAt: Date.now() }];
+            saveAccounts(list);
+            localStorage.setItem(DZMM_ACTIVE_ID_KEY, id);
+            return list;
+        }
+
+        async function setActiveAccount(id, { syncServer = true, fillInput = true } = {}) {
+            const list = loadAccounts();
+            const acc = list.find((a) => a.id === id);
+            if (!acc) return false;
+            localStorage.setItem(DZMM_ACTIVE_ID_KEY, id);
+            localStorage.setItem(DZMM_COOKIE_KEY, acc.cookie);
+            if (fillInput) {
+                const inp = document.getElementById('inp-dzmm-cookie');
+                if (inp) inp.value = acc.cookie;
+            }
+            if (acc.quotas) state.quotas = acc.quotas;
+            if (syncServer) {
+                await dzmmFetch('/api/dzmm/cookie', {
+                    method: 'POST',
+                    body: JSON.stringify({ cookie: acc.cookie }),
+                }).catch(() => null);
+            }
+            renderAccountList();
+            updateQuotaBadge();
+            return true;
+        }
+
+        function upsertAccount(cookie, meta = {}) {
+            const normalized = normalizeDzmmCookieClient(cookie);
+            if (!normalized) return null;
+            const id = cookieFingerprint(normalized);
+            const list = loadAccounts();
+            const idx = list.findIndex((a) => a.id === id);
+            const prev = idx >= 0 ? list[idx] : null;
+            const next = {
+                id,
+                cookie: normalized,
+                label: meta.label || prev?.label || meta.fullName || meta.email || `账号 ${list.length + (idx >= 0 ? 0 : 1)}`,
+                email: meta.email ?? prev?.email ?? '',
+                fullName: meta.fullName ?? prev?.fullName ?? '',
+                quotas: meta.quotas ?? prev?.quotas ?? null,
+                updatedAt: Date.now(),
+            };
+            if (idx >= 0) list[idx] = next;
+            else list.push(next);
+            saveAccounts(list);
+            localStorage.setItem(DZMM_ACTIVE_ID_KEY, id);
+            localStorage.setItem(DZMM_COOKIE_KEY, normalized);
+            return next;
+        }
+
+        function removeAccount(id) {
+            let list = loadAccounts().filter((a) => a.id !== id);
+            saveAccounts(list);
+            if (getActiveAccountId() === id) {
+                if (list[0]) {
+                    localStorage.setItem(DZMM_ACTIVE_ID_KEY, list[0].id);
+                    localStorage.setItem(DZMM_COOKIE_KEY, list[0].cookie);
+                } else {
+                    localStorage.removeItem(DZMM_ACTIVE_ID_KEY);
+                    localStorage.removeItem(DZMM_COOKIE_KEY);
+                }
+            }
+            renderAccountList();
+        }
+
+        function quotaRemaining(acc, quotaType) {
+            const q = acc?.quotas?.[quotaType];
+            return typeof q?.remaining === 'number' ? q.remaining : null;
+        }
+
+        function pickAccountWithQuota(quotaType, { preferId } = {}) {
+            const list = loadAccounts();
+            if (!list.length) return null;
+            const withQuota = list.filter((a) => {
+                const r = quotaRemaining(a, quotaType);
+                return r === null || r > 0;
+            });
+            const pool = withQuota.length ? withQuota : list;
+            if (preferId) {
+                const pref = pool.find((a) => a.id === preferId);
+                if (pref) return pref;
+            }
+            const activeId = getActiveAccountId();
+            return pool.find((a) => a.id === activeId) || pool[0];
+        }
+
+        /** 免费额度用尽时切到仍有额度的账号；全部用尽则留在当前（可用积分） */
+        async function ensureAccountForQuota(quotaType, { silent = true } = {}) {
+            if (!isAutoRotateEnabled()) return getActiveAccount();
+            const active = getActiveAccount();
+            const rem = quotaRemaining(active, quotaType);
+            if (active && (rem === null || rem > 0)) return active;
+            const next = pickAccountWithQuota(quotaType, { preferId: null });
+            if (!next) return active;
+            if (active && next.id === active.id) return active;
+            // 优先选 remaining>0 的
+            const list = loadAccounts();
+            const better = list.find((a) => (quotaRemaining(a, quotaType) || 0) > 0);
+            const target = better || next;
+            if (active && target.id === active.id) return active;
+            await setActiveAccount(target.id, { syncServer: true, fillInput: true });
+            if (!silent) {
+                const name = target.fullName || target.email || target.label || '下一账号';
+                showToast(`已切换账号：${name}`, 1600);
+            }
+            return target;
+        }
+
+        function renderAccountList() {
+            if (!accountListEl) return;
+            const list = loadAccounts();
+            const activeId = getActiveAccountId();
+            if (!list.length) {
+                accountListEl.innerHTML = '<div class="profile-hint" style="margin:0">账号池为空 — 粘贴 Cookie 后点「加入账号池」</div>';
+                return;
+            }
+            accountListEl.innerHTML = list.map((a) => {
+                const draw = a.quotas?.draw;
+                const edit = a.quotas?.edit;
+                const dq = typeof draw?.remaining === 'number' ? `${draw.remaining}/${draw.limit ?? '?'}` : '--';
+                const eq = typeof edit?.remaining === 'number' ? `${edit.remaining}/${edit.limit ?? '?'}` : '--';
+                const title = a.fullName || a.email || a.label || a.id;
+                const active = a.id === activeId ? ' active' : '';
+                return `<div class="dzmm-account-item${active}" data-id="${a.id}">
+                    <div class="meta">
+                        <strong>${title}${a.id === activeId ? ' · 当前' : ''}</strong>
+                        <span>日 ${dq} · Z ${eq}</span>
+                    </div>
+                    <button type="button" class="btn-secondary" data-act="use">使用</button>
+                    <button type="button" class="btn-danger" data-act="del">删</button>
+                </div>`;
+            }).join('');
         }
 
         function dzmmFetch(url, options = {}) {
@@ -13174,8 +13388,22 @@
                 quotaBadge.classList.add(q.remaining <= 0 ? 'empty' : 'ok');
             }
             const empty = q && q.remaining <= 0;
-            if (empty) btn.title = '免费配额已用完，仍可用积分继续生成';
-            else btn.title = '使用本地代理调用 dzmm.ai 生图（需配置 Cookie）';
+            const acc = getActiveAccount();
+            const accName = acc?.fullName || acc?.email || acc?.label || '';
+            const n = loadAccounts().length;
+            if (empty) {
+                btn.title = n > 1
+                    ? '当前账号免费配额已用完，将自动尝试切换或使用积分'
+                    : '免费配额已用完，仍可用积分继续生成';
+            } else {
+                btn.title = accName
+                    ? `DZMM 生图（${accName}${n > 1 ? ` · 共${n}账号` : ''}）`
+                    : '使用本地代理调用 dzmm.ai 生图（需配置 Cookie）';
+            }
+            if (quotaBadge && n > 1 && accName) {
+                const base = quotaBadge.textContent.replace(/\s*·\s*.*$/, '');
+                quotaBadge.textContent = `${base} · ${accName}`;
+            }
         }
 
         function fillDimensions(keepValue) {
@@ -13215,6 +13443,16 @@
                 if (data.quotas) state.quotas = data.quotas;
                 else if (data.quota) state.quotas = { draw: data.quota, edit: state.quotas.edit };
                 state.user = data.user || null;
+
+                const cookie = getLocalDzmmCookie();
+                if (cookie && data.hasCookie && !data.error) {
+                    upsertAccount(cookie, {
+                        email: data.user?.email || '',
+                        fullName: data.user?.fullName || '',
+                        quotas: state.quotas,
+                    });
+                }
+                renderAccountList();
                 updateQuotaBadge();
 
                 if (!el) return data;
@@ -13229,11 +13467,13 @@
                 const name = data.user?.fullName || data.user?.email || '已登录';
                 const dq = formatQuota(data.quotas?.draw || data.quota);
                 const eq = formatQuota(data.quotas?.edit);
-                el.textContent = `状态：${name} · 日配额 ${dq.replace(/^配额 /, '')} · Z配额 ${eq.replace(/^配额 /, '')}`;
+                const n = loadAccounts().length;
+                el.textContent = `状态：${name} · 日配额 ${dq.replace(/^配额 /, '')} · Z配额 ${eq.replace(/^配额 /, '')}${n > 1 ? ` · 账号池 ${n}` : ''}`;
                 return data;
             } catch (e) {
                 if (el) el.textContent = `状态：代理不可用 — ${e.message}`;
                 applyModels(FALLBACK_MODELS);
+                renderAccountList();
                 return null;
             }
         }
@@ -13249,15 +13489,55 @@
         });
 
         // 初次填充（本地兜底），再拉服务端配置
+        migrateLegacyCookie();
+        const rotateChk = document.getElementById('chk-dzmm-auto-rotate');
+        if (rotateChk) {
+            rotateChk.checked = isAutoRotateEnabled();
+            rotateChk.addEventListener('change', () => {
+                localStorage.setItem(DZMM_AUTO_ROTATE_KEY, rotateChk.checked ? '1' : '0');
+            });
+        }
         applyModels(FALLBACK_MODELS);
         const savedDim = localStorage.getItem('dzmm_dimension_' + (modelSel?.value || 'anime'));
         if (savedDim) fillDimensions(savedDim);
+        renderAccountList();
+        const active = getActiveAccount();
+        if (active) {
+            const inp = document.getElementById('inp-dzmm-cookie');
+            if (inp && !inp.value.trim()) inp.value = active.cookie;
+        }
         refreshDzmmStatus();
 
+        accountListEl?.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-act]');
+            const row = e.target.closest('.dzmm-account-item');
+            if (!btn || !row) return;
+            const id = row.getAttribute('data-id');
+            if (btn.getAttribute('data-act') === 'del') {
+                removeAccount(id);
+                await refreshDzmmStatus();
+                return;
+            }
+            if (btn.getAttribute('data-act') === 'use') {
+                await setActiveAccount(id);
+                await refreshDzmmStatus();
+                showToast('已切换当前账号');
+            }
+        });
+
+        document.getElementById('btn-dzmm-add-account')?.addEventListener('click', async () => {
+            const cookie = document.getElementById('inp-dzmm-cookie')?.value.trim() || getLocalDzmmCookie();
+            if (!cookie) {
+                showToast('请先粘贴 Cookie');
+                return;
+            }
+            await applyDzmmCookie(cookie, { addToPool: true });
+        });
+
         document.getElementById('btn-dzmm-test')?.addEventListener('click', async () => {
-            const cookie = getLocalDzmmCookie();
+            const cookie = getLocalDzmmCookie() || document.getElementById('inp-dzmm-cookie')?.value.trim();
             if (cookie) {
-                try { localStorage.setItem(DZMM_COOKIE_KEY, cookie); } catch { /* ignore */ }
+                upsertAccount(cookie);
                 await dzmmFetch('/api/dzmm/cookie', {
                     method: 'POST',
                     body: JSON.stringify({ cookie }),
@@ -13292,7 +13572,7 @@
             return text;
         }
 
-        async function applyDzmmCookie(raw, { silent } = {}) {
+        async function applyDzmmCookie(raw, { silent, addToPool = true } = {}) {
             const cookie = normalizeDzmmCookieClient(raw);
             if (!cookie) {
                 if (!silent) showToast('未识别到有效 Cookie');
@@ -13300,13 +13580,17 @@
             }
             const inp = document.getElementById('inp-dzmm-cookie');
             if (inp) inp.value = cookie;
-            try { localStorage.setItem(DZMM_COOKIE_KEY, cookie); } catch { /* ignore */ }
+            if (addToPool) upsertAccount(cookie);
+            else {
+                try { localStorage.setItem(DZMM_COOKIE_KEY, cookie); } catch { /* ignore */ }
+            }
             await dzmmFetch('/api/dzmm/cookie', {
                 method: 'POST',
                 body: JSON.stringify({ cookie }),
             }).catch(() => null);
-            if (!silent) showToast('Cookie 已导入本机');
+            if (!silent) showToast(addToPool ? '已加入账号池' : 'Cookie 已导入本机');
             await refreshDzmmStatus();
+            renderAccountList();
             return true;
         }
 
@@ -13378,6 +13662,10 @@
             return imageUrl;
         }
 
+        function isQuotaExhaustedError(msg) {
+            return /配额|额度|quota|limit|次数用尽|不足|exceed|每日|免费次数/i.test(String(msg || ''));
+        }
+
         btn.addEventListener('click', async () => {
             const positive = document.getElementById('txt-positive')?.value.trim() || '';
             const negative = document.getElementById('txt-negative')?.value.trim() || '';
@@ -13387,11 +13675,7 @@
             }
 
             const model = currentModel();
-            const q = state.quotas?.[model.quotaType || 'draw'];
-            if (q && typeof q.remaining === 'number' && q.remaining <= 0) {
-                // 仅提醒：免费配额用完后仍可走积分，不做拦截
-                showToast(`${model.label} 免费配额已用完，将尝试使用积分继续生成`);
-            }
+            const qType = model.quotaType || 'draw';
 
             const payload = {
                 prompt: positive,
@@ -13406,56 +13690,117 @@
             if (progressBar) progressBar.style.width = '8%';
             if (progressText) progressText.textContent = 'DZMM 提交中…';
 
+            const tried = new Set();
+            let lastError = null;
+
             try {
-                const statusRes = await dzmmFetch('/api/dzmm/status');
-                const status = await statusRes.json().catch(() => ({}));
-                if (!statusRes.ok) throw new Error(status.error || 'DZMM 代理不可用');
-                if (!status.hasCookie || status.error) {
-                    showToast(status.error || '请先在设置中配置有效的 DZMM Cookie');
-                    document.getElementById('btn-settings')?.click();
+                // 生成前按额度无感选号
+                await ensureAccountForQuota(qType, { silent: true });
+
+                const maxTries = Math.max(1, loadAccounts().length || 1);
+                for (let attempt = 0; attempt < maxTries; attempt++) {
+                    const acc = getActiveAccount();
+                    const accKey = acc?.id || getLocalDzmmCookie() || `try_${attempt}`;
+                    if (tried.has(accKey)) break;
+                    tried.add(accKey);
+
+                    const statusRes = await dzmmFetch('/api/dzmm/status');
+                    const status = await statusRes.json().catch(() => ({}));
+                    if (!statusRes.ok) throw new Error(status.error || 'DZMM 代理不可用');
+                    if (!status.hasCookie || status.error) {
+                        if (isAutoRotateEnabled() && loadAccounts().length > tried.size) {
+                            // 当前号无效，试下一个
+                            const list = loadAccounts().filter((a) => !tried.has(a.id));
+                            if (list[0]) {
+                                await setActiveAccount(list[0].id, { syncServer: true });
+                                continue;
+                            }
+                        }
+                        showToast(status.error || '请先在设置中配置有效的 DZMM Cookie');
+                        document.getElementById('btn-settings')?.click();
+                        return;
+                    }
+                    if (status.quotas) {
+                        state.quotas = status.quotas;
+                        if (acc) {
+                            upsertAccount(acc.cookie, {
+                                email: status.user?.email || acc.email,
+                                fullName: status.user?.fullName || acc.fullName,
+                                quotas: status.quotas,
+                            });
+                        }
+                        updateQuotaBadge();
+                    }
+
+                    // 当前号免费额度已空且还有别的号有额度 → 无感切换再试
+                    const rem = status.quotas?.[qType]?.remaining;
+                    if (typeof rem === 'number' && rem <= 0 && isAutoRotateEnabled()) {
+                        const better = loadAccounts().find((a) => !tried.has(a.id) && (quotaRemaining(a, qType) || 0) > 0);
+                        if (better) {
+                            await setActiveAccount(better.id, { syncServer: true });
+                            continue;
+                        }
+                    }
+
+                    const who = status.user?.fullName || status.user?.email || acc?.label || '';
+                    if (progressText) {
+                        progressText.textContent = who
+                            ? `DZMM ${model.label} · ${who}`
+                            : `DZMM ${model.label} 生成中…`;
+                    }
+                    if (progressBar) progressBar.style.width = `${20 + attempt * 10}%`;
+
+                    const res = await dzmmFetch('/api/dzmm/generate', {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.ok) {
+                        const msg = data.error || data.detail || `生成失败 (${res.status})`;
+                        lastError = msg;
+                        if (/Cookie|UNAUTHORIZED|登录/i.test(String(msg))) {
+                            const list = loadAccounts().filter((a) => !tried.has(a.id));
+                            if (isAutoRotateEnabled() && list[0]) {
+                                await setActiveAccount(list[0].id, { syncServer: true });
+                                continue;
+                            }
+                            document.getElementById('btn-settings')?.click();
+                            throw new Error(msg);
+                        }
+                        if (isQuotaExhaustedError(msg) && isAutoRotateEnabled()) {
+                            const list = loadAccounts().filter((a) => !tried.has(a.id));
+                            const better = list.find((a) => (quotaRemaining(a, qType) || 0) > 0) || list[0];
+                            if (better) {
+                                await setActiveAccount(better.id, { syncServer: true });
+                                continue;
+                            }
+                        }
+                        throw new Error(msg);
+                    }
+                    if (!data.imageUrl) throw new Error('生成完成但未返回图片');
+
+                    const finalUrl = await dewmarkDzmmResult(data.imageUrl);
+
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (progressText) progressText.textContent = '完成';
+                    if (typeof showResult === 'function') {
+                        showResult(finalUrl, false);
+                    } else {
+                        const img = document.getElementById('result-image');
+                        const ph = document.getElementById('result-placeholder');
+                        const actions = document.getElementById('result-actions');
+                        if (img) {
+                            img.src = finalUrl;
+                            img.classList.remove('hidden');
+                        }
+                        ph?.classList.add('hidden');
+                        actions?.classList.remove('hidden');
+                    }
+                    showToast('DZMM 生图完成');
+                    await refreshDzmmStatus();
                     return;
                 }
-                if (status.quotas) {
-                    state.quotas = status.quotas;
-                    updateQuotaBadge();
-                }
-
-                if (progressText) progressText.textContent = `DZMM ${model.label} 生成中…`;
-                if (progressBar) progressBar.style.width = '35%';
-
-                const res = await dzmmFetch('/api/dzmm/generate', {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.ok) {
-                    const msg = data.error || data.detail || `生成失败 (${res.status})`;
-                    if (/Cookie|UNAUTHORIZED|登录/i.test(String(msg))) {
-                        document.getElementById('btn-settings')?.click();
-                    }
-                    throw new Error(msg);
-                }
-                if (!data.imageUrl) throw new Error('生成完成但未返回图片');
-
-                const finalUrl = await dewmarkDzmmResult(data.imageUrl);
-
-                if (progressBar) progressBar.style.width = '100%';
-                if (progressText) progressText.textContent = '完成';
-                if (typeof showResult === 'function') {
-                    showResult(finalUrl, false);
-                } else {
-                    const img = document.getElementById('result-image');
-                    const ph = document.getElementById('result-placeholder');
-                    const actions = document.getElementById('result-actions');
-                    if (img) {
-                        img.src = finalUrl;
-                        img.classList.remove('hidden');
-                    }
-                    ph?.classList.add('hidden');
-                    actions?.classList.remove('hidden');
-                }
-                showToast('DZMM 生图完成');
-                await refreshDzmmStatus();
+                throw new Error(lastError || '所有账号均无法生成');
             } catch (e) {
                 console.error('[DZMM]', e);
                 showToast(`DZMM 失败: ${e.message}`);
@@ -13470,7 +13815,11 @@
         });
 
         document.getElementById('btn-settings')?.addEventListener('click', () => {
-            setTimeout(() => { refreshDzmmStatus(); }, 50);
+            setTimeout(() => {
+                migrateLegacyCookie();
+                renderAccountList();
+                refreshDzmmStatus();
+            }, 50);
         });
     }
 

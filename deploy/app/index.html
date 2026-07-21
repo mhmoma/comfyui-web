@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.62</title>
-    <link rel="stylesheet" href="style.css?v=448">
+    <title>生图工具 · ComfyUI Web v4.63</title>
+    <link rel="stylesheet" href="style.css?v=449">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.62</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.63</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1011,22 +1011,28 @@
             <label>登录 Cookie / Token
                 <textarea id="inp-dzmm-cookie" rows="3" placeholder="可粘贴完整 Cookie；分段时贴 sb-rls-auth-token.0/.1/.2 整段；或点下方「拉取 Cookie」"></textarea>
             </label>
-            <small class="profile-hint">个人登录凭证<strong>只保存在本机</strong>（浏览器 localStorage + 本地 <code>dzmm_config.json</code>），不会上传。浏览器禁止跨站直接读 Cookie，因此用「拉取」打开官网 + 书签一键复制（若 Cookie 为 HttpOnly 则需在 F12 里手动复制三段）。</small>
-            <div id="dzmm-status" class="profile-hint" style="margin-top:6px">状态：未检测</div>
+            <small class="profile-hint">个人登录凭证<strong>只保存在本机浏览器</strong>（多账号轮换池 + localStorage），不会上传到服务器。额度用尽可自动无感切下一账号。</small>
+            <div id="dzmm-account-list" class="dzmm-account-list" aria-label="DZMM 账号列表"></div>
             <div class="profile-actions" style="margin-top:8px;flex-wrap:wrap">
-                <button type="button" id="btn-dzmm-pull-cookie" class="btn-primary">拉取 Cookie</button>
+                <button type="button" id="btn-dzmm-add-account" class="btn-primary">加入账号池</button>
+                <button type="button" id="btn-dzmm-pull-cookie" class="btn-secondary">拉取 Cookie</button>
                 <button type="button" id="btn-dzmm-paste-cookie" class="btn-secondary">从剪贴板导入</button>
                 <button type="button" id="btn-dzmm-test" class="btn-secondary">检测登录/配额</button>
                 <button type="button" id="btn-dzmm-open-site" class="btn-secondary">打开官网生图页</button>
             </div>
+            <label class="chk-label" style="margin-top:8px">
+                <input type="checkbox" id="chk-dzmm-auto-rotate" checked>
+                免费额度用尽时自动切换下一账号（无感）
+            </label>
+            <div id="dzmm-status" class="profile-hint" style="margin-top:6px">状态：未检测</div>
             <div id="dzmm-cookie-helper" class="profile-hint" style="margin-top:8px;display:none">
                 <div>① 已打开 dzmm 官网，请先登录</div>
                 <div>② 把此链接拖到书签栏，在<strong>官网标签页</strong>点一下：
                     <a id="dzmm-cookie-bookmarklet" href="#">📋 复制DZMM Cookie</a>
                 </div>
-                <div>③ 回到这里点「从剪贴板导入」（书签若检测到本页会自动填入）</div>
+                <div>③ 回到这里点「从剪贴板导入」或「加入账号池」</div>
             </div>
-            <label style="margin-top:10px;display:flex;align-items:center;gap:8px">
+            <label class="chk-label" style="margin-top:10px">
                 <input type="checkbox" id="chk-dzmm-dewmark" checked>
                 自动去除宣传水印 / 二维码
             </label>
@@ -1580,6 +1586,6 @@
     <script src="vendor/jsQR.js"></script>
     <script src="dzmm-dewmark.js?v=1"></script>
     <script src="lora-library.js?v=4"></script>
-    <script src="script.js?v=461"></script>
+    <script src="script.js?v=462"></script>
 </body>
 </html>
