@@ -1706,9 +1706,11 @@ textarea {
 
 .history-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-auto-rows: min-content;
     gap: 8px;
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     align-content: flex-start;
@@ -1718,12 +1720,13 @@ textarea {
     width: 100%;
     min-width: 0;
     aspect-ratio: 1;
+    height: auto;
+    align-self: start;
     border-radius: 6px;
     overflow: hidden;
     cursor: pointer;
     border: 2px solid transparent;
     transition: border-color 0.2s;
-    flex: 0 0 auto;
 }
 
 .history-item:hover {
@@ -1731,6 +1734,7 @@ textarea {
 }
 
 .history-item img {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -4506,6 +4510,7 @@ body.char-browser-open {
     }
 
     .main.mobile-tab-history .history-grid {
+        display: flex;
         flex-direction: row;
         flex-wrap: wrap;
         gap: 8px;
@@ -4514,8 +4519,10 @@ body.char-browser-open {
 
     .main.mobile-tab-history .history-item {
         width: calc(33.333% - 6px);
+        flex: 0 0 calc(33.333% - 6px);
         min-width: 0;
         aspect-ratio: 1;
+        align-self: auto;
     }
 
     .main {
