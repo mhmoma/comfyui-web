@@ -6252,14 +6252,84 @@
 
     // ==================== 历史管理 ====================
     const HISTORY_BATCH = 40;
+    const HISTORY_IDB_KEY = 'comfyui_history';
     let historyRenderedCount = 0;
     let historyScrollObserver = null;
+    let _historyMem = null;
+    let _historyLoadPromise = null;
+
+    function ensureHistoryLoaded() {
+        if (_historyLoadPromise) return _historyLoadPromise;
+        _historyLoadPromise = (async () => {
+            if (_historyMem) return _historyMem;
+            const fromIdb = typeof _bigCacheGet === 'function'
+                ? await _bigCacheGet(HISTORY_IDB_KEY)
+                : null;
+            if (Array.isArray(fromIdb)) {
+                _historyMem = fromIdb;
+                return _historyMem;
+            }
+            try {
+                const legacy = JSON.parse(localStorage.getItem('comfyui_history') || '[]');
+                _historyMem = Array.isArray(legacy) ? legacy : [];
+                if (_historyMem.length && typeof _bigCacheSet === 'function') {
+                    await _bigCacheSet(HISTORY_IDB_KEY, _historyMem);
+                }
+                if (_historyMem.length) {
+                    try { localStorage.removeItem('comfyui_history'); } catch { /* ignore */ }
+                }
+            } catch {
+                _historyMem = [];
+            }
+            if (!_historyMem) _historyMem = [];
+            return _historyMem;
+        })();
+        return _historyLoadPromise;
+    }
 
     function getHistory() {
-        try {
-            return JSON.parse(localStorage.getItem('comfyui_history') || '[]');
-        } catch {
-            return [];
+        return _historyMem || [];
+    }
+
+    async function persistHistory(history) {
+        _historyMem = history;
+        if (typeof _bigCacheSet !== 'function') {
+            try {
+                localStorage.setItem('comfyui_history', JSON.stringify(history));
+                return true;
+            } catch (e) {
+                console.warn('[History] localStorage full:', e.message);
+                return false;
+            }
+        }
+        let trimmed = history;
+        let ok = await _bigCacheSet(HISTORY_IDB_KEY, trimmed);
+        while (!ok && trimmed.length > 1) {
+            trimmed = trimmed.slice(0, -1);
+            _historyMem = trimmed;
+            ok = await _bigCacheSet(HISTORY_IDB_KEY, trimmed);
+        }
+        if (!ok) return false;
+        try { localStorage.removeItem('comfyui_history'); } catch { /* ignore */ }
+        return true;
+    }
+
+    function pickHistoryUrl(url, meta = {}) {
+        const candidates = [meta.persistUrl, meta.remoteUrl, url].filter(Boolean);
+        for (const u of candidates) {
+            if (typeof u === 'string' && !u.startsWith('data:') && u.length < 4000) return u;
+        }
+        return url;
+    }
+
+    function prependHistoryUI(entry, historyLength) {
+        if (!dom.historyGrid) return;
+        if (historyRenderedCount > 0) {
+            dom.historyGrid.insertBefore(createHistoryItemElement(entry), dom.historyGrid.firstChild);
+            historyRenderedCount += 1;
+            ensureHistorySentinel(historyLength);
+        } else {
+            renderHistory({ reset: true });
         }
     }
 
@@ -6321,22 +6391,31 @@
     }
 
     function saveToHistory(url, meta = {}) {
-        const history = getHistory();
-        history.unshift({ url, time: Date.now(), ...meta });
-        localStorage.setItem('comfyui_history', JSON.stringify(history));
-        if (!dom.historyGrid) return;
-        if (historyRenderedCount > 0) {
-            dom.historyGrid.insertBefore(createHistoryItemElement(history[0]), dom.historyGrid.firstChild);
-            historyRenderedCount += 1;
-            ensureHistorySentinel(history.length);
-        } else {
-            renderHistory({ reset: true });
-        }
+        const storeUrl = pickHistoryUrl(url, meta);
+        const entry = { url: storeUrl, time: Date.now(), ...meta };
+        if (storeUrl !== url) entry.fullUrl = url;
+        (async () => {
+            await ensureHistoryLoaded();
+            const history = [...getHistory()];
+            history.unshift(entry);
+            const ok = await persistHistory(history);
+            if (!ok) {
+                showToast('历史保存失败（存储空间不足）', 2200);
+                return;
+            }
+            prependHistoryUI(entry, history.length);
+        })().catch((e) => {
+            console.warn('[History] save failed:', e);
+            showToast('历史保存失败', 2000);
+        });
     }
 
     function clearHistory() {
-        localStorage.removeItem('comfyui_history');
-        renderHistory({ reset: true });
+        (async () => {
+            await ensureHistoryLoaded();
+            await persistHistory([]);
+            renderHistory({ reset: true });
+        })().catch((e) => console.warn('[History] clear failed:', e));
     }
 
     function renderHistory({ reset = false, append = false } = {}) {
@@ -9324,8 +9403,9 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.65');
+        console.log('[ComfyUI Web] v4.67');
         await loadTags();
+        await ensureHistoryLoaded();
         renderHistory();
         setupTagPickers();
         setupPortalOverlays();
@@ -13971,7 +14051,12 @@
                         actions?.classList.remove('hidden');
                     }
                     if (typeof saveToHistory === 'function') {
-                        saveToHistory(finalUrl, { source: 'dzmm', taskId: data.taskId });
+                        saveToHistory(finalUrl, {
+                            source: 'dzmm',
+                            taskId: data.taskId,
+                            remoteUrl: polled.remoteUrl || polled.imageUrl,
+                            persistUrl: polled.imageUrl?.startsWith('data:') ? polled.remoteUrl : polled.imageUrl,
+                        });
                     }
                     showToast('DZMM 生图完成');
                     refreshDzmmStatus().catch(() => null);
