@@ -360,6 +360,27 @@ def _trpc_error_message(resp: dict) -> str:
     return str(msg or code or "")
 
 
+def _finalize_task_image(task_id: str, item: dict, result: Dict[str, Any]) -> None:
+    """下载完成任务的图片到本地 outputs_dzmm，并写入 result.imageUrl。"""
+    img_path = item["outputImages"][0]
+    img_bytes = dzmm_download(img_path)
+    try:
+        from dzmm_dewmark import remove_watermark_bytes
+
+        cleaned, changed = remove_watermark_bytes(img_bytes)
+        if changed:
+            img_bytes = cleaned
+            result["dewmark"] = True
+    except Exception as e:
+        result["dewmarkError"] = str(e)
+    ext = ".webp" if img_bytes[:4] == b"RIFF" else ".png"
+    out_file = _output_dir() / f"{task_id}{ext}"
+    out_file.write_bytes(img_bytes)
+    result["localPath"] = str(out_file)
+    result["imageUrl"] = f"/api/dzmm/files/{out_file.name}"
+    result["remoteUrl"] = DZMM_BASE + img_path if img_path.startswith("/") else img_path
+
+
 def _task_failure_message(item: dict, model: str = "") -> str:
     """官网 detail 用 errorMessage，不是 error。"""
     raw = (
@@ -457,23 +478,7 @@ def generate(
     result["detail"] = detail
     item = _unwrap(detail or {}) or {}
     if status == "completed" and item.get("outputImages"):
-        img_path = item["outputImages"][0]
-        img_bytes = dzmm_download(img_path)
-        try:
-            from dzmm_dewmark import remove_watermark_bytes
-
-            cleaned, changed = remove_watermark_bytes(img_bytes)
-            if changed:
-                img_bytes = cleaned
-                result["dewmark"] = True
-        except Exception as e:
-            result["dewmarkError"] = str(e)
-        ext = ".webp" if img_bytes[:4] == b"RIFF" else ".png"
-        out_file = _output_dir() / f"{task_id}{ext}"
-        out_file.write_bytes(img_bytes)
-        result["localPath"] = str(out_file)
-        result["imageUrl"] = f"/api/dzmm/files/{out_file.name}"
-        result["remoteUrl"] = DZMM_BASE + img_path if img_path.startswith("/") else img_path
+        _finalize_task_image(task_id, item, result)
     elif status in ("failed", "error"):
         result["ok"] = False
         result["error"] = _task_failure_message(item, model)
@@ -483,6 +488,48 @@ def generate(
         result["ok"] = False
         result["error"] = f"轮询超时，最后状态: {status}"
         result["code"] = "POLL_TIMEOUT"
+    return result
+
+
+def poll_task(
+    task_id: str,
+    *,
+    model: str = "anime",
+    finalize: bool = True,
+) -> Dict[str, Any]:
+    """查询单次任务状态；完成时可选下载图片到本地。"""
+    task_id = (task_id or "").strip()
+    if not task_id:
+        return {"ok": False, "error": "缺少 taskId", "code": "MISSING_TASK_ID"}
+
+    model = normalize_model(model)
+    detail = trpc_get("draw.image.detail", {"json": {"id": task_id}})
+    if "error" in detail:
+        msg = _trpc_error_message(detail) or "detail failed"
+        return {"ok": False, "error": msg, "taskId": task_id, "detail": detail}
+
+    item = _unwrap(detail) or {}
+    status = item.get("status") or "pending"
+    result: Dict[str, Any] = {
+        "ok": True,
+        "taskId": task_id,
+        "status": status,
+        "detail": detail,
+    }
+
+    if status == "completed":
+        if finalize and item.get("outputImages"):
+            _finalize_task_image(task_id, item, result)
+        elif not item.get("outputImages"):
+            result["ok"] = False
+            result["error"] = "任务已完成但未返回图片"
+            result["code"] = "NO_IMAGE"
+    elif status in ("failed", "error"):
+        result["ok"] = False
+        result["error"] = _task_failure_message(item, model)
+        result["errorMessage"] = item.get("errorMessage")
+        result["code"] = "TASK_FAILED"
+
     return result
 
 
@@ -529,6 +576,14 @@ def _handle_api_inner(method: str, path: str, query: dict, body: dict) -> Tuple[
             "quotas": status.get("quotas"),
             "error": status.get("error"),
         }
+
+    if path == "/api/dzmm/task" and method == "GET":
+        task_id = query.get("id") or query.get("taskId") or ""
+        model = normalize_model(query.get("model") or "anime")
+        finalize = str(query.get("finalize", "1")).lower() not in ("0", "false", "no")
+        result = poll_task(task_id, model=model, finalize=finalize)
+        code = 200 if result.get("ok") or result.get("status") in ("pending", "processing", "queued") else 502
+        return code, result
 
     if path == "/api/dzmm/generate" and method == "POST":
         model = normalize_model(body.get("model") or "anime")

@@ -6251,6 +6251,10 @@
     }
 
     // ==================== 历史管理 ====================
+    const HISTORY_BATCH = 40;
+    let historyRenderedCount = 0;
+    let historyScrollObserver = null;
+
     function getHistory() {
         try {
             return JSON.parse(localStorage.getItem('comfyui_history') || '[]');
@@ -6259,55 +6263,100 @@
         }
     }
 
-    function saveToHistory(url) {
+    function createHistoryItemElement(item) {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        const img = document.createElement('img');
+        img.src = item.url;
+        img.alt = '历史图片';
+        img.loading = 'lazy';
+        div.appendChild(img);
+        const overlay = document.createElement('div');
+        overlay.className = 'history-overlay';
+        overlay.innerHTML = '<button class="btn-history-ref" title="用作参考图">📌</button><button class="btn-history-inpaint" title="局部重绘">🖌</button><button class="btn-history-composite" title="图层合成">🧩</button><button class="btn-history-cutout" title="抠图">✂️</button>';
+        overlay.querySelector('.btn-history-ref').addEventListener('click', (e) => {
+            e.stopPropagation();
+            useImageAsRef(item.url);
+        });
+        overlay.querySelector('.btn-history-inpaint').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openInpaintModal(item.url);
+        });
+        overlay.querySelector('.btn-history-composite').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCompositorModal({ baseUrl: item.url });
+        });
+        overlay.querySelector('.btn-history-cutout').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCutoutModal({ imageUrl: item.url });
+        });
+        div.appendChild(overlay);
+        div.addEventListener('click', () => {
+            dom.previewImage.src = item.url;
+            dom.modalPreview.classList.remove('hidden');
+        });
+        return div;
+    }
+
+    function removeHistorySentinel() {
+        dom.historyGrid?.querySelector('.history-sentinel')?.remove();
+    }
+
+    function ensureHistorySentinel(historyLength) {
+        if (!dom.historyGrid) return;
+        removeHistorySentinel();
+        if (historyRenderedCount >= historyLength) return;
+        const sentinel = document.createElement('div');
+        sentinel.className = 'history-sentinel';
+        sentinel.setAttribute('aria-hidden', 'true');
+        dom.historyGrid.appendChild(sentinel);
+        if (!historyScrollObserver) {
+            historyScrollObserver = new IntersectionObserver((entries) => {
+                if (entries.some((e) => e.isIntersecting)) {
+                    renderHistory({ append: true });
+                }
+            }, { root: dom.historyGrid, rootMargin: '120px' });
+        }
+        historyScrollObserver.observe(sentinel);
+    }
+
+    function saveToHistory(url, meta = {}) {
         const history = getHistory();
-        history.unshift({ url, time: Date.now() });
+        history.unshift({ url, time: Date.now(), ...meta });
         localStorage.setItem('comfyui_history', JSON.stringify(history));
-        renderHistory();
+        if (!dom.historyGrid) return;
+        if (historyRenderedCount > 0) {
+            dom.historyGrid.insertBefore(createHistoryItemElement(history[0]), dom.historyGrid.firstChild);
+            historyRenderedCount += 1;
+            ensureHistorySentinel(history.length);
+        } else {
+            renderHistory({ reset: true });
+        }
     }
 
     function clearHistory() {
         localStorage.removeItem('comfyui_history');
-        renderHistory();
+        renderHistory({ reset: true });
     }
 
-    function renderHistory() {
+    function renderHistory({ reset = false, append = false } = {}) {
+        if (!dom.historyGrid) return;
         const history = getHistory();
-        dom.historyGrid.innerHTML = '';
-        history.forEach((item) => {
-            const div = document.createElement('div');
-            div.className = 'history-item';
-            const img = document.createElement('img');
-            img.src = item.url;
-            img.alt = '历史图片';
-            img.loading = 'lazy';
-            div.appendChild(img);
-            const overlay = document.createElement('div');
-            overlay.className = 'history-overlay';
-            overlay.innerHTML = '<button class="btn-history-ref" title="用作参考图">📌</button><button class="btn-history-inpaint" title="局部重绘">🖌</button><button class="btn-history-composite" title="图层合成">🧩</button><button class="btn-history-cutout" title="抠图">✂️</button>';
-            overlay.querySelector('.btn-history-ref').addEventListener('click', (e) => {
-                e.stopPropagation();
-                useImageAsRef(item.url);
-            });
-            overlay.querySelector('.btn-history-inpaint').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openInpaintModal(item.url);
-            });
-            overlay.querySelector('.btn-history-composite').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openCompositorModal({ baseUrl: item.url });
-            });
-            overlay.querySelector('.btn-history-cutout').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openCutoutModal({ imageUrl: item.url });
-            });
-            div.appendChild(overlay);
-            div.addEventListener('click', () => {
-                dom.previewImage.src = item.url;
-                dom.modalPreview.classList.remove('hidden');
-            });
-            dom.historyGrid.appendChild(div);
-        });
+        if (reset || (!append && historyRenderedCount === 0)) {
+            historyScrollObserver?.disconnect();
+            historyScrollObserver = null;
+            dom.historyGrid.innerHTML = '';
+            historyRenderedCount = 0;
+        }
+        if (!history.length) return;
+        const nextEnd = Math.min(historyRenderedCount + HISTORY_BATCH, history.length);
+        const frag = document.createDocumentFragment();
+        for (let i = historyRenderedCount; i < nextEnd; i++) {
+            frag.appendChild(createHistoryItemElement(history[i]));
+        }
+        dom.historyGrid.appendChild(frag);
+        historyRenderedCount = nextEnd;
+        ensureHistorySentinel(history.length);
     }
 
     // ==================== ControlNet 预览 ====================
@@ -13740,50 +13789,105 @@
             return /配额|额度|quota|limit|次数用尽|不足|exceed|每日|免费次数/i.test(String(msg || ''));
         }
 
-        btn.addEventListener('click', async () => {
-            const positive = document.getElementById('txt-positive')?.value.trim() || '';
-            const negative = document.getElementById('txt-negative')?.value.trim() || '';
-            if (!positive) {
-                showToast('请先填写正向提示词');
-                return;
-            }
+        const dzmmTasks = new Map();
+        let dzmmTaskSeq = 0;
+        const DZMM_BTN_LABEL = '使用dzmm生图';
 
+        function countActiveDzmmTasks() {
+            let n = 0;
+            for (const t of dzmmTasks.values()) {
+                if (t.state === 'submitting' || t.state === 'polling') n += 1;
+            }
+            return n;
+        }
+
+        function updateDzmmTaskUI() {
+            const active = countActiveDzmmTasks();
+            btn.textContent = active > 0 ? `${DZMM_BTN_LABEL} (${active})` : DZMM_BTN_LABEL;
+            if (active > 0) {
+                progressContainer?.classList.remove('hidden');
+                if (progressText) {
+                    progressText.textContent = active === 1
+                        ? 'DZMM 生成中…'
+                        : `DZMM 进行中 ${active} 个任务`;
+                }
+                if (progressBar) {
+                    progressBar.style.width = `${Math.min(92, 12 + active * 18)}%`;
+                }
+            } else {
+                setTimeout(() => {
+                    if (countActiveDzmmTasks() === 0) {
+                        progressContainer?.classList.add('hidden');
+                        if (progressBar) progressBar.style.width = '0%';
+                    }
+                }, 600);
+            }
+        }
+
+        async function pollDzmmTaskUntilDone(taskId, model, cookie) {
+            const maxAttempts = 60;
+            const interval = 2000;
+            for (let i = 0; i < maxAttempts; i++) {
+                const qs = new URLSearchParams({ id: taskId, model });
+                const res = await dzmmFetchWithCookie(`/api/dzmm/task?${qs}`, cookie);
+                const data = await res.json().catch(() => ({}));
+                const pending = ['pending', 'processing', 'queued'].includes(data.status);
+                if (!res.ok && !pending) {
+                    throw new Error(data.error || `查询失败 (${res.status})`);
+                }
+                if (data.status === 'completed' && data.imageUrl) return data;
+                if (data.status === 'failed' || data.status === 'error') {
+                    throw new Error(data.error || '生成失败');
+                }
+                if (data.ok === false && !pending) {
+                    throw new Error(data.error || '查询失败');
+                }
+                await new Promise((r) => setTimeout(r, interval));
+            }
+            throw new Error('轮询超时');
+        }
+
+        async function submitDzmmGeneration(positive, negative) {
             const model = currentModel();
             const qType = model.quotaType || 'draw';
-
             const payload = {
                 prompt: positive,
                 negativePrompt: negative,
                 model: model.id,
                 dimension: dimSel?.value || model.defaultDimension,
-                poll: true,
+                poll: false,
             };
 
-            btn.disabled = true;
-            if (progressContainer) progressContainer.classList.remove('hidden');
-            if (progressBar) progressBar.style.width = '8%';
-            if (progressText) progressText.textContent = 'DZMM 提交中…';
+            const localId = ++dzmmTaskSeq;
+            const task = {
+                id: localId,
+                state: 'submitting',
+                prompt: positive,
+                model: model.id,
+                modelLabel: model.label,
+            };
+            dzmmTasks.set(localId, task);
+            updateDzmmTaskUI();
 
             const tried = new Set();
             let lastError = null;
 
             try {
-                // 生成前按额度无感选号
                 await ensureAccountForQuota(qType, { silent: true });
-
                 const maxTries = Math.max(1, loadAccounts().length || 1);
+
                 for (let attempt = 0; attempt < maxTries; attempt++) {
                     const acc = getActiveAccount();
                     const accKey = acc?.id || getLocalDzmmCookie() || `try_${attempt}`;
                     if (tried.has(accKey)) break;
                     tried.add(accKey);
+                    const cookie = acc?.cookie || getLocalDzmmCookie();
 
-                    const statusRes = await dzmmFetch('/api/dzmm/status');
+                    const statusRes = await dzmmFetchWithCookie('/api/dzmm/status', cookie);
                     const status = await statusRes.json().catch(() => ({}));
                     if (!statusRes.ok) throw new Error(status.error || 'DZMM 代理不可用');
                     if (!status.hasCookie || status.error) {
                         if (isAutoRotateEnabled() && loadAccounts().length > tried.size) {
-                            // 当前号无效，试下一个
                             const list = loadAccounts().filter((a) => !tried.has(a.id));
                             if (list[0]) {
                                 await setActiveAccount(list[0].id, { syncServer: true });
@@ -13806,7 +13910,6 @@
                         updateQuotaBadge();
                     }
 
-                    // 当前号免费额度已空且还有别的号有额度 → 无感切换再试
                     const rem = status.quotas?.[qType]?.remaining;
                     if (typeof rem === 'number' && rem <= 0 && isAutoRotateEnabled()) {
                         const better = loadAccounts().find((a) => !tried.has(a.id) && (quotaRemaining(a, qType) || 0) > 0);
@@ -13816,15 +13919,7 @@
                         }
                     }
 
-                    const who = status.user?.fullName || status.user?.email || acc?.label || '';
-                    if (progressText) {
-                        progressText.textContent = who
-                            ? `DZMM ${model.label} · ${who}`
-                            : `DZMM ${model.label} 生成中…`;
-                    }
-                    if (progressBar) progressBar.style.width = `${20 + attempt * 10}%`;
-
-                    const res = await dzmmFetch('/api/dzmm/generate', {
+                    const res = await dzmmFetchWithCookie('/api/dzmm/generate', cookie, {
                         method: 'POST',
                         body: JSON.stringify(payload),
                     });
@@ -13851,12 +13946,17 @@
                         }
                         throw new Error(msg);
                     }
-                    if (!data.imageUrl) throw new Error('生成完成但未返回图片');
+                    if (!data.taskId) throw new Error('未返回 taskId');
 
-                    const finalUrl = await dewmarkDzmmResult(data.imageUrl);
+                    task.state = 'polling';
+                    task.taskId = data.taskId;
+                    task.cookie = cookie;
+                    updateDzmmTaskUI();
 
-                    if (progressBar) progressBar.style.width = '100%';
-                    if (progressText) progressText.textContent = '完成';
+                    const polled = await pollDzmmTaskUntilDone(data.taskId, model.id, cookie);
+                    if (!polled.imageUrl) throw new Error('生成完成但未返回图片');
+
+                    const finalUrl = await dewmarkDzmmResult(polled.imageUrl);
                     if (typeof showResult === 'function') {
                         showResult(finalUrl, false);
                     } else {
@@ -13870,22 +13970,32 @@
                         ph?.classList.add('hidden');
                         actions?.classList.remove('hidden');
                     }
+                    if (typeof saveToHistory === 'function') {
+                        saveToHistory(finalUrl, { source: 'dzmm', taskId: data.taskId });
+                    }
                     showToast('DZMM 生图完成');
-                    await refreshDzmmStatus();
+                    refreshDzmmStatus().catch(() => null);
                     return;
                 }
                 throw new Error(lastError || '所有账号均无法生成');
             } catch (e) {
                 console.error('[DZMM]', e);
                 showToast(`DZMM 失败: ${e.message}`);
-                try { await navigator.clipboard.writeText(positive); } catch { /* ignore */ }
             } finally {
-                btn.disabled = false;
-                setTimeout(() => {
-                    progressContainer?.classList.add('hidden');
-                    if (progressBar) progressBar.style.width = '0%';
-                }, 800);
+                task.state = 'done';
+                dzmmTasks.delete(localId);
+                updateDzmmTaskUI();
             }
+        }
+
+        btn.addEventListener('click', () => {
+            const positive = document.getElementById('txt-positive')?.value.trim() || '';
+            const negative = document.getElementById('txt-negative')?.value.trim() || '';
+            if (!positive) {
+                showToast('请先填写正向提示词');
+                return;
+            }
+            submitDzmmGeneration(positive, negative);
         });
 
         document.getElementById('btn-settings')?.addEventListener('click', () => {

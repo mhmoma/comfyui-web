@@ -1736,6 +1736,13 @@ textarea {
     object-fit: cover;
 }
 
+.history-sentinel {
+    grid-column: 1 / -1;
+    height: 1px;
+    width: 100%;
+    pointer-events: none;
+}
+
 .history-resizer {
     width: 4px;
     cursor: col-resize;

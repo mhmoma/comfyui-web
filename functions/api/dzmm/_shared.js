@@ -265,6 +265,76 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function finalizeTaskImage(cookie, taskId, item, result, model) {
+  const imgPath = item.outputImages[0];
+  const remoteUrl = imgPath.startsWith('/') ? DZMM_BASE + imgPath : imgPath;
+  result.remoteUrl = remoteUrl;
+  result.imageUrl = remoteUrl;
+  try {
+    const imgRes = await fetch(remoteUrl, {
+      headers: {
+        Cookie: cookie,
+        'User-Agent': 'Mozilla/5.0',
+        Referer: `${DZMM_BASE}/`,
+      },
+    });
+    if (imgRes.ok) {
+      const buf = await imgRes.arrayBuffer();
+      if (buf.byteLength > 0 && buf.byteLength < 4.5 * 1024 * 1024) {
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+        }
+        const mime = imgRes.headers.get('content-type') || 'image/webp';
+        result.imageUrl = `data:${mime};base64,${btoa(binary)}`;
+      }
+    }
+  } catch {
+    /* keep remoteUrl */
+  }
+}
+
+export async function pollTask(cookie, query = {}) {
+  const taskId = String(query?.id || query?.taskId || '').trim();
+  if (!taskId) return { ok: false, error: '缺少 taskId', code: 'MISSING_TASK_ID' };
+
+  const model = normalizeModel(query?.model || 'anime');
+  const finalize = !['0', 'false', 'no'].includes(String(query?.finalize ?? '1').toLowerCase());
+
+  const detail = await trpcGet(cookie, 'draw.image.detail', { json: { id: taskId } });
+  if (detail?.error) {
+    return {
+      ok: false,
+      error: trpcErrorMessage(detail) || 'detail failed',
+      taskId,
+      detail,
+    };
+  }
+
+  const item = unwrap(detail) || {};
+  const status = item.status || 'pending';
+  const result = { ok: true, taskId, status, detail };
+
+  if (status === 'completed') {
+    if (finalize && item.outputImages?.length) {
+      await finalizeTaskImage(cookie, taskId, item, result, model);
+    } else if (!item.outputImages?.length) {
+      result.ok = false;
+      result.error = '任务已完成但未返回图片';
+      result.code = 'NO_IMAGE';
+    }
+  } else if (status === 'failed' || status === 'error') {
+    result.ok = false;
+    result.error = taskFailureMessage(item, model);
+    result.errorMessage = item.errorMessage;
+    result.code = 'TASK_FAILED';
+  }
+
+  return result;
+}
+
 export async function generate(cookie, body) {
   const prompt = String(body?.prompt || '').trim();
   if (!prompt) return { ok: false, error: '正向提示词不能为空' };
@@ -346,35 +416,7 @@ export async function generate(cookie, body) {
   result.detail = detail;
   const item = unwrap(detail || {}) || {};
   if (status === 'completed' && item.outputImages?.length) {
-    const imgPath = item.outputImages[0];
-    const remoteUrl = imgPath.startsWith('/') ? DZMM_BASE + imgPath : imgPath;
-    result.remoteUrl = remoteUrl;
-    // Cloudflare 不落盘：优先返回远端 URL；前端可直接展示
-    result.imageUrl = remoteUrl;
-    try {
-      const imgRes = await fetch(remoteUrl, {
-        headers: {
-          Cookie: cookie,
-          'User-Agent': 'Mozilla/5.0',
-          Referer: `${DZMM_BASE}/`,
-        },
-      });
-      if (imgRes.ok) {
-        const buf = await imgRes.arrayBuffer();
-        if (buf.byteLength > 0 && buf.byteLength < 4.5 * 1024 * 1024) {
-          const bytes = new Uint8Array(buf);
-          let binary = '';
-          const chunk = 0x8000;
-          for (let i = 0; i < bytes.length; i += chunk) {
-            binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-          }
-          const mime = imgRes.headers.get('content-type') || 'image/webp';
-          result.imageUrl = `data:${mime};base64,${btoa(binary)}`;
-        }
-      }
-    } catch {
-      /* keep remoteUrl */
-    }
+    await finalizeTaskImage(cookie, taskId, item, result, model);
   } else if (status === 'failed' || status === 'error') {
     result.ok = false;
     result.error = taskFailureMessage(item, model);
