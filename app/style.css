@@ -1512,6 +1512,21 @@ textarea {
     border-color: rgba(62, 207, 142, 0.35);
 }
 
+.dzmm-pool-badge {
+    border-color: rgba(102, 126, 234, 0.45);
+    color: #b8c4ff;
+}
+
+.dzmm-pool-badge.empty {
+    color: #f0a0a0;
+    border-color: rgba(240, 120, 120, 0.35);
+}
+
+.dzmm-pool-badge.ok {
+    color: #a8d4f0;
+    border-color: rgba(102, 180, 234, 0.45);
+}
+
 .dzmm-account-list {
     display: flex;
     flex-direction: column;

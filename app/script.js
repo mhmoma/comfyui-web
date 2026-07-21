@@ -9275,7 +9275,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.64');
+        console.log('[ComfyUI Web] v4.65');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -13121,6 +13121,7 @@
         const modelSel = document.getElementById('sel-dzmm-model');
         const dimSel = document.getElementById('sel-dzmm-dimension');
         const quotaBadge = document.getElementById('dzmm-quota-badge');
+        const poolQuotaBadge = document.getElementById('dzmm-quota-pool-badge');
         const accountListEl = document.getElementById('dzmm-account-list');
 
         function cookieFingerprint(cookie) {
@@ -13320,6 +13321,55 @@
             return fetch(url, { ...options, headers });
         }
 
+        function dzmmFetchWithCookie(url, cookie, options = {}) {
+            const headers = new Headers(options.headers || {});
+            if (cookie) headers.set('X-Dzmm-Cookie', cookie);
+            if (options.body && !headers.has('Content-Type')) {
+                headers.set('Content-Type', 'application/json');
+            }
+            return fetch(url, { ...options, headers });
+        }
+
+        function aggregatePoolQuotas() {
+            const list = loadAccounts();
+            const out = {
+                draw: { remaining: 0, limit: 0, count: 0 },
+                edit: { remaining: 0, limit: 0, count: 0 },
+            };
+            for (const a of list) {
+                for (const type of ['draw', 'edit']) {
+                    const q = a.quotas?.[type];
+                    if (q && typeof q.remaining === 'number') {
+                        out[type].remaining += q.remaining;
+                        if (typeof q.limit === 'number') out[type].limit += q.limit;
+                        out[type].count += 1;
+                    }
+                }
+            }
+            return out;
+        }
+
+        async function refreshPoolQuotas() {
+            const list = loadAccounts();
+            if (!list.length) return;
+            const activeId = getActiveAccountId();
+            for (const acc of list) {
+                try {
+                    const res = await dzmmFetchWithCookie('/api/dzmm/status', acc.cookie);
+                    const data = await res.json();
+                    if (!res.ok || !data.hasCookie || data.error) continue;
+                    upsertAccount(acc.cookie, {
+                        email: data.user?.email || acc.email,
+                        fullName: data.user?.fullName || acc.fullName,
+                        quotas: data.quotas || { draw: data.quota, edit: null },
+                    });
+                } catch { /* ignore per-account */ }
+            }
+            const active = loadAccounts().find((a) => a.id === activeId) || loadAccounts()[0];
+            if (active?.quotas) state.quotas = active.quotas;
+            state.user = active ? { fullName: active.fullName, email: active.email } : state.user;
+        }
+
         const FALLBACK_MODELS = [
             {
                 id: 'anime', label: 'Anime 动漫', quotaType: 'draw', defaultDimension: '1:1',
@@ -13376,6 +13426,11 @@
             return t;
         }
 
+        function formatQuotaShort(q) {
+            if (!q || typeof q.remaining !== 'number') return '--';
+            return `${q.remaining}/${q.limit ?? '?'}`;
+        }
+
         function updateQuotaBadge() {
             if (!quotaBadge) return;
             const model = currentModel();
@@ -13387,10 +13442,26 @@
             if (q && typeof q.remaining === 'number') {
                 quotaBadge.classList.add(q.remaining <= 0 ? 'empty' : 'ok');
             }
+
+            const pool = aggregatePoolQuotas();
+            const n = loadAccounts().length;
+            if (poolQuotaBadge) {
+                if (n > 1 && pool[qType].count > 0) {
+                    poolQuotaBadge.classList.remove('hidden');
+                    const poolLabel = qType === 'edit' ? '池Z' : '池日';
+                    const p = pool[qType];
+                    poolQuotaBadge.textContent = `${poolLabel} ${formatQuotaShort(p)}`;
+                    poolQuotaBadge.title = `账号池合计（${n} 账号）：日 ${formatQuotaShort(pool.draw)} · Z ${formatQuotaShort(pool.edit)}`;
+                    poolQuotaBadge.classList.remove('empty', 'ok');
+                    poolQuotaBadge.classList.add(p.remaining <= 0 ? 'empty' : 'ok');
+                } else {
+                    poolQuotaBadge.classList.add('hidden');
+                }
+            }
+
             const empty = q && q.remaining <= 0;
             const acc = getActiveAccount();
             const accName = acc?.fullName || acc?.email || acc?.label || '';
-            const n = loadAccounts().length;
             if (empty) {
                 btn.title = n > 1
                     ? '当前账号免费配额已用完，将自动尝试切换或使用积分'
@@ -13399,10 +13470,6 @@
                 btn.title = accName
                     ? `DZMM 生图（${accName}${n > 1 ? ` · 共${n}账号` : ''}）`
                     : '使用本地代理调用 dzmm.ai 生图（需配置 Cookie）';
-            }
-            if (quotaBadge && n > 1 && accName) {
-                const base = quotaBadge.textContent.replace(/\s*·\s*.*$/, '');
-                quotaBadge.textContent = `${base} · ${accName}`;
             }
         }
 
@@ -13436,6 +13503,9 @@
         async function refreshDzmmStatus() {
             const el = document.getElementById('dzmm-status');
             try {
+                if (loadAccounts().length > 1) {
+                    await refreshPoolQuotas();
+                }
                 const res = await dzmmFetch('/api/dzmm/status');
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || res.statusText);
@@ -13443,7 +13513,6 @@
                 if (data.quotas) state.quotas = data.quotas;
                 else if (data.quota) state.quotas = { draw: data.quota, edit: state.quotas.edit };
                 state.user = data.user || null;
-
                 const cookie = getLocalDzmmCookie();
                 if (cookie && data.hasCookie && !data.error) {
                     upsertAccount(cookie, {
@@ -13468,12 +13537,17 @@
                 const dq = formatQuota(data.quotas?.draw || data.quota);
                 const eq = formatQuota(data.quotas?.edit);
                 const n = loadAccounts().length;
-                el.textContent = `状态：${name} · 日配额 ${dq.replace(/^配额 /, '')} · Z配额 ${eq.replace(/^配额 /, '')}${n > 1 ? ` · 账号池 ${n}` : ''}`;
+                const pool = aggregatePoolQuotas();
+                const poolLine = n > 1 && pool.draw.count
+                    ? ` · 池日 ${formatQuotaShort(pool.draw)} · 池Z ${formatQuotaShort(pool.edit)}`
+                    : '';
+                el.textContent = `状态：${name} · 日配额 ${dq.replace(/^配额 /, '')} · Z配额 ${eq.replace(/^配额 /, '')}${poolLine}${n > 1 ? ` · ${n}账号` : ''}`;
                 return data;
             } catch (e) {
                 if (el) el.textContent = `状态：代理不可用 — ${e.message}`;
                 applyModels(FALLBACK_MODELS);
                 renderAccountList();
+                updateQuotaBadge();
                 return null;
             }
         }

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.64</title>
-    <link rel="stylesheet" href="style.css?v=450">
+    <title>生图工具 · ComfyUI Web v4.65</title>
+    <link rel="stylesheet" href="style.css?v=451">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.64</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.65</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -765,7 +765,8 @@
                             <option value="z-image">Z-Image</option>
                         </select>
                         <select id="sel-dzmm-dimension" class="dzmm-select" title="DZMM 画幅" aria-label="DZMM 画幅"></select>
-                        <span id="dzmm-quota-badge" class="dzmm-quota-badge" title="免费配额；用完后仍可用积分">配额 --</span>
+                        <span id="dzmm-quota-badge" class="dzmm-quota-badge" title="当前账号免费配额">配额 --</span>
+                        <span id="dzmm-quota-pool-badge" class="dzmm-quota-badge dzmm-pool-badge hidden" title="账号池合计配额">池 --</span>
                     </div>
                 </div>
 
@@ -1586,6 +1587,6 @@
     <script src="vendor/jsQR.js"></script>
     <script src="dzmm-dewmark.js?v=1"></script>
     <script src="lora-library.js?v=4"></script>
-    <script src="script.js?v=463"></script>
+    <script src="script.js?v=464"></script>
 </body>
 </html>
