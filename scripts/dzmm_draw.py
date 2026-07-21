@@ -459,6 +459,15 @@ def generate(
     if status == "completed" and item.get("outputImages"):
         img_path = item["outputImages"][0]
         img_bytes = dzmm_download(img_path)
+        try:
+            from dzmm_dewmark import remove_watermark_bytes
+
+            cleaned, changed = remove_watermark_bytes(img_bytes)
+            if changed:
+                img_bytes = cleaned
+                result["dewmark"] = True
+        except Exception as e:
+            result["dewmarkError"] = str(e)
         ext = ".webp" if img_bytes[:4] == b"RIFF" else ".png"
         out_file = _output_dir() / f"{task_id}{ext}"
         out_file.write_bytes(img_bytes)

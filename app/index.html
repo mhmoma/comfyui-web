@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>生图工具 · ComfyUI Web v4.61</title>
-    <link rel="stylesheet" href="style.css?v=447">
+    <title>生图工具 · ComfyUI Web v4.62</title>
+    <link rel="stylesheet" href="style.css?v=448">
 </head>
 <body>
     <div class="app">
         <header class="header">
 <a href="/" class="site-home-link" title="返回首页">🏠</a>
-            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.61</span></h1>
+            <h1>ComfyUI Web <span id="app-version" class="version-badge">v4.62</span></h1>
             <div class="conn-status" id="conn-status" title="ComfyUI 连接状态">
                 <span class="conn-dot" id="conn-dot" aria-hidden="true"></span>
                 <span class="conn-text" id="conn-text">检测中</span>
@@ -1026,6 +1026,11 @@
                 </div>
                 <div>③ 回到这里点「从剪贴板导入」（书签若检测到本页会自动填入）</div>
             </div>
+            <label style="margin-top:10px;display:flex;align-items:center;gap:8px">
+                <input type="checkbox" id="chk-dzmm-dewmark" checked>
+                自动去除宣传水印 / 二维码
+            </label>
+            <small class="profile-hint">出图后在本机检测角落二维码与品牌贴并修复，默认开启；不上传原图。</small>
             <hr class="settings-divider">
             <h3 class="settings-section-title">配置方案</h3>
             <label>当前方案
@@ -1572,7 +1577,9 @@
         </div>
     </div>
 
+    <script src="vendor/jsQR.js"></script>
+    <script src="dzmm-dewmark.js?v=1"></script>
     <script src="lora-library.js?v=4"></script>
-    <script src="script.js?v=460"></script>
+    <script src="script.js?v=461"></script>
 </body>
 </html>

@@ -6448,6 +6448,10 @@
             if (dzmmInp && !dzmmInp.value.trim()) {
                 dzmmInp.value = localStorage.getItem('dzmm_cookie') || '';
             }
+            const dewmarkChk = document.getElementById('chk-dzmm-dewmark');
+            if (dewmarkChk && window.DzmmDewmark) {
+                dewmarkChk.checked = DzmmDewmark.enabled();
+            }
             dom.modalSettings.classList.remove('hidden');
         });
 
@@ -6487,6 +6491,10 @@
                 }
             } else {
                 try { localStorage.removeItem('dzmm_cookie'); } catch { /* ignore */ }
+            }
+            const dewmarkChk = document.getElementById('chk-dzmm-dewmark');
+            if (dewmarkChk && window.DzmmDewmark) {
+                DzmmDewmark.setEnabled(!!dewmarkChk.checked);
             }
             const admKey = document.getElementById('inp-admin-key')?.value.trim();
             if (admKey) {
@@ -9238,7 +9246,7 @@
     }
 
     async function init() {
-        console.log('[ComfyUI Web] v4.61');
+        console.log('[ComfyUI Web] v4.62');
         await loadTags();
         renderHistory();
         setupTagPickers();
@@ -13340,11 +13348,35 @@
             window.open(DZMM_URL, 'dzmm_window', 'width=1280,height=900,menubar=no,toolbar=no,location=yes,status=no');
         });
 
+        const dewmarkChk = document.getElementById('chk-dzmm-dewmark');
+        if (dewmarkChk && window.DzmmDewmark) {
+            dewmarkChk.checked = DzmmDewmark.enabled();
+            dewmarkChk.addEventListener('change', () => {
+                DzmmDewmark.setEnabled(dewmarkChk.checked);
+            });
+        }
+
         btn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             window.open(DZMM_URL, 'dzmm_window', 'width=1280,height=900,menubar=no,toolbar=no,location=yes,status=no');
             showToast('已打开 dzmm 官网生图页');
         });
+
+        async function dewmarkDzmmResult(imageUrl) {
+            if (!window.DzmmDewmark || !DzmmDewmark.enabled()) return imageUrl;
+            try {
+                if (progressText) progressText.textContent = '去除宣传水印…';
+                if (progressBar) progressBar.style.width = '88%';
+                const cleaned = await DzmmDewmark.remove(imageUrl);
+                if (cleaned?.changed && cleaned.url) {
+                    showToast('已去除宣传水印');
+                    return cleaned.url;
+                }
+            } catch (e) {
+                console.warn('[DZMM] dewmark:', e);
+            }
+            return imageUrl;
+        }
 
         btn.addEventListener('click', async () => {
             const positive = document.getElementById('txt-positive')?.value.trim() || '';
@@ -13405,16 +13437,18 @@
                 }
                 if (!data.imageUrl) throw new Error('生成完成但未返回图片');
 
+                const finalUrl = await dewmarkDzmmResult(data.imageUrl);
+
                 if (progressBar) progressBar.style.width = '100%';
                 if (progressText) progressText.textContent = '完成';
                 if (typeof showResult === 'function') {
-                    showResult(data.imageUrl, false);
+                    showResult(finalUrl, false);
                 } else {
                     const img = document.getElementById('result-image');
                     const ph = document.getElementById('result-placeholder');
                     const actions = document.getElementById('result-actions');
                     if (img) {
-                        img.src = data.imageUrl;
+                        img.src = finalUrl;
                         img.classList.remove('hidden');
                     }
                     ph?.classList.add('hidden');
